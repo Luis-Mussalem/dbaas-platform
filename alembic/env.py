@@ -5,6 +5,7 @@ from sqlalchemy import pool
 
 from src.core.config import settings
 from src.core.database import Base, engine
+import src.models  # noqa: F401 — registra todos os models no Base.metadata
 
 config = context.config
 fileConfig(config.config_file_name)
