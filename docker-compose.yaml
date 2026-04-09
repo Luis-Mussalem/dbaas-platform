@@ -1,28 +1,28 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: dbaas-postgres
+    container_name: palmtreedb-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-dbaas}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dbaas_secret}
-      POSTGRES_DB: ${POSTGRES_DB:-dbaas}
+      POSTGRES_USER: ${POSTGRES_USER:-palmtreedb}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      POSTGRES_DB: ${POSTGRES_DB:-palmtreedb}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dbaas}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-palmtreedb}"]
       interval: 5s
       timeout: 5s
       retries: 5
 
   pgadmin:
     image: dpage/pgadmin4:latest
-    container_name: dbaas-pgadmin
+    container_name: palmtreedb-pgadmin
     restart: unless-stopped
     environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@admin.com}
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@palmtreedb.dev}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-admin}
     ports:
       - "5050:80"
