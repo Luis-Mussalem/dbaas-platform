@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from src.core.config import settings
-from src.routers import auth, health, users
+from src.routers import auth, health, instances, users
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -31,3 +31,4 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(users.router)
+app.include_router(instances.router)
