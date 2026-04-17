@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
+    # Encryption (Fernet) — generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    FERNET_KEY: str = "change-me-generate-a-real-fernet-key"
+
+    # Registration lockout
+    REGISTRATION_ENABLED: bool = False
+
     @property
     def DATABASE_URL(self) -> str:
         return (
