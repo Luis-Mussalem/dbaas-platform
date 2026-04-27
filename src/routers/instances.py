@@ -21,12 +21,12 @@ router = APIRouter(prefix="/instances", tags=["Instances"])
 
 
 @router.post("", response_model=InstanceRead, status_code=status.HTTP_201_CREATED)
-def create(
+async def create(
     data: InstanceCreate,
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    return create_instance(db, data)
+    return await create_instance(db, data)
 
 
 @router.get("", response_model=list[InstanceRead])
@@ -63,7 +63,7 @@ def update(
 
 
 @router.patch("/{instance_id}/status", response_model=InstanceRead)
-def change_status(
+async def change_status(
     instance_id: uuid.UUID,
     new_status: InstanceStatus,
     db: Session = Depends(get_db),
@@ -72,11 +72,11 @@ def change_status(
     instance = get_instance_by_id(db, instance_id)
     if not instance:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instance not found")
-    return transition_status(db, instance, new_status)
+    return await transition_status(db, instance, new_status)
 
 
 @router.delete("/{instance_id}", response_model=InstanceRead)
-def delete(
+async def delete(
     instance_id: uuid.UUID,
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
@@ -84,4 +84,4 @@ def delete(
     instance = get_instance_by_id(db, instance_id)
     if not instance:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instance not found")
-    return soft_delete_instance(db, instance)
+    return await soft_delete_instance(db, instance)
