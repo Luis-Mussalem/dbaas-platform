@@ -35,6 +35,14 @@ class Settings(BaseSettings):
     # Registration lockout
     REGISTRATION_ENABLED: bool = False
 
+    # Provisioning — Docker
+    # Senha do superuser postgres dentro de cada container provisionado.
+    # Sem default intencional: pydantic-settings levanta ValidationError no
+    # startup se esta variável não estiver definida no .env, impedindo a
+    # aplicação de rodar com uma senha conhecida/fraca acidentalmente.
+    # Gerar com: python -c "import secrets; print(secrets.token_urlsafe(32))"
+    PROVISIONER_SUPERUSER_PASSWORD: str
+
     @property
     def DATABASE_URL(self) -> str:
         return (
