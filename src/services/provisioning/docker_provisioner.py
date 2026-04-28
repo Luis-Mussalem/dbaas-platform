@@ -143,16 +143,19 @@ class DockerProvisioner(ProvisionerBase):
         (se necessário), e começar a aceitar conexões. Um sleep fixo seria
         não confiável — muito curto em máquina carregada, desperdício em máquina rápida.
         """
-        dsn = (
-            f"host={host} port={port} user={user} password={password} "
-            f"dbname={dbname} connect_timeout=2"
-        )
         deadline = time.monotonic() + timeout
         last_error: Optional[Exception] = None
 
         while time.monotonic() < deadline:
             try:
-                with psycopg.connect(dsn):
+                with psycopg.connect(
+                    host=host,
+                    port=port,
+                    user=user,
+                    password=password,
+                    dbname=dbname,
+                    connect_timeout=2,
+                ):
                     return  # Conexão bem-sucedida — PostgreSQL pronto
             except Exception as exc:
                 last_error = exc
@@ -190,11 +193,15 @@ class DockerProvisioner(ProvisionerBase):
         password_literal = _pg_literal_string(db_password)
 
         # Passo 1: conectar ao banco padrão 'postgres' como superuser
-        admin_dsn = (
-            f"host={host} port={port} user=postgres "
-            f"password={superuser_password} dbname=postgres connect_timeout=5"
-        )
-        with psycopg.connect(admin_dsn, autocommit=True) as conn:
+        with psycopg.connect(
+            host=host,
+            port=port,
+            user="postgres",
+            password=superuser_password,
+            dbname="postgres",
+            connect_timeout=5,
+            autocommit=True,
+        ) as conn:
             with conn.cursor() as cur:
                 # Criar a role com LOGIN + senha (DDL — requer autocommit)
                 cur.execute(
@@ -206,11 +213,15 @@ class DockerProvisioner(ProvisionerBase):
                 )
 
         # Passo 2: conectar ao NOVO banco para configurar privilégios de schema
-        app_dsn = (
-            f"host={host} port={port} user=postgres "
-            f"password={superuser_password} dbname={db_name} connect_timeout=5"
-        )
-        with psycopg.connect(app_dsn, autocommit=True) as conn:
+        with psycopg.connect(
+            host=host,
+            port=port,
+            user="postgres",
+            password=superuser_password,
+            dbname=db_name,
+            connect_timeout=5,
+            autocommit=True,
+        ) as conn:
             with conn.cursor() as cur:
                 # Permitir uso e criação de objetos no schema public
                 cur.execute(
