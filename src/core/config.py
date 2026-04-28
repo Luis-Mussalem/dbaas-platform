@@ -1,3 +1,4 @@
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -42,6 +43,20 @@ class Settings(BaseSettings):
     # aplicação de rodar com uma senha conhecida/fraca acidentalmente.
     # Gerar com: python -c "import secrets; print(secrets.token_urlsafe(32))"
     PROVISIONER_SUPERUSER_PASSWORD: str
+
+    @model_validator(mode="after")
+    def check_secrets_are_changed(self) -> "Settings":
+        if "change-me" in self.JWT_SECRET_KEY:
+            raise ValueError(
+                "JWT_SECRET_KEY must be changed from the default placeholder. "
+                'Generate with: python -c "import secrets; print(secrets.token_urlsafe(48))"'
+            )
+        if "change-me" in self.FERNET_KEY:
+            raise ValueError(
+                "FERNET_KEY must be changed from the default placeholder. "
+                'Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
+            )
+        return self
 
     @property
     def DATABASE_URL(self) -> str:
