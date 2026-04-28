@@ -1,15 +1,18 @@
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.models.database_instance import InstanceStatus
 
 
+SUPPORTED_ENGINE_VERSIONS = Literal["14", "15", "16", "17"]
+
+
 class InstanceBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
-    engine_version: str = Field(default="16", max_length=50)
+    engine_version: SUPPORTED_ENGINE_VERSIONS = "16"
     cpu: Optional[int] = Field(default=None, ge=1)
     memory_mb: Optional[int] = Field(default=None, ge=128)
     storage_gb: Optional[int] = Field(default=None, ge=1)
@@ -22,7 +25,7 @@ class InstanceCreate(InstanceBase):
 
 class InstanceUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=255)
-    engine_version: Optional[str] = Field(default=None, max_length=50)
+    engine_version: Optional[SUPPORTED_ENGINE_VERSIONS] = None
     cpu: Optional[int] = Field(default=None, ge=1)
     memory_mb: Optional[int] = Field(default=None, ge=128)
     storage_gb: Optional[int] = Field(default=None, ge=1)
