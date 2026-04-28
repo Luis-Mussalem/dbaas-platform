@@ -41,7 +41,12 @@ def get_current_user(
     if is_token_blacklisted(db, jti):
         raise credentials_exception
 
-    user = db.query(User).filter(User.id == uuid.UUID(user_id)).first()
+    try:
+        user_uuid = uuid.UUID(user_id)
+    except ValueError:
+        raise credentials_exception
+
+    user = db.query(User).filter(User.id == user_uuid).first()
     if user is None or not user.is_active:
         raise credentials_exception
 
