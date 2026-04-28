@@ -10,7 +10,7 @@ from slowapi.errors import RateLimitExceeded
 
 from src.core.config import settings
 from src.core.rate_limit import limiter
-from src.routers import auth, health, instances, users
+from src.routers import auth, health, instances, metrics, users
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +41,7 @@ async def lifespan(app: FastAPI):
     # --- STARTUP ---
     from src.services.provisioning import get_provisioner
     from src.services.provisioning.status_poller import status_polling_loop
+    from src.services.metrics_poller import metrics_polling_loop
 
     logger.info("Conectando ao daemon Docker...")
     try:
@@ -56,12 +57,20 @@ async def lifespan(app: FastAPI):
     poller_task = asyncio.create_task(status_polling_loop(stop_event))
     logger.info("Status poller iniciado.")
 
+    metrics_stop_event = asyncio.Event()
+    metrics_poller_task = asyncio.create_task(
+        metrics_polling_loop(metrics_stop_event)
+    )
+    logger.info("Metrics poller iniciado.")
+
     yield  # Aplicação em execução — processando requests
 
     # --- SHUTDOWN ---
-    logger.info("Encerrando status poller...")
+    logger.info("Encerrando pollers...")
     stop_event.set()
+    metrics_stop_event.set()
     await poller_task
+    await metrics_poller_task
     logger.info("Encerramento concluído.")
 
 
@@ -108,3 +117,4 @@ app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(instances.router)
+app.include_router(metrics.router)
