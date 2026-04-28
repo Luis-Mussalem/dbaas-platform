@@ -103,9 +103,15 @@ def refresh(request: Request, db: Session = Depends(get_db)):
     if user is None or not user.is_active:
         raise credentials_exception
 
+    # Blacklist the consumed refresh token (token rotation — prevent reuse)
+    ref_expires_at = datetime.fromtimestamp(payload["exp"], tz=timezone.utc)
+    blacklist_token(db, jti, "refresh", uuid.UUID(user_id), ref_expires_at)
+
     new_access_token = create_access_token({"sub": str(user.id)})
+    new_refresh_token = create_refresh_token({"sub": str(user.id)})
     return {
         "access_token": new_access_token,
+        "refresh_token": new_refresh_token,
         "token_type": "bearer",
     }
 
