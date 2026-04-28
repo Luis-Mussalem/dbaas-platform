@@ -223,6 +223,16 @@ class DockerProvisioner(ProvisionerBase):
             autocommit=True,
         ) as conn:
             with conn.cursor() as cur:
+                # Instalar pg_stat_statements no banco da instância
+                # IF NOT EXISTS garante idempotência — sem erro se já existir
+                cur.execute("CREATE EXTENSION IF NOT EXISTS pg_stat_statements")
+
+                # Conceder pg_monitor ao db_user — acesso a pg_stat_*, pg_locks,
+                # pg_stat_statements etc. sem precisar de superuser
+                cur.execute(
+                    f"GRANT pg_monitor TO {quoted_user}"
+                )
+
                 # Permitir uso e criação de objetos no schema public
                 cur.execute(
                     f"GRANT USAGE, CREATE ON SCHEMA public TO {quoted_user}"
@@ -275,6 +285,7 @@ class DockerProvisioner(ProvisionerBase):
             network=_NETWORK_NAME,
             detach=True,
             remove=False,  # Manter container após stop (necessário para restart)
+            command=["-c", "shared_preload_libraries=pg_stat_statements"],
         )
 
         # Recarregar metadados do container para obter a porta atribuída
