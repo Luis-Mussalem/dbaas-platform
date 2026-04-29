@@ -3,6 +3,7 @@ import secrets
 import string
 import time
 import uuid
+from pathlib import Path
 from typing import Optional
 
 import docker
@@ -233,6 +234,12 @@ class DockerProvisioner(ProvisionerBase):
                     f"GRANT pg_monitor TO {quoted_user}"
                 )
 
+                # Conceder privilégio REPLICATION — necessário para pg_basebackup
+                # (backup físico) conectar a esta instância via protocolo de replicação.
+                cur.execute(
+                    f"ALTER ROLE {quoted_user} WITH REPLICATION"
+                )
+
                 # Permitir uso e criação de objetos no schema public
                 cur.execute(
                     f"GRANT USAGE, CREATE ON SCHEMA public TO {quoted_user}"
@@ -271,6 +278,12 @@ class DockerProvisioner(ProvisionerBase):
         db_name = f"db_{instance_hex[:16]}"
         db_password = self._generate_password()
 
+        # Criar diretório WAL archive no host antes de iniciar o container.
+        # Este diretório é montado como /archive dentro do container e recebe
+        # os segmentos WAL via archive_command — base para PITR no futuro.
+        wal_dir = Path(settings.BACKUP_DIR).resolve() / str(instance_id) / "wal"
+        wal_dir.mkdir(parents=True, exist_ok=True)
+
         # Iniciar container — porta None no host = Docker atribui porta livre
         # ("127.0.0.1", None) = bind em localhost com porta dinâmica
         container = self._client.containers.run(
@@ -285,7 +298,15 @@ class DockerProvisioner(ProvisionerBase):
             network=_NETWORK_NAME,
             detach=True,
             remove=False,  # Manter container após stop (necessário para restart)
-            command=["-c", "shared_preload_libraries=pg_stat_statements"],
+            command=[
+                "-c", "shared_preload_libraries=pg_stat_statements",
+                "-c", "wal_level=replica",
+                "-c", "archive_mode=on",
+                "-c", "archive_command=cp %p /archive/%f",
+            ],
+            volumes={
+                str(wal_dir): {"bind": "/archive", "mode": "rw"},
+            },
         )
 
         # Recarregar metadados do container para obter a porta atribuída
