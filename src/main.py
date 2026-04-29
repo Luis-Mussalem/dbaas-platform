@@ -10,7 +10,8 @@ from slowapi.errors import RateLimitExceeded
 
 from src.core.config import settings
 from src.core.rate_limit import limiter
-from src.routers import auth, health, instances, metrics, users
+from src.routers import auth, backups, health, instances, metrics, users
+from src.services.backup_scheduler import backup_scheduling_loop
 
 logger = logging.getLogger(__name__)
 
@@ -63,14 +64,22 @@ async def lifespan(app: FastAPI):
     )
     logger.info("Metrics poller iniciado.")
 
+    backup_stop_event = asyncio.Event()
+    backup_scheduler_task = asyncio.create_task(
+        backup_scheduling_loop(backup_stop_event)
+    )
+    logger.info("Backup scheduler iniciado.")
+
     yield  # Aplicação em execução — processando requests
 
     # --- SHUTDOWN ---
     logger.info("Encerrando pollers...")
     stop_event.set()
     metrics_stop_event.set()
+    backup_stop_event.set()
     await poller_task
     await metrics_poller_task
+    await backup_scheduler_task
     logger.info("Encerramento concluído.")
 
 
@@ -118,3 +127,4 @@ app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(instances.router)
 app.include_router(metrics.router)
+app.include_router(backups.router)
