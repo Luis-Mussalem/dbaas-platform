@@ -36,6 +36,13 @@ class Settings(BaseSettings):
     # Registration lockout
     REGISTRATION_ENABLED: bool = False
 
+    # Backup
+    BACKUP_DIR: str = "./data/backups"
+    # Diretório raiz onde todos os backups são armazenados no host.
+    # Cada instância tem sua própria subpasta: {BACKUP_DIR}/{instance_id}/
+    # Subpastas: logical/ (pg_dump .dump files), physical/ (pg_basebackup dirs), wal/ (WAL archive)
+    # Em produção, usar caminho absoluto com bastante espaço em disco.
+
     # Provisioning — Docker
     # Senha do superuser postgres dentro de cada container provisionado.
     # Sem default intencional: pydantic-settings levanta ValidationError no

@@ -33,3 +33,6 @@ guide.md
 
 # Scripts de estudo (local only)
 scripts/
+
+# Backup data (arquivos de backup não são commitados)
+data/
