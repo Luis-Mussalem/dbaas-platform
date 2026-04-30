@@ -234,6 +234,15 @@ class DockerProvisioner(ProvisionerBase):
                     f"GRANT pg_monitor TO {quoted_user}"
                 )
 
+                # Conceder pg_signal_backend — permite que o db_user chame
+                # pg_terminate_backend() para encerrar conexões idle ou longas.
+                # Necessário para as tarefas KILL_IDLE e KILL_LONG da FASE 6.
+                # Sem esse grant, pg_terminate_backend() retornaria false silenciosamente
+                # para conexões de outros usuários.
+                cur.execute(
+                    f"GRANT pg_signal_backend TO {quoted_user}"
+                )
+
                 # Conceder privilégio REPLICATION — necessário para pg_basebackup
                 # (backup físico) conectar a esta instância via protocolo de replicação.
                 cur.execute(
