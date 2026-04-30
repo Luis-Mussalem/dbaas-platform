@@ -2,7 +2,7 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, Response
+from fastapi import APIRouter, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
@@ -123,8 +123,14 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 
 
 app.include_router(health.router)
-app.include_router(auth.router)
-app.include_router(users.router)
-app.include_router(instances.router)
-app.include_router(metrics.router)
-app.include_router(backups.router)
+
+# Todas as rotas de domínio ficam sob /api/v1/.
+# health.router permanece na raiz — load balancers e probes de infra
+# fazem GET /health diretamente, sem conhecer a versão da API.
+api_v1 = APIRouter(prefix="/api/v1")
+api_v1.include_router(auth.router)
+api_v1.include_router(users.router)
+api_v1.include_router(instances.router)
+api_v1.include_router(metrics.router)
+api_v1.include_router(backups.router)
+app.include_router(api_v1)
