@@ -1,14 +1,23 @@
 import asyncio
 import logging
+from datetime import datetime, timedelta, timezone
 
 from src.core.database import SessionLocal
 from src.models.database_instance import DatabaseInstance, InstanceStatus
+from src.models.metric import Metric
 from src.services.metrics import collect_and_store
 
 logger = logging.getLogger(__name__)
 
 # Intervalo entre ciclos de coleta de métricas
 _POLL_INTERVAL_SECONDS = 60
+
+# Retenção: apagar métricas com mais de N dias (padrão: 30 dias)
+METRICS_RETENTION_DAYS = 30
+
+# Limpeza de métricas antigas: a cada N ciclos (60s × 1440 = 24h)
+_METRICS_CLEANUP_EVERY_N_CYCLES = 1440
+_metrics_cycle_counter = 0
 
 
 def poll_metrics_once() -> None:
@@ -21,7 +30,15 @@ def poll_metrics_once() -> None:
       provisionamento foi concluído antes de tentar conectar
     - Exceção por instância: uma instância problemática não cancela as demais
     - finally: db.close() sempre executa
+
+    Retenção de métricas:
+    - A cada _METRICS_CLEANUP_EVERY_N_CYCLES (~24h), apaga métricas com mais
+      de METRICS_RETENTION_DAYS dias. Sem retenção, a tabela metrics cresceria
+      ~864.000 linhas/dia com 10 instâncias RUNNING.
     """
+    global _metrics_cycle_counter
+    _metrics_cycle_counter += 1
+
     db = SessionLocal()
     try:
         instances = (
@@ -48,6 +65,25 @@ def poll_metrics_once() -> None:
                     instance.id,
                     exc,
                 )
+
+        # Limpeza periódica de métricas antigas
+        if _metrics_cycle_counter % _METRICS_CLEANUP_EVERY_N_CYCLES == 0:
+            try:
+                cutoff = datetime.now(timezone.utc) - timedelta(days=METRICS_RETENTION_DAYS)
+                deleted = (
+                    db.query(Metric)
+                    .filter(Metric.collected_at < cutoff)
+                    .delete(synchronize_session=False)
+                )
+                db.commit()
+                if deleted:
+                    logger.info(
+                        "Metrics retention: %d records older than %d days removed",
+                        deleted,
+                        METRICS_RETENTION_DAYS,
+                    )
+            except Exception as exc:
+                logger.warning("Metrics retention cleanup failed: %s", exc)
 
     finally:
         db.close()

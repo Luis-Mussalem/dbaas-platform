@@ -1,5 +1,6 @@
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from urllib.parse import quote as _urlquote
 
 
 class Settings(BaseSettings):
@@ -67,8 +68,9 @@ class Settings(BaseSettings):
 
     @property
     def DATABASE_URL(self) -> str:
+        password = _urlquote(self.POSTGRES_PASSWORD, safe="")
         return (
-            f"postgresql+psycopg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
+            f"postgresql+psycopg://{self.POSTGRES_USER}:{password}"
             f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
         )
 

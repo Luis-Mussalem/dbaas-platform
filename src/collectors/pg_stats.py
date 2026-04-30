@@ -182,23 +182,57 @@ def collect_bloat(conn: psycopg.Connection) -> list[dict[str, Any]]:
         return cur.fetchall()
 
 
+_EXPLAIN_BLOCKED = {
+    "insert", "update", "delete", "drop", "truncate",
+    "create", "alter", "grant", "revoke", "copy",
+    "vacuum", "reindex", "cluster",
+}
+_EXPLAIN_MAX_LEN = 8000
+
+
 def collect_explain(conn: psycopg.Connection, query: str) -> list:
     """
     Executar EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) para uma query SELECT.
 
     Restrito a SELECTs: EXPLAIN ANALYZE executa a query de verdade.
     Um DELETE com EXPLAIN ANALYZE causaria modificação real dos dados.
-    A validação startswith("select") previne esse efeito colateral.
+
+    Validações aplicadas (defesa em profundidade):
+    1. Tamanho máximo: evita queries enormes que consumam memória excessiva
+    2. Ponto-e-vírgula proibido: bloqueia múltiplos statements em sequência
+    3. startswith('select'): verificação primária
+    4. Blacklist de keywords DML/DDL: bloqueia SELECT ... FROM (DELETE ...) etc.
 
     FORMAT JSON retorna o plano como estrutura navegável.
     BUFFERS expõe cache hits/misses por nó — essencial para identificar
     quais partes da query forçam I/O de disco.
     """
+    if len(query) > _EXPLAIN_MAX_LEN:
+        raise ValueError(
+            f"Query too long: {len(query)} chars (max {_EXPLAIN_MAX_LEN})"
+        )
+
+    if ";" in query:
+        raise ValueError(
+            "Semicolons are not allowed — only a single SELECT statement is permitted"
+        )
+
     normalized = query.strip().lower()
     if not normalized.startswith("select"):
         raise ValueError(
             "Only SELECT queries are allowed for EXPLAIN ANALYZE. "
             f"Received: '{query[:80]}'"
+        )
+
+    # Bloquear keywords destrutivos mesmo dentro de SELECT
+    # (ex: SELECT * FROM (DELETE ... RETURNING *) t)
+    import re as _re
+    tokens = set(_re.findall(r"[a-z]+", normalized))
+    blocked = tokens & _EXPLAIN_BLOCKED
+    if blocked:
+        raise ValueError(
+            f"Query contains disallowed keyword(s): {', '.join(sorted(blocked))}. "
+            "Only pure SELECT queries are permitted."
         )
 
     with conn.cursor() as cur:

@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 import bcrypt
 from sqlalchemy.orm import Session
@@ -66,3 +66,24 @@ def blacklist_token(
     db.add(entry)
     db.commit()
     return entry
+
+
+def cleanup_expired_tokens(db: Session) -> int:
+    """
+    Remove tokens já expirados da blacklist.
+
+    Tokens expirados são inválidos independentemente de estar na blacklist —
+    o JWT decode os rejeita por 'exp'. Manter esses registros só desperdiça
+    espaço e deixa o índice de jti crescer desnecessariamente.
+
+    Retorna o número de registros removidos.
+    Deve ser chamado periodicamente por um background task (ex: diariamente).
+    """
+    now = datetime.now(timezone.utc)
+    deleted = (
+        db.query(TokenBlacklist)
+        .filter(TokenBlacklist.expires_at < now)
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    return deleted

@@ -1,8 +1,10 @@
 import asyncio
 import logging
+from datetime import datetime, timezone
 
 from src.core.database import SessionLocal
 from src.models.database_instance import DatabaseInstance, InstanceStatus
+from src.services.auth import cleanup_expired_tokens
 from src.services.provisioning.factory import get_provisioner
 from src.services.provisioning.types import ProvisionerStatus
 
@@ -10,6 +12,10 @@ logger = logging.getLogger(__name__)
 
 # Intervalo em segundos entre cada ciclo de polling
 _POLL_INTERVAL_SECONDS = 30
+
+# Limpeza de tokens expirados: a cada N ciclos de poll (30s × 2880 = 24h)
+_TOKEN_CLEANUP_EVERY_N_CYCLES = 2880
+_poll_cycle_counter = 0
 
 
 def poll_once() -> None:
@@ -34,7 +40,15 @@ def poll_once() -> None:
     - STOPPED no banco mas container reporta RUNNING
       → harmless inconsistência (não deve ocorrer em operação normal)
       → deixamos como está (não forçamos mudanças sem investigar)
+
+    Limpeza de TokenBlacklist:
+    - A cada _TOKEN_CLEANUP_EVERY_N_CYCLES ciclos (~24h), remove tokens
+      expirados da blacklist. Tokens expirados são inválidos por definição
+      (JWT rejeita por 'exp'), então mantê-los só desperdiça espaço.
     """
+    global _poll_cycle_counter
+    _poll_cycle_counter += 1
+
     provisioner = get_provisioner()
     db = SessionLocal()
     try:
@@ -72,6 +86,15 @@ def poll_once() -> None:
                 logger.exception(
                     "Erro ao fazer poll da instância %s: %s", instance.id, exc
                 )
+
+        # Limpeza periódica de tokens expirados da blacklist
+        if _poll_cycle_counter % _TOKEN_CLEANUP_EVERY_N_CYCLES == 0:
+            try:
+                removed = cleanup_expired_tokens(db)
+                if removed:
+                    logger.info("TokenBlacklist cleanup: %d expired entries removed", removed)
+            except Exception as exc:
+                logger.warning("TokenBlacklist cleanup failed: %s", exc)
 
     finally:
         db.close()

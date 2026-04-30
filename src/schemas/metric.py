@@ -77,7 +77,7 @@ class BloatResponse(BaseModel):
 
 
 class ExplainRequest(BaseModel):
-    query: str = Field(..., min_length=1)
+    query: str = Field(..., min_length=1, max_length=8000)
 
 
 class ExplainResponse(BaseModel):
