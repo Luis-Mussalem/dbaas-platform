@@ -359,7 +359,7 @@ qualquer ponto no tempo. Backups antigos limpos automaticamente pela retenção.
 
 ---
 
-### FASE 5.5 — Fundação para Crescimento `[ ]`
+### FASE 5.5 — Fundação para Crescimento `[x]`
 
 > Duas correções de infraestrutura que precisam ser feitas antes das próximas
 > fases adicionarem mais rotas, endpoints e containers. São mudanças pequenas
@@ -382,7 +382,7 @@ CPU e RAM configurados na instância — nenhum banco pode sufocar os outros por
 
 ---
 
-### FASE 6 — Manutenção Automatizada `[ ]`
+### FASE 6 — Manutenção Automatizada `[x]`
 
 > PostgreSQL exige manutenção regular para manter performance. Esta fase
 > automatiza tudo que um DBA faria manualmente: VACUUM, REINDEX, ANALYZE,
