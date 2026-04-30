@@ -85,6 +85,8 @@ async def create_instance(db: Session, data: InstanceCreate) -> DatabaseInstance
             provisioner.create,
             instance.id,
             instance.engine_version,
+            instance.memory_mb,
+            instance.cpu,
         )
     except Exception as exc:
         instance.status = InstanceStatus.FAILED

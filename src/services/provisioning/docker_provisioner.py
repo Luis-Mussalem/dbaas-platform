@@ -258,7 +258,13 @@ class DockerProvisioner(ProvisionerBase):
     # Implementação da interface ProvisionerBase
     # ---------------------------------------------------------------------------
 
-    def create(self, instance_id: uuid.UUID, engine_version: str) -> ProvisionResult:
+    def create(
+        self,
+        instance_id: uuid.UUID,
+        engine_version: str,
+        memory_mb: int | None = None,
+        cpu: int | None = None,
+    ) -> ProvisionResult:
         """
         Provisionar um container PostgreSQL completo para uma instância.
 
@@ -286,28 +292,40 @@ class DockerProvisioner(ProvisionerBase):
 
         # Iniciar container — porta None no host = Docker atribui porta livre
         # ("127.0.0.1", None) = bind em localhost com porta dinâmica
-        container = self._client.containers.run(
-            image=f"postgres:{engine_version}-alpine",
-            name=container_name,
-            environment={
+        run_kwargs: dict = {
+            "image": f"postgres:{engine_version}-alpine",
+            "name": container_name,
+            "environment": {
                 "POSTGRES_USER": "postgres",
                 "POSTGRES_PASSWORD": settings.PROVISIONER_SUPERUSER_PASSWORD,
                 "POSTGRES_DB": "postgres",
             },
-            ports={"5432/tcp": ("127.0.0.1", None)},
-            network=_NETWORK_NAME,
-            detach=True,
-            remove=False,  # Manter container após stop (necessário para restart)
-            command=[
+            "ports": {"5432/tcp": ("127.0.0.1", None)},
+            "network": _NETWORK_NAME,
+            "detach": True,
+            "remove": False,  # Manter container após stop (necessário para restart)
+            "command": [
                 "-c", "shared_preload_libraries=pg_stat_statements",
                 "-c", "wal_level=replica",
                 "-c", "archive_mode=on",
                 "-c", "archive_command=cp %p /archive/%f",
             ],
-            volumes={
+            "volumes": {
                 str(wal_dir): {"bind": "/archive", "mode": "rw"},
             },
-        )
+        }
+
+        # Aplicar limites de recurso quando definidos na instância.
+        # mem_limit: string no formato "<n>m" (ex: "512m") — equivale a --memory no docker run.
+        # nano_cpus: inteiro em nanoCPUs (1 CPU = 1_000_000_000) — equivale a --cpus no docker run.
+        # Usar nano_cpus (throttling por tempo) em vez de cpuset_cpus (pinning de núcleos):
+        # cpu=2 significa "pode usar até 2 CPUs equivalentes", não "só pode usar os núcleos 0 e 1".
+        if memory_mb is not None:
+            run_kwargs["mem_limit"] = f"{memory_mb}m"
+        if cpu is not None:
+            run_kwargs["nano_cpus"] = int(cpu * 1_000_000_000)
+
+        container = self._client.containers.run(**run_kwargs)
 
         # Recarregar metadados do container para obter a porta atribuída
         container.reload()

@@ -20,7 +20,13 @@ class ProvisionerBase(ABC):
     """
 
     @abstractmethod
-    def create(self, instance_id: uuid.UUID, engine_version: str) -> ProvisionResult:
+    def create(
+        self,
+        instance_id: uuid.UUID,
+        engine_version: str,
+        memory_mb: int | None = None,
+        cpu: int | None = None,
+    ) -> ProvisionResult:
         """
         Provisionar um novo container de banco de dados.
 
@@ -28,6 +34,9 @@ class ProvisionerBase(ABC):
         - Iniciar o container Docker
         - Aguardar o PostgreSQL aceitar conexões
         - Criar o banco e a role dedicada com privilégios mínimos
+
+        memory_mb: limite de RAM em MiB (None = sem limite)
+        cpu: vCPUs máximas (None = sem limite; convertido para nano_cpus internamente)
 
         Levanta RuntimeError se o provisionamento falhar por qualquer motivo.
         """
