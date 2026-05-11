@@ -1,6 +1,6 @@
 # PalmTreeDB — Agent Instructions
 
-> Documento central de orientação para o GitHub Copilot neste projeto.
+> Documento central de orientação para agentes de IA (Claude Code) neste projeto.
 > Atualizar sempre que houver mudança de convenções, stack ou cronograma.
 
 > ⚠️ **REGRA DE SEGURANÇA — NUNCA IGNORAR**
@@ -118,9 +118,24 @@ autenticação existente (FASE 1) serve como admin access para proteger a API.
 
 ### 3.1 Formato Padrão de Resposta
 
-O usuário cria todos os arquivos manualmente. **Sempre evitar** usar ferramentas de
-edição automática (create_file, replace_string_in_file, etc.) para código do
-projeto — a não ser quando seja explicitamente solicitado pelo usuário.
+> ⚠️ **REGRA DE PRIVACIDADE — NUNCA IGNORAR**
+>
+> Este repositório é **público** (portfólio). Antes de criar ou editar qualquer arquivo
+> que vai para o git, verificar se o conteúdo expõe:
+> - **Nome do produto** não registrado (ex.: marca ainda não formalizada)
+> - Credenciais, segredos ou tokens em qualquer forma
+> - Dados de clientes ou informações operacionais reais
+> - Qualquer informação que identifique clientes específicos
+>
+> Arquivos excluídos do git (`.gitignore`) — `AGENTS.md`, `guide.md`, `scripts/`,
+> `data/`, `.env` — podem conter essas informações. **Arquivos rastreados pelo git**
+> (código-fonte, `requirements.txt`, `README.md`, `.env.example`) devem conter
+> **apenas valores genéricos e reutilizáveis**.
+
+**Claude Code** pode criar e editar arquivos diretamente quando explicitamente
+solicitado pelo usuário. Para cada implementação, sempre fornecer o código
+**completo** do arquivo (nunca parcial, nunca com `...` ou `# resto do código`),
+indicando o caminho relativo à raiz do projeto e se é criação ou edição.
 
 Cada resposta de implementação deve seguir este template:
 
@@ -547,4 +562,5 @@ O valor proprietário está na **operação com clientes reais**, não no códig
 | 7 | 2026-04-30 | `token_blacklist` crescia indefinidamente | Nenhuma tarefa removia tokens já expirados da tabela | `cleanup_expired_tokens()` em `src/services/auth.py` + chamada diária no `status_poller` |
 | 8 | 2026-04-30 | Tabela `metrics` crescia indefinidamente | Sem política de retenção — ~864k linhas/dia com 10 instâncias RUNNING | Retenção de 30 dias + limpeza diária em `src/services/metrics_poller.py` |
 | 9 | 2026-04-30 | `ExplainRequest.query` sem `max_length` no schema Pydantic | Schema e collector desalinhados — Pydantic aceitava strings arbitrariamente longas | `max_length=8000` adicionado ao campo em `src/schemas/metric.py` |
+| 10 | 2026-05-11 | `kill_idle_connections` falhava com "permission denied for function pg_terminate_backend" | Role provisionada sem a permissão `pg_signal_backend` — necessária para chamar `pg_terminate_backend` / `pg_cancel_backend` em sessões de outros roles | `GRANT pg_signal_backend TO {role}` adicionado ao `DockerProvisioner` em `src/services/provisioning/docker_provisioner.py` |
 

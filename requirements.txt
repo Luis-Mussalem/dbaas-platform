@@ -13,3 +13,4 @@ docker==7.1.0
 cryptography==44.0.2
 slowapi==0.1.9
 croniter>=3.0.0
+httpx>=0.27.0
