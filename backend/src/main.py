@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
+from src.core.audit_middleware import AuditMiddleware
 from src.core.config import settings
 from src.core.rate_limit import limiter
 from src.routers import alerts, auth, backups, health, instances, maintenance, metrics, users
@@ -118,6 +119,11 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
+
+# AuditMiddleware adicionado por último = mais interno na cadeia.
+# Executa depois que o handler já processou o request e a resposta está pronta.
+# Assim, só grava ações que o handler confirmou como bem-sucedidas (2xx).
+app.add_middleware(AuditMiddleware)
 
 
 @app.middleware("http")
