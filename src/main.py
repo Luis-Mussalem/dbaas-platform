@@ -10,7 +10,8 @@ from slowapi.errors import RateLimitExceeded
 
 from src.core.config import settings
 from src.core.rate_limit import limiter
-from src.routers import auth, backups, health, instances, maintenance, metrics, users
+from src.routers import alerts, auth, backups, health, instances, maintenance, metrics, users
+from src.services.alert_evaluator import alert_evaluation_loop
 from src.services.backup_scheduler import backup_scheduling_loop
 from src.services.maintenance_scheduler import maintenance_scheduling_loop
 
@@ -77,6 +78,12 @@ async def lifespan(app: FastAPI):
     )
     logger.info("Maintenance scheduler iniciado.")
 
+    alert_stop_event = asyncio.Event()
+    alert_evaluator_task = asyncio.create_task(
+        alert_evaluation_loop(alert_stop_event)
+    )
+    logger.info("Alert evaluator iniciado.")
+
     yield  # Aplicação em execução — processando requests
 
     # --- SHUTDOWN ---
@@ -85,10 +92,12 @@ async def lifespan(app: FastAPI):
     metrics_stop_event.set()
     backup_stop_event.set()
     maintenance_stop_event.set()
+    alert_stop_event.set()
     await poller_task
     await metrics_poller_task
     await backup_scheduler_task
     await maintenance_scheduler_task
+    await alert_evaluator_task
     logger.info("Encerramento concluído.")
 
 
@@ -143,4 +152,5 @@ api_v1.include_router(instances.router)
 api_v1.include_router(metrics.router)
 api_v1.include_router(backups.router)
 api_v1.include_router(maintenance.router)
+api_v1.include_router(alerts.router)
 app.include_router(api_v1)
