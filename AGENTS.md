@@ -425,7 +425,7 @@ Recomendações de tuning geradas automaticamente baseadas em CPU/memória da in
 
 ---
 
-### FASE 7 — Alertas & Notificações `[ ]`
+### FASE 7 — Alertas & Notificações `[x]`
 
 > Detecção proativa de problemas. Em vez de esperar algo quebrar, a plataforma
 > avisa antes — transformando reação em prevenção.
@@ -445,6 +445,17 @@ Recomendações de tuning geradas automaticamente baseadas em CPU/memória da in
 **Critério de conclusão:** Alertas disparam automaticamente quando métricas excedem
 thresholds configurados. Backup com falha nas últimas 24h gera alerta crítico.
 Histórico de alertas consultável.
+
+**Entregas implementadas:**
+- Models `AlertRule` + `AlertEvent` com migration Alembic
+- 5 metric_types: `connections_ratio`, `cache_hit_ratio`, `db_usage_percent`, `long_query_seconds`, `backup_age_hours`
+- 5 condições: `gt`, `gte`, `lt`, `lte`, `eq`
+- 3 severidades: `info`, `warning`, `critical`
+- Engine de avaliação: ciclo de 60s, auto-disparo e auto-resolução de eventos
+- Notificação via log + webhook HTTP (configurável via `ALERT_WEBHOOK_URL`)
+- Seed de regras padrão via `POST /instances/{id}/alerts/seed-defaults`
+- Router com 9 endpoints sob `/api/v1/`
+- Background loop `alert_evaluation_loop` registrado no lifespan
 
 ---
 
