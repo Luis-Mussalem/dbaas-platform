@@ -4,6 +4,7 @@ from src.models.token_blacklist import TokenBlacklist
 from src.models.metric import Metric
 from src.models.backup import Backup, BackupSchedule
 from src.models.maintenance import MaintenanceTask, MaintenanceSchedule, TaskType, TaskStatus
+from src.models.alert import AlertRule, AlertEvent, AlertCondition, AlertSeverity
 
 __all__ = [
     "User",
@@ -16,4 +17,8 @@ __all__ = [
     "MaintenanceSchedule",
     "TaskType",
     "TaskStatus",
+    "AlertRule",
+    "AlertEvent",
+    "AlertCondition",
+    "AlertSeverity",
 ]
