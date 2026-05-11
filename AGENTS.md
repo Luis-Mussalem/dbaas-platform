@@ -483,7 +483,7 @@ Histórico de alertas consultável.
 
 ---
 
-### FASE 8 — Painel de Administração `[ ]`
+### FASE 8 — Painel de Administração `[x]`
 
 > Visão consolidada de toda a plataforma. Um único lugar para ver a saúde
 > de todos os bancos gerenciados.
@@ -494,11 +494,21 @@ Histórico de alertas consultável.
 | Overview da plataforma | Total de instâncias (por status), alertas ativos, backups recentes, próximas manutenções |
 | Model `AuditLog` | user_id, action, resource_type, resource_id, details (JSON), ip_address, timestamp |
 | Audit trail | Evento emitido automaticamente pelos endpoints — sem anotação manual no código de negócio |
-| Eventos auditáveis | **Auth:** `register`, `login`, `logout` · **Instances:** `create`, `status_change`, `delete` · **Backups:** `backup_created`, `restore_initiated`, `schedule_created`, `schedule_deleted` · **Maintenance (F6):** `maintenance_run`, `config_applied` · **Replication (F9):** `replica_created`, `failover_promoted` |
+| Eventos auditáveis | **Auth:** `register`, `login`, `logout` · **Instances:** `create`, `status_change`, `delete` · **Backups:** `backup_created`, `restore_initiated`, `schedule_created`, `schedule_deleted` · **Maintenance (F6):** `maintenance_run` |
 | Router `/admin` | `GET /admin/dashboard`, `GET /admin/audit-log` |
 
 **Critério de conclusão:** Dashboard retorna visão consolidada da saúde de todos os bancos.
 Audit log registra todas as ações relevantes da plataforma.
+
+**Entregas implementadas:**
+- Model `AuditLog` com migration Alembic (`e0033cc79913`)
+- Índices: `action`, `timestamp`, composto `(user_id, timestamp)`
+- `AuditMiddleware` — intercepção automática via regex de path + método, sem anotação nos routers
+- 11 ações auditadas: `register`, `login`, `logout`, `instance_created`, `instance_status_changed`, `instance_deleted`, `backup_created`, `restore_initiated`, `schedule_created`, `schedule_deleted`, `maintenance_run`
+- `user_id` extraído do JWT Bearer no header (NULL para login/register — sem token no request)
+- Service `admin.py`: `write_audit_log()`, `get_dashboard()`, `list_audit_logs()`
+- 2 endpoints sob `/api/v1/admin/`: `GET /admin/dashboard`, `GET /admin/audit-log`
+- `GET /admin/audit-log` filtrável por `action`, `resource_type` e `user_id` com paginação
 
 ---
 
