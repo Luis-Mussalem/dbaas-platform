@@ -5,6 +5,7 @@ from src.models.metric import Metric
 from src.models.backup import Backup, BackupSchedule
 from src.models.maintenance import MaintenanceTask, MaintenanceSchedule, TaskType, TaskStatus
 from src.models.alert import AlertRule, AlertEvent, AlertCondition, AlertSeverity
+from src.models.audit_log import AuditLog
 
 __all__ = [
     "User",
@@ -21,4 +22,5 @@ __all__ = [
     "AlertEvent",
     "AlertCondition",
     "AlertSeverity",
+    "AuditLog",
 ]
