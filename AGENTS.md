@@ -40,7 +40,16 @@
 > ```bash
 > sudo docker compose up -d
 > source .venv/bin/activate
+> cd backend
 > uvicorn src.main:app --reload --port 8001
+> ```
+>
+> Para rodar migrações Alembic:
+>
+> ```bash
+> cd backend
+> alembic upgrade head
+> alembic revision --autogenerate -m "descrição"
 > ```
 
 ---
@@ -83,14 +92,29 @@ autenticação existente (FASE 1) serve como admin access para proteger a API.
 
 ## 2. Stack do Projeto
 
+### Estrutura do Repositório (Monorepo)
+
+```
+dbaas-platform/
+├── backend/          ← Python/FastAPI (src/, alembic/, alembic.ini, requirements.txt)
+├── frontend/         ← Next.js (planejado — placeholder atual)
+├── data/             ← Backups em runtime (gitignored — só estrutura rastreada)
+├── docker-compose.yaml
+├── .env / .env.example
+└── .venv/            ← Virtualenv Python (raiz do projeto, gitignored)
+```
+
+### Stack por Camada
+
 | Camada     | Tecnologia                                           |
 |------------|------------------------------------------------------|
-| Framework  | FastAPI 0.115.0 (Python 3.12)                        |
+| Backend    | FastAPI 0.115.0 (Python 3.12) — em `backend/`        |
 | ORM        | SQLAlchemy 2.0.44 — **SYNC sempre** (Session + psycopg) |
-| Migrations | Alembic 1.17.2                                       |
+| Migrations | Alembic 1.17.2 — executar sempre de `backend/`       |
 | Database   | PostgreSQL 16 Alpine                                  |
 | DB Admin   | pgAdmin                                              |
-| Ambiente   | WSL2 Ubuntu 24.04, venv em `.venv/`                  |
+| Frontend   | Next.js 15 (TypeScript, App Router, Tailwind, shadcn/ui) — em `frontend/` *(planejado)* |
+| Ambiente   | WSL2 Ubuntu 24.04, venv em `.venv/` (raiz do projeto) |
 
 ---
 
@@ -182,7 +206,7 @@ git commit -m "tipo: descrição objetiva da mudança"
 
 | Entrega | Descrição |
 |---------|-----------|
-| Estrutura de pastas | `src/` com layout de pacotes (models, schemas, routers, services, core) |
+| Estrutura de pastas | `backend/src/` com layout de pacotes (models, schemas, routers, services, core) |
 | Docker Compose | PostgreSQL 16 Alpine + pgAdmin — ambiente local completo |
 | Configuração | `.env.example` + `pydantic-settings` para gerenciar variáveis |
 | FastAPI app | Aplicação inicializada com CORS e tratamento de exceções padronizado |
@@ -526,6 +550,115 @@ Lag de replicação monitorado. Réplica pode ser promovida a primary via API.
 
 ---
 
+### FRONTEND F0 — Setup do Projeto Next.js `[ ]`
+
+> Primeiro contato com JavaScript/TypeScript. Configurar o projeto frontend
+> dentro do monorepo, integrado à API do backend.
+
+| Entrega | Descrição |
+|---------|-----------|
+| Scaffold | `npx create-next-app@latest frontend --typescript --tailwind --app` |
+| shadcn/ui | Componentes de UI instalados no projeto |
+| `lib/api.ts` | Cliente HTTP tipado que aponta para `http://localhost:8001/api/v1/` |
+| `lib/types.ts` | Tipos TypeScript espelhando os schemas Pydantic do backend |
+| `context/AuthContext.tsx` | Context API para gerenciar token JWT e estado de autenticação |
+
+**Critério de conclusão:** `npm run dev` sobe o Next.js em `localhost:3000`. Calls à API tipadas.
+
+---
+
+### FRONTEND F1 — Autenticação `[ ]`
+
+> Primeira tela real. Login → JWT → acesso protegido.
+
+| Entrega | Descrição |
+|---------|-----------|
+| Login page | `/login` — formulário de email + senha, call a `POST /auth/login` |
+| JWT storage | Token armazenado em `localStorage`, injetado via `api.ts` em cada request |
+| Protected routes | `middleware.ts` do Next.js redireciona `/login` se não autenticado |
+| Logout | Chama `POST /auth/logout`, limpa token, redireciona para `/login` |
+
+**Critério de conclusão:** Login funcional. Rotas protegidas redirecionam se sem token.
+
+---
+
+### FRONTEND F2 — Gestão de Instâncias `[ ]`
+
+> Tela principal da plataforma: listar, criar e gerenciar bancos.
+
+| Entrega | Descrição |
+|---------|-----------|
+| Listagem | `/instances` — tabela com status, host, engine, criado em |
+| Detalhe | `/instances/[id]` — info completa da instância |
+| Criar | Modal ou drawer com formulário de nova instância |
+| Ações | Botões de stop, start, delete com confirmação |
+
+**Critério de conclusão:** CRUD de instâncias funcional na UI.
+
+---
+
+### FRONTEND F3 — Métricas & Observabilidade `[ ]`
+
+> Visibilidade em tempo real sobre cada banco gerenciado.
+
+| Entrega | Descrição |
+|---------|-----------|
+| Gráficos | Cache hit ratio, conexões ativas — recharts ou Chart.js |
+| Polling | Atualização automática a cada 30s |
+| Slow queries | Tabela com top queries por tempo de execução |
+| Locks | Visualização de locks ativos |
+
+**Critério de conclusão:** Métricas renderizadas com atualização automática.
+
+---
+
+### FRONTEND F4 — Backups `[ ]`
+
+> Visibilidade e controle sobre backups de cada instância.
+
+| Entrega | Descrição |
+|---------|-----------|
+| Listagem | Lista de backups por instância (tipo, status, tamanho, data) |
+| Trigger manual | Botão para disparar backup lógico ou físico |
+| Restore | Formulário de restore com seleção de backup |
+| Schedule | UI para configurar backup agendado |
+
+**Critério de conclusão:** Backup manual e agendado gerenciáveis via UI.
+
+---
+
+### FRONTEND F5 — Manutenção & Alertas `[ ]`
+
+> Controle das tarefas automáticas e visibilidade dos alertas ativos.
+
+| Entrega | Descrição |
+|---------|-----------|
+| Tarefas de manutenção | Histórico de VACUUM, REINDEX, ANALYZE por instância |
+| Trigger manual | Disparar manutenção imediatamente via UI |
+| Regras de alerta | Listar, criar e desativar regras de alerta |
+| Eventos de alerta | Feed de alertas ativos e resolvidos |
+
+**Critério de conclusão:** Alertas ativos visíveis. Manutenção disparável manualmente.
+
+---
+
+### FRONTEND F6 — Dashboard Consolidado `[ ]`
+
+> Visão de cima: saúde de toda a plataforma em uma página.
+> Depende de `GET /admin/dashboard` (FASE 8 do backend).
+
+| Entrega | Descrição |
+|---------|-----------|
+| Overview | Total de instâncias por status, alertas ativos, backups recentes |
+| Status cards | Card por instância com indicador de saúde |
+| Audit log | Tabela de ações recentes da plataforma |
+| Navegação | Sidebar ou nav com links para todas as seções |
+
+**Critério de conclusão:** Dashboard carrega visão consolidada de todos os bancos.
+Navegação completa entre seções da plataforma funcional.
+
+---
+
 ### Mapa de Dependências
 
 ```
@@ -541,8 +674,15 @@ FASE 0 (Fundação)
                                   └─→ FASE 5.5 (Fundação para Crescimento)
                                         └─→ FASE 6 (Manutenção Automatizada)
                                               └─→ FASE 8 (Painel de Administração)
-                                                    └─→ FASE 9 (Replicação & Alta Disponibilidade)
-                                                          └─→ FASE 10 (Deploy & Polimento)
+                                                    ├─→ FASE 9 (Replicação & Alta Disponibilidade)
+                                                    │     └─→ FASE 10 (Deploy & Polimento)
+                                                    └─→ F0 (Frontend Setup)
+                                                          └─→ F1 (Auth UI)
+                                                                └─→ F2 (Instâncias UI)
+                                                                      └─→ F3 (Métricas UI)
+                                                                            └─→ F4 (Backups UI)
+                                                                                  └─→ F5 (Manutenção & Alertas UI)
+                                                                                        └─→ F6 (Dashboard Consolidado)
 ```
 
 ### Separação Público / Privado
@@ -568,10 +708,10 @@ O valor proprietário está na **operação com clientes reais**, não no códig
 | 2 | 2026-04-08 | `(trapped) error reading bcrypt version` | `passlib 1.7.4` tenta acessar `bcrypt.__about__` removido na versão 4.x | Remover `passlib`, usar `bcrypt` diretamente via `bcrypt.hashpw` / `bcrypt.checkpw` |
 | 3 | 2026-04-08 | `RuntimeError: Form data requires python-multipart` | `OAuth2PasswordRequestForm` depende de `python-multipart` não incluído no `requirements.txt` | Instalar e adicionar `python-multipart==0.0.9` ao `requirements.txt` |
 | 4 | 2026-04-14 | pgAdmin `password authentication failed for user "palmtreedb"` | Arquivo `.env` com terminação CRLF (Windows). Copy-paste incluía `\r` invisível na senha (33 chars vs 32 esperados) | `sed -i 's/\r$//' .env` para converter CRLF → LF. Verificar LF no canto inferior do VS Code |
-| 5 | 2026-04-30 | `collect_explain` aceitava `SELECT * FROM (DELETE ...)` | Validação apenas com `startswith("select")` — não bloqueava DML embutido em subqueries | Blacklist `_EXPLAIN_BLOCKED`, limite de 8000 chars, proibição de `;` em `src/collectors/pg_stats.py` |
-| 6 | 2026-04-30 | `DATABASE_URL` quebrava com senhas contendo `@`, `#`, `/` | f-string sem encode da senha → SQLAlchemy falha ao parsear host da URL | `urllib.parse.quote(password, safe="")` no property `DATABASE_URL` em `src/core/config.py` |
-| 7 | 2026-04-30 | `token_blacklist` crescia indefinidamente | Nenhuma tarefa removia tokens já expirados da tabela | `cleanup_expired_tokens()` em `src/services/auth.py` + chamada diária no `status_poller` |
-| 8 | 2026-04-30 | Tabela `metrics` crescia indefinidamente | Sem política de retenção — ~864k linhas/dia com 10 instâncias RUNNING | Retenção de 30 dias + limpeza diária em `src/services/metrics_poller.py` |
-| 9 | 2026-04-30 | `ExplainRequest.query` sem `max_length` no schema Pydantic | Schema e collector desalinhados — Pydantic aceitava strings arbitrariamente longas | `max_length=8000` adicionado ao campo em `src/schemas/metric.py` |
-| 10 | 2026-05-11 | `kill_idle_connections` falhava com "permission denied for function pg_terminate_backend" | Role provisionada sem a permissão `pg_signal_backend` — necessária para chamar `pg_terminate_backend` / `pg_cancel_backend` em sessões de outros roles | `GRANT pg_signal_backend TO {role}` adicionado ao `DockerProvisioner` em `src/services/provisioning/docker_provisioner.py` |
+| 5 | 2026-04-30 | `collect_explain` aceitava `SELECT * FROM (DELETE ...)` | Validação apenas com `startswith("select")` — não bloqueava DML embutido em subqueries | Blacklist `_EXPLAIN_BLOCKED`, limite de 8000 chars, proibição de `;` em `backend/src/collectors/pg_stats.py` |
+| 6 | 2026-04-30 | `DATABASE_URL` quebrava com senhas contendo `@`, `#`, `/` | f-string sem encode da senha → SQLAlchemy falha ao parsear host da URL | `urllib.parse.quote(password, safe="")` no property `DATABASE_URL` em `backend/src/core/config.py` |
+| 7 | 2026-04-30 | `token_blacklist` crescia indefinidamente | Nenhuma tarefa removia tokens já expirados da tabela | `cleanup_expired_tokens()` em `backend/src/services/auth.py` + chamada diária no `status_poller` |
+| 8 | 2026-04-30 | Tabela `metrics` crescia indefinidamente | Sem política de retenção — ~864k linhas/dia com 10 instâncias RUNNING | Retenção de 30 dias + limpeza diária em `backend/src/services/metrics_poller.py` |
+| 9 | 2026-04-30 | `ExplainRequest.query` sem `max_length` no schema Pydantic | Schema e collector desalinhados — Pydantic aceitava strings arbitrariamente longas | `max_length=8000` adicionado ao campo em `backend/src/schemas/metric.py` |
+| 10 | 2026-05-11 | `kill_idle_connections` falhava com "permission denied for function pg_terminate_backend" | Role provisionada sem a permissão `pg_signal_backend` — necessária para chamar `pg_terminate_backend` / `pg_cancel_backend` em sessões de outros roles | `GRANT pg_signal_backend TO {role}` adicionado ao `DockerProvisioner` em `backend/src/services/provisioning/docker_provisioner.py` |
 
