@@ -1,11 +1,15 @@
+from pathlib import Path
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from urllib.parse import quote as _urlquote
 
+# backend/src/core/config.py → parents[3] = project root (dbaas-platform/)
+_PROJECT_ROOT = Path(__file__).parents[3]
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(_PROJECT_ROOT / ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -38,11 +42,11 @@ class Settings(BaseSettings):
     REGISTRATION_ENABLED: bool = False
 
     # Backup
-    BACKUP_DIR: str = "./data/backups"
+    BACKUP_DIR: str = str(_PROJECT_ROOT / "data" / "backups")
     # Diretório raiz onde todos os backups são armazenados no host.
     # Cada instância tem sua própria subpasta: {BACKUP_DIR}/{instance_id}/
     # Subpastas: logical/ (pg_dump .dump files), physical/ (pg_basebackup dirs), wal/ (WAL archive)
-    # Em produção, usar caminho absoluto com bastante espaço em disco.
+    # Em produção, substituir por um caminho com bastante espaço em disco.
 
     # Alerts
     # URL opcional para entrega de webhooks quando um alerta dispara ou é resolvido.
