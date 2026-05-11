@@ -44,6 +44,13 @@ class Settings(BaseSettings):
     # Subpastas: logical/ (pg_dump .dump files), physical/ (pg_basebackup dirs), wal/ (WAL archive)
     # Em produção, usar caminho absoluto com bastante espaço em disco.
 
+    # Alerts
+    # URL opcional para entrega de webhooks quando um alerta dispara ou é resolvido.
+    # Se não definida, alertas são registrados apenas no log da aplicação.
+    # O payload enviado é JSON com: event, severity, metric_type, instance_id,
+    # current_value, threshold, message, triggered_at, resolved_at.
+    ALERT_WEBHOOK_URL: str | None = None
+
     # Provisioning — Docker
     # Senha do superuser postgres dentro de cada container provisionado.
     # Sem default intencional: pydantic-settings levanta ValidationError no
