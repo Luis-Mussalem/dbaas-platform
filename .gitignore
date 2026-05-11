@@ -23,7 +23,7 @@ Thumbs.db
 docker-compose.override.yml
 
 # Alembic
-alembic/versions/__pycache__/
+backend/alembic/versions/__pycache__/
 
 # Agents
 AGENTS.md
@@ -34,5 +34,13 @@ guide.md
 # Scripts de estudo (local only)
 scripts/
 
-# Backup data (arquivos de backup não são commitados)
-data/
+# Backup data — rastrear o diretório data/, ignorar apenas os conteúdos
+data/backups/
+data/wal/
+data/physical/
+
+# Frontend (Next.js)
+frontend/node_modules/
+frontend/.next/
+frontend/.env.local
+frontend/out/
