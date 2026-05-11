@@ -93,6 +93,12 @@ This project focuses heavily on backend engineering and operational concepts, in
 ## Scheduling & Automation
 - croniter
 
+## Frontend *(in progress)*
+- Next.js 15
+- TypeScript
+- Tailwind CSS
+- shadcn/ui
+
 ---
 
 # Features
@@ -163,19 +169,29 @@ This project focuses heavily on backend engineering and operational concepts, in
 
 # Architecture
 
-The project follows a modular backend architecture focused on scalability, maintainability, and separation of concerns.
+The project is organized as a monorepo separating backend, frontend, and data layers.
 
 ```text
-src/
+dbaas-platform/
 │
-├── collectors/     # PostgreSQL metrics & statistics collectors
-├── core/           # Configuration, security, database setup
-├── models/         # SQLAlchemy ORM models
-├── routers/        # API routes/endpoints
-├── schemas/        # Pydantic request/response schemas
-├── services/       # Business logic and workflows
+├── backend/            # Python / FastAPI
+│   ├── src/
+│   │   ├── collectors/ # PostgreSQL metrics & statistics collectors
+│   │   ├── core/       # Configuration, security, database setup
+│   │   ├── models/     # SQLAlchemy ORM models
+│   │   ├── routers/    # API routes/endpoints
+│   │   ├── schemas/    # Pydantic request/response schemas
+│   │   ├── services/   # Business logic and workflows
+│   │   └── main.py     # FastAPI application entrypoint
+│   ├── alembic/        # Database migrations
+│   └── requirements.txt
 │
-├── main.py         # FastAPI application entrypoint
+├── frontend/           # Next.js (TypeScript) — in progress
+│
+├── data/               # Runtime backups and WAL archives (gitignored)
+│
+├── docker-compose.yaml # PostgreSQL + pgAdmin
+└── .env.example        # Environment variable template
 ```
 
 ---
@@ -350,10 +366,20 @@ The example file already contains all required configuration variables for:
 
 ---
 
-## Run with Docker
+## Start infrastructure with Docker
 
 ```bash
-docker compose up --build
+docker compose up -d
+```
+
+---
+
+## Run the API
+
+```bash
+source .venv/bin/activate
+cd backend
+uvicorn src.main:app --reload --port 8001
 ```
 
 ---
@@ -363,19 +389,19 @@ docker compose up --build
 Swagger UI:
 
 ```bash
-http://localhost:8000/docs
+http://localhost:8001/docs
 ```
 
 ReDoc:
 
 ```bash
-http://localhost:8000/redoc
+http://localhost:8001/redoc
 ```
 
 Health check:
 
 ```bash
-http://localhost:8000/health
+http://localhost:8001/health
 ```
 
 ---
@@ -393,16 +419,16 @@ Implemented phases include:
 - Backup & PITR
 - Infrastructure scaling groundwork
 - Automated maintenance workflows
+- Alerting & notifications system
 
 Planned future phases include:
 
-- Alerting system
-- Administrative dashboard
+- Administrative dashboard (backend)
+- Next.js frontend administration panel
 - Replication & high availability
 - CI/CD pipelines
 - Automated testing
 - Cloud deployment
-- Frontend administration panel
 
 ---
 
@@ -410,7 +436,7 @@ Planned future phases include:
 
 Potential future improvements include:
 
-- React / Next.js administration frontend
+- Next.js administration frontend (in progress)
 - Real-time monitoring dashboards
 - Multi-user support
 - Role-based access control
