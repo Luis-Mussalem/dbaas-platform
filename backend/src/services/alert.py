@@ -55,7 +55,7 @@ def get_rule(db: Session, rule_id: uuid.UUID) -> Optional[AlertRule]:
 
 
 def update_rule(db: Session, rule: AlertRule, data: AlertRuleUpdate) -> AlertRule:
-    for field, value in data.model_dump(exclude_none=True).items():
+    for field, value in data.model_dump(exclude_unset=True).items():
         setattr(rule, field, value)
     db.commit()
     db.refresh(rule)
