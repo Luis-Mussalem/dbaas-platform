@@ -3,7 +3,8 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from src.core.dependencies import get_current_user, get_db, get_instance_or_404
+from src.core.database import get_db
+from src.core.dependencies import get_current_user, get_instance_or_404
 from src.models.alert import AlertEvent, AlertRule
 from src.models.user import User
 from src.schemas.alert import AlertEventRead, AlertRuleCreate, AlertRuleRead, AlertRuleUpdate
