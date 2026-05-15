@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from src.core.config import settings
 from src.core.database import get_db
+from src.models.database_instance import DatabaseInstance, InstanceStatus
 from src.models.user import User
 from src.services.auth import is_token_blacklisted
 
@@ -51,3 +52,30 @@ def get_current_user(
         raise credentials_exception
 
     return user
+
+
+def get_instance_or_404(instance_id: uuid.UUID, db: Session) -> DatabaseInstance:
+    instance = (
+        db.query(DatabaseInstance)
+        .filter(
+            DatabaseInstance.id == instance_id,
+            DatabaseInstance.deleted_at.is_(None),
+        )
+        .first()
+    )
+    if not instance:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Instance not found",
+        )
+    return instance
+
+
+def get_instance_if_running(instance_id: uuid.UUID, db: Session) -> DatabaseInstance:
+    instance = get_instance_or_404(instance_id, db)
+    if instance.status != InstanceStatus.RUNNING:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Instance is not RUNNING (current status: {instance.status.value})",
+        )
+    return instance

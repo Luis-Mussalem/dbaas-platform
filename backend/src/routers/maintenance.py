@@ -3,9 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from src.core.database import get_db
-from src.core.dependencies import get_current_user
-from src.models.database_instance import DatabaseInstance, InstanceStatus
+from src.core.dependencies import get_current_user, get_db, get_instance_or_404, get_instance_if_running
 from src.models.maintenance import MaintenanceSchedule
 from src.models.user import User
 from src.schemas.maintenance import (
@@ -23,38 +21,6 @@ router = APIRouter(prefix="/instances", tags=["Maintenance"])
 # ---------------------------------------------------------------------------
 # Helpers internos
 # ---------------------------------------------------------------------------
-
-def _require_instance(instance_id: uuid.UUID, db: Session) -> DatabaseInstance:
-    """Retorna a instância ou levanta 404."""
-    instance = (
-        db.query(DatabaseInstance)
-        .filter(
-            DatabaseInstance.id == instance_id,
-            DatabaseInstance.deleted_at.is_(None),
-        )
-        .first()
-    )
-    if not instance:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Instance not found",
-        )
-    return instance
-
-
-def _require_running(instance_id: uuid.UUID, db: Session) -> DatabaseInstance:
-    """Retorna a instância somente se estiver RUNNING; 404 ou 409 caso contrário."""
-    instance = _require_instance(instance_id, db)
-    if instance.status != InstanceStatus.RUNNING:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                f"Instance is '{instance.status.value}' — "
-                "maintenance tasks require RUNNING status"
-            ),
-        )
-    return instance
-
 
 def _require_schedule(
     schedule_id: uuid.UUID,
@@ -103,7 +69,7 @@ def run_maintenance(
 
     Requer que a instância esteja `RUNNING`.
     """
-    instance = _require_running(instance_id, db)
+    instance = get_instance_if_running(instance_id, db)
     try:
         return svc.run_task(db, instance, data)
     except ValueError as exc:
@@ -128,7 +94,7 @@ def list_maintenance_history(
     Retornar histórico das últimas tarefas de manutenção da instância.
     Ordenado por `scheduled_at` decrescente.
     """
-    _require_instance(instance_id, db)
+    get_instance_or_404(instance_id, db)
     return svc.get_task_history(db, instance_id, limit=limit)
 
 
@@ -154,7 +120,7 @@ def create_schedule(
     `VACUUM_FULL` não pode ser agendado automaticamente (usa lock exclusivo).
     Execute-o manualmente via `POST /maintenance/run`.
     """
-    _require_instance(instance_id, db)
+    get_instance_or_404(instance_id, db)
     return svc.create_schedule(db, instance_id, data)
 
 
@@ -169,7 +135,7 @@ def list_schedules(
     _: User = Depends(get_current_user),
 ):
     """Retornar todos os agendamentos de manutenção da instância."""
-    _require_instance(instance_id, db)
+    get_instance_or_404(instance_id, db)
     return svc.list_schedules(db, instance_id)
 
 
@@ -185,7 +151,7 @@ def delete_schedule(
     _: User = Depends(get_current_user),
 ):
     """Remover permanentemente um agendamento de manutenção."""
-    _require_instance(instance_id, db)
+    get_instance_or_404(instance_id, db)
     schedule = _require_schedule(schedule_id, instance_id, db)
     svc.delete_schedule(db, schedule)
 
@@ -209,5 +175,5 @@ def get_config_recommendations(
     As fórmulas seguem as recomendações do [wiki.postgresql.org](https://wiki.postgresql.org/wiki/Tuning_Your_PostgreSQL_Server)
     e do pgTune para cargas OLTP.
     """
-    instance = _require_instance(instance_id, db)
+    instance = get_instance_or_404(instance_id, db)
     return svc.get_config_recommendations(instance)

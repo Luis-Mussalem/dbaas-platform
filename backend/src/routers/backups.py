@@ -4,10 +4,8 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from src.core.database import get_db
-from src.core.dependencies import get_current_user
+from src.core.dependencies import get_current_user, get_db, get_instance_or_404, get_instance_if_running
 from src.models.backup import BackupStatus, BackupStrategy
-from src.models.database_instance import DatabaseInstance, InstanceStatus
 from src.models.user import User
 from src.schemas.backup import (
     BackupRead,
@@ -31,46 +29,6 @@ from src.services.backup import (
 )
 
 router = APIRouter(tags=["Backups"])
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _require_instance(instance_id: uuid.UUID, db: Session) -> DatabaseInstance:
-    """
-    Retorna a instância se existir e não estiver deletada.
-    Levanta 404 se não encontrada.
-    """
-    instance = (
-        db.query(DatabaseInstance)
-        .filter(
-            DatabaseInstance.id == instance_id,
-            DatabaseInstance.deleted_at.is_(None),
-        )
-        .first()
-    )
-    if not instance:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Instance not found",
-        )
-    return instance
-
-
-def _require_running(instance_id: uuid.UUID, db: Session) -> DatabaseInstance:
-    """
-    Retorna a instância apenas se estiver em status RUNNING.
-    Levanta 404 se não encontrada, 409 se não estiver RUNNING.
-    """
-    instance = _require_instance(instance_id, db)
-    if instance.status != InstanceStatus.RUNNING:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Instance is not RUNNING (current status: {instance.status})",
-        )
-    return instance
 
 
 # ---------------------------------------------------------------------------
@@ -99,7 +57,7 @@ async def create_backup(
     Operação bloqueante — aguarda a conclusão do backup antes de retornar.
     Para bancos grandes, pode levar vários minutos.
     """
-    instance = _require_running(instance_id, db)
+    instance = get_instance_if_running(instance_id, db)
 
     if not instance.connection_uri:
         raise HTTPException(
@@ -137,7 +95,7 @@ def list_instance_backups(
     """
     Lista todos os backups não-deletados de uma instância, mais recentes primeiro.
     """
-    _require_instance(instance_id, db)
+    get_instance_or_404(instance_id, db)
     return list_backups(db, instance_id)
 
 
@@ -224,7 +182,7 @@ async def restore_backup(
             detail="Only logical backups can be restored via this endpoint",
         )
 
-    instance = _require_running(backup.instance_id, db)
+    instance = get_instance_if_running(backup.instance_id, db)
 
     try:
         await asyncio.to_thread(restore_logical_backup, db, backup, instance)
@@ -256,7 +214,7 @@ def create_backup_schedule(
     A cron expression é validada antes de salvar.
     next_run_at é calculado automaticamente.
     """
-    _require_instance(instance_id, db)
+    get_instance_or_404(instance_id, db)
     return create_schedule(db, instance_id, data)
 
 
@@ -270,7 +228,7 @@ def list_backup_schedules(
     _: User = Depends(get_current_user),
 ):
     """Lista todos os schedules de backup de uma instância."""
-    _require_instance(instance_id, db)
+    get_instance_or_404(instance_id, db)
     return list_schedules(db, instance_id)
 
 
@@ -290,7 +248,7 @@ def update_backup_schedule(
     Se a cron expression mudar, next_run_at é recalculado automaticamente.
     Se is_active for desativado, next_run_at é anulado (pausa o schedule).
     """
-    _require_instance(instance_id, db)
+    get_instance_or_404(instance_id, db)
     schedule = get_schedule_by_id(db, schedule_id)
     if not schedule or schedule.instance_id != instance_id:
         raise HTTPException(
@@ -311,7 +269,7 @@ def delete_backup_schedule(
     _: User = Depends(get_current_user),
 ):
     """Remove um schedule de backup. Os backups já criados não são afetados."""
-    _require_instance(instance_id, db)
+    get_instance_or_404(instance_id, db)
     schedule = get_schedule_by_id(db, schedule_id)
     if not schedule or schedule.instance_id != instance_id:
         raise HTTPException(

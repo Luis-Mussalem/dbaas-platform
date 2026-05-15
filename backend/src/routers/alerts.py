@@ -3,31 +3,13 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from src.core.database import get_db
-from src.core.dependencies import get_current_user
+from src.core.dependencies import get_current_user, get_db, get_instance_or_404
 from src.models.alert import AlertEvent, AlertRule
-from src.models.database_instance import DatabaseInstance
 from src.models.user import User
 from src.schemas.alert import AlertEventRead, AlertRuleCreate, AlertRuleRead, AlertRuleUpdate
 from src.services import alert as alert_service
 
 router = APIRouter(tags=["alerts"])
-
-
-def _get_instance_or_404(instance_id: uuid.UUID, db: Session) -> DatabaseInstance:
-    instance = (
-        db.query(DatabaseInstance)
-        .filter(
-            DatabaseInstance.id == instance_id,
-            DatabaseInstance.deleted_at.is_(None),
-        )
-        .first()
-    )
-    if not instance:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Instance not found"
-        )
-    return instance
 
 
 def _get_rule_or_404(rule_id: uuid.UUID, db: Session) -> AlertRule:
@@ -63,7 +45,7 @@ def create_alert_rule(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    _get_instance_or_404(instance_id, db)
+    get_instance_or_404(instance_id, db)
     return alert_service.create_rule(db, instance_id, data)
 
 
@@ -76,7 +58,7 @@ def list_alert_rules(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    _get_instance_or_404(instance_id, db)
+    get_instance_or_404(instance_id, db)
     return alert_service.list_rules(db, instance_id)
 
 
@@ -140,7 +122,7 @@ def seed_default_alert_rules(
     Use após provisionar uma nova instância para ativar o monitoramento
     automático com os thresholds recomendados.
     """
-    _get_instance_or_404(instance_id, db)
+    get_instance_or_404(instance_id, db)
     return alert_service.seed_default_rules(db, instance_id)
 
 
@@ -163,7 +145,7 @@ def list_instance_alert_events(
 
     ?only_open=true retorna apenas eventos ainda não resolvidos.
     """
-    _get_instance_or_404(instance_id, db)
+    get_instance_or_404(instance_id, db)
     return alert_service.list_events(db, instance_id, only_open=only_open)
 
 
