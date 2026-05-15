@@ -25,7 +25,7 @@ docker-compose.override.yml
 # Alembic
 backend/alembic/versions/__pycache__/
 
-# Agents
+# Agent instructions (private — replaced by public CLAUDE.md)
 AGENTS.md
 
 # Study guide
