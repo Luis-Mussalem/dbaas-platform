@@ -167,6 +167,24 @@ This project focuses heavily on backend engineering and operational concepts, in
 
 ---
 
+## Alerts & Notifications
+- Configurable alert rules per instance (threshold, condition, severity)
+- Automated evaluation against collected metrics (60-second cycle)
+- Auto-fire and auto-resolution of alert events
+- Severity levels: info, warning, critical
+- Default rule seed (connections, cache hit ratio, disk usage, long queries, backup age)
+- HTTP webhook integration for external notification delivery
+
+---
+
+## Administration & Audit
+- Platform dashboard with consolidated health view across all instances
+- Audit log with automatic event capture via middleware (no manual annotation)
+- 11 audited action types across auth, instances, backups, and maintenance
+- Filterable audit trail by action type, resource type, and user
+
+---
+
 # Architecture
 
 The project is organized as a monorepo separating backend, frontend, and data layers.
@@ -420,11 +438,11 @@ Implemented phases include:
 - Infrastructure scaling groundwork
 - Automated maintenance workflows
 - Alerting & notifications system
+- Administration panel & audit log
 
 Planned future phases include:
 
-- Administrative dashboard (backend)
-- Next.js frontend administration panel
+- Next.js frontend (in progress)
 - Replication & high availability
 - CI/CD pipelines
 - Automated testing
