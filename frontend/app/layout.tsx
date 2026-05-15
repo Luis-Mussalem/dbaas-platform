@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PalmTreeDB",
-  description: "Database-as-a-Service — gerencie instâncias PostgreSQL",
+  title: "DBaaS Platform",
+  description: "Database-as-a-Service — manage PostgreSQL instances",
 };
 
 export default function RootLayout({

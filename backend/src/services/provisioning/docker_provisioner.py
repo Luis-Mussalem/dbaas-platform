@@ -15,10 +15,10 @@ from src.services.provisioning.base import ProvisionerBase
 from src.services.provisioning.types import ProvisionResult, ProvisionerStatus
 
 # Prefixo para todos os containers provisionados pela plataforma
-_CONTAINER_PREFIX = "palmtreedb-inst-"
+_CONTAINER_PREFIX = "dbaas-inst-"
 
 # Nome da rede Docker isolada para as instâncias gerenciadas
-_NETWORK_NAME = "palmtreedb-network"
+_NETWORK_NAME = "dbaas-network"
 
 # Quantos segundos esperar o PostgreSQL aceitar conexões antes de desistir
 _READY_TIMEOUT_SECONDS = 90
@@ -94,7 +94,7 @@ class DockerProvisioner(ProvisionerBase):
     - PROVISIONER_SUPERUSER_PASSWORD usado apenas no setup, nunca armazenado
     - A role da instância tem apenas CONNECT + CRUD no próprio banco
     - Containers publicam porta apenas em 127.0.0.1 (localhost WSL2)
-    - Todos os containers ficam na rede Docker isolada palmtreedb-network
+    - Todos os containers ficam na rede Docker isolada dbaas-network
     """
 
     def __init__(self, client: docker.DockerClient) -> None:
@@ -102,7 +102,7 @@ class DockerProvisioner(ProvisionerBase):
         self._ensure_network()
 
     def _ensure_network(self) -> None:
-        """Criar a rede Docker palmtreedb-network se ainda não existir."""
+        """Criar a rede Docker dbaas-network se ainda não existir."""
         try:
             self._client.networks.get(_NETWORK_NAME)
         except docker.errors.NotFound:

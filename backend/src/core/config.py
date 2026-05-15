@@ -15,14 +15,14 @@ class Settings(BaseSettings):
     )
 
     # Application
-    APP_NAME: str = "PalmTreeDB"
+    APP_NAME: str = "DBaaS Platform"
     APP_VERSION: str = "0.1.0"
     DEBUG: bool = False
 
     # Database
-    POSTGRES_USER: str = "palmtreedb"
+    POSTGRES_USER: str = "dbaas"
     POSTGRES_PASSWORD: str = "change-me"
-    POSTGRES_DB: str = "palmtreedb"
+    POSTGRES_DB: str = "dbaas"
     POSTGRES_HOST: str = "localhost"
     POSTGRES_PORT: int = 5432
 
