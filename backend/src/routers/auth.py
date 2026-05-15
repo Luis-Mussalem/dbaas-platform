@@ -1,6 +1,5 @@
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -26,7 +25,7 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
 class LogoutRequest(BaseModel):
-    refresh_token: Optional[str] = None
+    refresh_token: str
 
 
 @router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
@@ -144,21 +143,20 @@ def logout(
 
     blacklist_token(db, jti, token_type, current_user.id, expires_at)
 
-    if body.refresh_token:
-        try:
-            ref_payload = jwt.decode(
-                body.refresh_token,
-                settings.JWT_SECRET_KEY,
-                algorithms=[settings.JWT_ALGORITHM],
-            )
-            ref_jti = ref_payload["jti"]
-            ref_type = ref_payload["type"]
-            ref_exp = ref_payload["exp"]
-            if ref_type == "refresh":
-                ref_expires_at = datetime.fromtimestamp(ref_exp, tz=timezone.utc)
-                blacklist_token(db, ref_jti, ref_type, current_user.id, ref_expires_at)
-        except (JWTError, KeyError):
-            pass
+    try:
+        ref_payload = jwt.decode(
+            body.refresh_token,
+            settings.JWT_SECRET_KEY,
+            algorithms=[settings.JWT_ALGORITHM],
+        )
+        ref_jti = ref_payload["jti"]
+        ref_type = ref_payload["type"]
+        ref_exp = ref_payload["exp"]
+        if ref_type == "refresh":
+            ref_expires_at = datetime.fromtimestamp(ref_exp, tz=timezone.utc)
+            blacklist_token(db, ref_jti, ref_type, current_user.id, ref_expires_at)
+    except (JWTError, KeyError):
+        pass
 
     return {"detail": "Successfully logged out"}
 
