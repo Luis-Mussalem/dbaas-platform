@@ -354,6 +354,24 @@ The goal is to reinforce operational thinking and long-term maintainability.
 
 ---
 
+# Development Approach
+
+This project follows an engineering-first and learning-oriented development workflow.
+
+Claude Code assisted development tools were used primarily for:
+
+- architecture planning
+- technical research
+- debugging support
+- documentation refinement
+- accelerated learning of backend and infrastructure concepts
+
+The focus remains on understanding system design decisions, PostgreSQL internals, backend engineering practices, and operational workflows rather than relying on autonomous code generation.
+
+This approach was intentionally adopted to reinforce deep technical understanding while accelerating iteration and experimentation during development.
+
+---
+
 # Running the Project
 
 ## Clone the repository
