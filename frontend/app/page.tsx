@@ -1,24 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { listInstances } from "@/lib/api";
 import { InstanceCard } from "@/components/InstanceCard";
-import type { Instance } from "@/lib/types";
+import { useInstances } from "@/hooks/use-instances";
 
 export default function HomePage() {
-  const [instances, setInstances] = useState<Instance[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
   const { logout } = useAuth();
-
-  useEffect(() => {
-    listInstances()
-      .then(setInstances)
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
-      .finally(() => setIsLoading(false));
-  }, []);
+  const { instances, isLoading, error } = useInstances();
 
   if (isLoading) {
     return (
