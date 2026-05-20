@@ -43,6 +43,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       })
       .catch(() => {
         localStorage.removeItem("access_token");
+        document.cookie = "auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
         setToken(null);
         setUser(null);
         setIsLoading(false);
@@ -52,12 +53,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
   async function login(username: string, password: string): Promise<void> {
     const response = await apiLogin(username, password);
     localStorage.setItem("access_token", response.access_token);
+    document.cookie = `auth_token=${response.access_token}; path=/; SameSite=Lax`;
     setIsLoading(true);
     setToken(response.access_token);
   }
 
   function logout(): void {
     localStorage.removeItem("access_token");
+    document.cookie = "auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
     setToken(null);
     setUser(null);
   }
