@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { listInstances } from "@/lib/api";
+import { InstanceCard } from "@/components/InstanceCard";
 import type { Instance } from "@/lib/types";
 
 export default function HomePage() {
@@ -52,22 +53,7 @@ export default function HomePage() {
       ) : (
         <div className="flex flex-col gap-3">
           {instances.map((instance) => (
-            <div
-              key={instance.id}
-              className="rounded-lg border border-zinc-800 bg-zinc-900 p-4"
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-medium text-zinc-100">{instance.name}</span>
-                <span className="text-xs text-zinc-500 uppercase tracking-wide">
-                  {instance.status}
-                </span>
-              </div>
-              {instance.host && (
-                <p className="text-sm text-zinc-500 mt-1">
-                  {instance.host}:{instance.port}
-                </p>
-              )}
-            </div>
+            <InstanceCard key={instance.id} instance={instance} />
           ))}
         </div>
       )}
