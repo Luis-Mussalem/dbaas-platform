@@ -1,4 +1,5 @@
 "use client";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { InstanceCard } from "@/components/InstanceCard";
 import { useInstances } from "@/hooks/use-instances";
@@ -7,6 +8,7 @@ import { CreateInstanceDialog } from "@/components/CreateInstanceDialog";
 export default function HomePage() {
   const { logout } = useAuth();
   const { instances, isLoading, error, create } = useInstances();
+  const router = useRouter();
 
   if (isLoading) {
     return (
@@ -41,7 +43,11 @@ export default function HomePage() {
       ) : (
         <div className="flex flex-col gap-3">
           {instances.map((instance) => (
-            <InstanceCard key={instance.id} instance={instance} />
+            <InstanceCard
+              key={instance.id}
+              instance={instance}
+              onClick={() => router.push(`/instances/${instance.id}`)}
+            />
           ))}
         </div>
       )}

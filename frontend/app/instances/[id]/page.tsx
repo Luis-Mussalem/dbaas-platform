@@ -1,0 +1,115 @@
+"use client";
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { getInstance } from "@/lib/api";
+import type { Instance } from "@/lib/types";
+
+export default function InstanceDetailPage() {
+  const { id } = useParams<{ id: string }>();
+  const router = useRouter();
+  const [instance, setInstance] = useState<Instance | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getInstance(id)
+      .then(setInstance)
+      .catch((err) =>
+        setError(err instanceof Error ? err.message : "Failed to load")
+      )
+      .finally(() => setIsLoading(false));
+  }, [id]);
+
+  if (isLoading) {
+    return (
+      <main className="flex flex-1 items-center justify-center">
+        <p className="text-zinc-500 text-sm">Loading...</p>
+      </main>
+    );
+  }
+
+  if (error || !instance) {
+    return (
+      <main className="flex flex-1 items-center justify-center">
+        <p className="text-red-400 text-sm">{error ?? "Instance not found"}</p>
+      </main>
+    );
+  }
+
+  return (
+    <main className="flex flex-1 flex-col p-8 gap-6 max-w-2xl mx-auto w-full">
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => router.back()}
+          className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
+        >
+          ← Back
+        </button>
+        <h1 className="text-xl font-semibold text-zinc-100">{instance.name}</h1>
+        <span className="text-xs text-zinc-500 uppercase tracking-wide">
+          {instance.status}
+        </span>
+      </div>
+
+      <div className="rounded-lg border border-zinc-800 bg-zinc-900 divide-y divide-zinc-800">
+        <Section title="Engine">
+          <Row label="Version" value={`PostgreSQL ${instance.engine_version}`} />
+          <Row label="Status" value={instance.status} />
+        </Section>
+
+        {(instance.host || instance.port || instance.db_name || instance.db_user) && (
+          <Section title="Connection">
+            {instance.host && <Row label="Host" value={instance.host} />}
+            {instance.port && <Row label="Port" value={String(instance.port)} />}
+            {instance.db_name && <Row label="Database" value={instance.db_name} />}
+            {instance.db_user && <Row label="User" value={instance.db_user} />}
+          </Section>
+        )}
+
+        {(instance.cpu || instance.memory_mb || instance.storage_gb) && (
+          <Section title="Resources">
+            {instance.cpu && <Row label="CPU" value={`${instance.cpu} vCPU`} />}
+            {instance.memory_mb && (
+              <Row label="Memory" value={`${instance.memory_mb / 1024} GB`} />
+            )}
+            {instance.storage_gb && (
+              <Row label="Storage" value={`${instance.storage_gb} GB`} />
+            )}
+          </Section>
+        )}
+
+        {instance.notes && (
+          <Section title="Notes">
+            <p className="px-4 py-3 text-sm text-zinc-400">{instance.notes}</p>
+          </Section>
+        )}
+      </div>
+    </main>
+  );
+}
+
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <p className="px-4 pt-3 pb-1 text-xs font-medium text-zinc-500 uppercase tracking-wider">
+        {title}
+      </p>
+      {children}
+    </div>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between px-4 py-2">
+      <span className="text-sm text-zinc-500">{label}</span>
+      <span className="text-sm text-zinc-100 font-mono">{value}</span>
+    </div>
+  );
+}
