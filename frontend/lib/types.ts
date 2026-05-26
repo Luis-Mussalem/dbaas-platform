@@ -5,7 +5,9 @@ export type InstanceStatus =
   | "provisioning"
   | "running"
   | "stopped"
-  | "deleting";
+  | "deleting"
+  | "deleted"
+  | "failed";
 
 export type BackupStatus = "pending" | "running" | "completed" | "failed" | "deleted";
 export type BackupType = "manual" | "scheduled";
@@ -40,6 +42,7 @@ export interface LoginRequest {
 
 export interface TokenResponse {
   access_token: string;
+  refresh_token: string;
   token_type: string;
 }
 

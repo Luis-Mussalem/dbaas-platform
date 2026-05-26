@@ -9,6 +9,8 @@ const STATUS_STYLES: Record<InstanceStatus, string> = {
   pending:      "bg-yellow-500/10 text-yellow-400",
   provisioning: "bg-blue-500/10 text-blue-400",
   deleting:     "bg-red-500/10 text-red-400",
+  deleted:      "bg-zinc-700/20 text-zinc-500",
+  failed:       "bg-red-700/10 text-red-500",
 };
 
 // ─── Props ─────────────────────────────────────────────────────────────────────
