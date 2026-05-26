@@ -1,6 +1,8 @@
 import uuid
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from src.core.database import get_db
@@ -18,6 +20,16 @@ from src.services.instance import (
 )
 
 router = APIRouter(prefix="/instances", tags=["Instances"])
+
+
+class StatusAction(BaseModel):
+    action: Literal["start", "stop"]
+
+
+_ACTION_TO_STATUS = {
+    "start": InstanceStatus.RUNNING,
+    "stop": InstanceStatus.STOPPED,
+}
 
 
 @router.post("", response_model=InstanceRead, status_code=status.HTTP_201_CREATED)
@@ -65,14 +77,14 @@ def update(
 @router.patch("/{instance_id}/status", response_model=InstanceRead)
 async def change_status(
     instance_id: uuid.UUID,
-    new_status: InstanceStatus,
+    body: StatusAction,
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
     instance = get_instance_by_id(db, instance_id)
     if not instance:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instance not found")
-    return await transition_status(db, instance, new_status)
+    return await transition_status(db, instance, _ACTION_TO_STATUS[body.action])
 
 
 @router.delete("/{instance_id}", response_model=InstanceRead)
