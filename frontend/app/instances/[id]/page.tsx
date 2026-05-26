@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { getInstance } from "@/lib/api";
+import { useMetrics } from "@/hooks/use-metrics";
 import type { Instance } from "@/lib/types";
 
 export default function InstanceDetailPage() {
@@ -10,6 +11,8 @@ export default function InstanceDetailPage() {
   const [instance, setInstance] = useState<Instance | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const { metrics } = useMetrics(id);
 
   useEffect(() => {
     getInstance(id)
@@ -75,6 +78,18 @@ export default function InstanceDetailPage() {
             {instance.storage_gb && (
               <Row label="Storage" value={`${instance.storage_gb} GB`} />
             )}
+          </Section>
+        )}
+
+        {metrics && Object.keys(metrics.metrics).length > 0 && (
+          <Section title="Metrics">
+            {Object.entries(metrics.metrics).map(([key, value]) => (
+              <Row
+                key={key}
+                label={key.replace(/_/g, " ")}
+                value={String(Number(value.toFixed(2)))}
+              />
+            ))}
           </Section>
         )}
 
