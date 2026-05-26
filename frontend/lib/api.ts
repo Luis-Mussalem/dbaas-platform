@@ -71,8 +71,11 @@ export async function login(
   });
 }
 
-export async function logout(): Promise<void> {
-  return request<void>("/auth/logout", { method: "POST" });
+export async function logout(refreshToken: string | null = null): Promise<void> {
+  return request<void>("/auth/logout", {
+    method: "POST",
+    body: JSON.stringify({ refresh_token: refreshToken }),
+  });
 }
 
 export async function getCurrentUser(): Promise<User> {

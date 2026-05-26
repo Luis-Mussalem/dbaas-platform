@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import type { User } from "@/lib/types";
-import { getCurrentUser, login as apiLogin } from "@/lib/api";
+import { getCurrentUser, login as apiLogin, logout as apiLogout } from "@/lib/api";
 
 // ─── Context shape ─────────────────────────────────────────────────────────────
 
@@ -43,6 +43,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       })
       .catch(() => {
         localStorage.removeItem("access_token");
+        localStorage.removeItem("refresh_token");
         document.cookie = "auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
         setToken(null);
         setUser(null);
@@ -53,13 +54,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
   async function login(username: string, password: string): Promise<void> {
     const response = await apiLogin(username, password);
     localStorage.setItem("access_token", response.access_token);
+    localStorage.setItem("refresh_token", response.refresh_token);
     document.cookie = `auth_token=${response.access_token}; path=/; SameSite=Lax`;
     setIsLoading(true);
     setToken(response.access_token);
   }
 
   function logout(): void {
+    const refreshToken = localStorage.getItem("refresh_token");
+    // Fire-and-forget: blacklist tokens on backend (best-effort, never blocks UI)
+    apiLogout(refreshToken).catch(() => undefined);
     localStorage.removeItem("access_token");
+    localStorage.removeItem("refresh_token");
     document.cookie = "auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
     setToken(null);
     setUser(null);
