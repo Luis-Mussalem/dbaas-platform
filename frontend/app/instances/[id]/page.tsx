@@ -6,6 +6,7 @@ import { updateInstanceStatus, deleteInstance } from "@/lib/api";
 import { useMetrics } from "@/hooks/use-metrics";
 import { Button } from "@/components/ui/button";
 import type { Instance } from "@/lib/types";
+import { MetricsChart } from "@/components/MetricsChart";
 
 export default function InstanceDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -132,6 +133,7 @@ export default function InstanceDetailPage() {
 
         {metrics && Object.keys(metrics.metrics).length > 0 && (
           <Section title="Metrics">
+            <MetricsChart snapshot={metrics} />
             {Object.entries(metrics.metrics).map(([key, value]) => (
               <Row
                 key={key}
