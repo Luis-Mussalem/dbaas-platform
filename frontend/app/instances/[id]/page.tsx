@@ -2,7 +2,9 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { getInstance } from "@/lib/api";
+import { updateInstanceStatus, deleteInstance } from "@/lib/api";
 import { useMetrics } from "@/hooks/use-metrics";
+import { Button } from "@/components/ui/button";
 import type { Instance } from "@/lib/types";
 
 export default function InstanceDetailPage() {
@@ -11,6 +13,7 @@ export default function InstanceDetailPage() {
   const [instance, setInstance] = useState<Instance | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isActing, setIsActing] = useState(false);
 
   const { metrics } = useMetrics(id);
 
@@ -22,6 +25,42 @@ export default function InstanceDetailPage() {
       )
       .finally(() => setIsLoading(false));
   }, [id]);
+
+  // ─── Action handlers ────────────────────────────────────────────────────────
+
+  async function handleStatusChange(action: "start" | "stop") {
+    if (!instance) return;
+    setIsActing(true);
+    try {
+      const updated = await updateInstanceStatus(instance.id, action);
+      setInstance(updated); // React re-renders with new status automatically
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Action failed");
+    } finally {
+      setIsActing(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!instance) return;
+    // window.confirm() is the simplest way to ask for confirmation in the browser
+    // Returns true if user clicked OK, false if clicked Cancel
+    const confirmed = window.confirm(
+      `Delete "${instance.name}"? This cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setIsActing(true);
+    try {
+      await deleteInstance(instance.id);
+      router.push("/"); // Navigate back to the list after deletion
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Delete failed");
+      setIsActing(false);
+    }
+  }
+
+  // ─── Loading / error states ──────────────────────────────────────────────────
 
   if (isLoading) {
     return (
@@ -38,6 +77,16 @@ export default function InstanceDetailPage() {
       </main>
     );
   }
+
+  // ─── Derived state: which buttons to show ────────────────────────────────────
+  // These are NOT stored in useState — they are recalculated on every render
+  // from instance.status. When setInstance() is called, these update automatically.
+  const canStart = instance.status === "stopped" || instance.status === "failed";
+  const canStop = instance.status === "running";
+  const canDelete = !["deleting", "deleted"].includes(instance.status);
+  const isTransitioning = ["pending", "provisioning", "deleting"].includes(
+    instance.status
+  );
 
   return (
     <main className="flex flex-1 flex-col p-8 gap-6 max-w-2xl mx-auto w-full">
@@ -96,6 +145,57 @@ export default function InstanceDetailPage() {
         {instance.notes && (
           <Section title="Notes">
             <p className="px-4 py-3 text-sm text-zinc-400">{instance.notes}</p>
+          </Section>
+        )}
+
+        {/* ─── Actions section ─────────────────────────────────────────────── */}
+        {/* Only renders if instance is not already deleted */}
+        {canDelete && (
+          <Section title="Actions">
+            <div className="px-4 py-3 flex items-center gap-3">
+
+              {/* Start button: visible only when instance can be started */}
+              {canStart && (
+                <Button
+                  onClick={() => handleStatusChange("start")}
+                  disabled={isActing || isTransitioning}
+                  className="bg-green-600 hover:bg-green-500 text-white"
+                >
+                  {isActing ? "Starting..." : "Start"}
+                </Button>
+              )}
+
+              {/* Stop button: visible only when instance is running */}
+              {canStop && (
+                <Button
+                  onClick={() => handleStatusChange("stop")}
+                  disabled={isActing || isTransitioning}
+                  variant="outline"
+                  className="border-zinc-600 text-zinc-300 hover:bg-zinc-800"
+                >
+                  {isActing ? "Stopping..." : "Stop"}
+                </Button>
+              )}
+
+              {/* Transitioning message: shows when status is in-progress */}
+              {isTransitioning && (
+                <p className="text-xs text-zinc-500">
+                  {instance.status === "provisioning" && "Provisioning..."}
+                  {instance.status === "pending" && "Pending..."}
+                  {instance.status === "deleting" && "Deleting..."}
+                </p>
+              )}
+
+              {/* Delete: always shown (except deleted/deleting), destructive */}
+              <Button
+                onClick={handleDelete}
+                disabled={isActing || isTransitioning}
+                variant="ghost"
+                className="ml-auto text-red-400 hover:text-red-300 hover:bg-red-950/30"
+              >
+                Delete
+              </Button>
+            </div>
           </Section>
         )}
       </div>
