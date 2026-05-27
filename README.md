@@ -1,8 +1,8 @@
 # Database as a Service Platform
 
-Backend platform for provisioning, managing, monitoring, and maintaining PostgreSQL database instances through a REST API.
+Full-stack platform for provisioning, managing, monitoring, and maintaining PostgreSQL database instances. Combines a FastAPI backend with a Next.js frontend for end-to-end database lifecycle management.
 
-This DBaaS was designed as a long-term backend engineering project focused on infrastructure automation, database lifecycle management, observability, security hardening, and operational reliability.
+This DBaaS was designed as a long-term engineering project focused on infrastructure automation, database lifecycle management, observability, security hardening, and operational reliability.
 
 The project simulates real-world DBaaS concepts commonly found in modern platform engineering and cloud database services.
 
@@ -10,6 +10,10 @@ The project simulates real-world DBaaS concepts commonly found in modern platfor
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)
+![React](https://img.shields.io/badge/React-61DAFB?style=for-the-badge&logo=react&logoColor=black)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)
 
 ![JWT Authentication](https://img.shields.io/badge/Auth-JWT-black?style=flat-square)
 ![PITR](https://img.shields.io/badge/PostgreSQL-PITR-blue?style=flat-square)
@@ -24,7 +28,7 @@ The project simulates real-world DBaaS concepts commonly found in modern platfor
 >
 > Sensitive infrastructure details, production credentials, operational environments, and client-specific configurations were intentionally excluded for security reasons.
 >
-> The repository preserves the core backend architecture, engineering concepts, and implementation patterns of the platform for portfolio purposes.
+> The repository preserves the core architecture, engineering concepts, and implementation patterns of the platform for portfolio purposes.
 
 ---
 
@@ -32,7 +36,7 @@ The project simulates real-world DBaaS concepts commonly found in modern platfor
 
 Modern applications increasingly depend on scalable and automated infrastructure services.
 
-This project explores how database infrastructure can be abstracted into a backend platform capable of:
+This project explores how database infrastructure can be abstracted into a full-stack platform capable of:
 
 - Provisioning PostgreSQL instances dynamically
 - Managing database lifecycle and state transitions
@@ -41,6 +45,7 @@ This project explores how database infrastructure can be abstracted into a backe
 - Handling backups and recovery workflows
 - Applying practical security hardening techniques
 - Structuring infrastructure operations through APIs
+- Exposing all of the above through a modern web interface
 
 The goal is not only to build APIs, but to design systems that simulate operational challenges found in real backend and infrastructure environments.
 
@@ -60,18 +65,19 @@ This project focuses heavily on backend engineering and operational concepts, in
 - Backup and recovery strategies
 - API-first platform design
 - Reproducible containerized environments
+- Full-stack integration with a typed React frontend
 
 ---
 
 # Tech Stack
 
 ## Backend
-- Python
-- FastAPI
+- Python 3.12
+- FastAPI 0.115
 
 ## Database
 - PostgreSQL 16
-- SQLAlchemy
+- SQLAlchemy 2.0 (sync)
 - Alembic
 - psycopg
 
@@ -93,11 +99,14 @@ This project focuses heavily on backend engineering and operational concepts, in
 ## Scheduling & Automation
 - croniter
 
-## Frontend *(in progress)*
-- Next.js 15
+## Frontend
+- Next.js 16 (App Router)
 - TypeScript
-- Tailwind CSS
-- shadcn/ui
+- React 19
+- Tailwind CSS v4
+- shadcn/ui + Base UI
+- recharts (metrics visualization)
+- lucide-react (icons)
 
 ---
 
@@ -185,6 +194,16 @@ This project focuses heavily on backend engineering and operational concepts, in
 
 ---
 
+## Frontend Interface
+- JWT authentication with token rotation (login, logout, protected routes)
+- Instance list with status badges and resource summary
+- Instance detail with live metrics polling (5-second interval)
+- Start / Stop / Delete actions with reactive status updates
+- Metrics bar chart (recharts)
+- Responsive dark UI with Tailwind CSS
+
+---
+
 # Architecture
 
 The project is organized as a monorepo separating backend, frontend, and data layers.
@@ -192,24 +211,34 @@ The project is organized as a monorepo separating backend, frontend, and data la
 ```text
 dbaas-platform/
 │
-├── backend/            # Python / FastAPI
+├── backend/                  # Python / FastAPI
 │   ├── src/
-│   │   ├── collectors/ # PostgreSQL metrics & statistics collectors
-│   │   ├── core/       # Configuration, security, database setup
-│   │   ├── models/     # SQLAlchemy ORM models
-│   │   ├── routers/    # API routes/endpoints
-│   │   ├── schemas/    # Pydantic request/response schemas
-│   │   ├── services/   # Business logic and workflows
-│   │   └── main.py     # FastAPI application entrypoint
-│   ├── alembic/        # Database migrations
+│   │   ├── collectors/       # PostgreSQL metrics & statistics collectors
+│   │   ├── core/             # Configuration, security, database setup
+│   │   ├── models/           # SQLAlchemy ORM models
+│   │   ├── routers/          # API routes/endpoints
+│   │   ├── schemas/          # Pydantic request/response schemas
+│   │   ├── services/         # Business logic and workflows
+│   │   └── main.py           # FastAPI application entrypoint
+│   ├── alembic/              # Database migrations
 │   └── requirements.txt
 │
-├── frontend/           # Next.js (TypeScript) — in progress
+├── frontend/                 # Next.js (TypeScript, App Router)
+│   ├── app/
+│   │   ├── layout.tsx        # Root layout with global auth provider
+│   │   ├── page.tsx          # Instance list dashboard
+│   │   ├── login/            # Login page
+│   │   └── instances/[id]/   # Instance detail (dynamic route)
+│   ├── components/           # Reusable UI components
+│   ├── context/              # React Context (auth state)
+│   ├── hooks/                # Custom hooks (instances, metrics)
+│   ├── lib/                  # API client, types, utilities
+│   └── middleware.ts         # Route protection (Next.js middleware)
 │
-├── data/               # Runtime backups and WAL archives (gitignored)
+├── data/                     # Runtime backups and WAL archives (gitignored)
 │
-├── docker-compose.yaml # PostgreSQL + pgAdmin
-└── .env.example        # Environment variable template
+├── docker-compose.yaml       # PostgreSQL + pgAdmin
+└── .env.example              # Environment variable template
 ```
 
 ---
@@ -364,7 +393,7 @@ Claude Code assisted development tools were used primarily for:
 - technical research
 - debugging support
 - documentation refinement
-- accelerated learning of backend and infrastructure concepts
+- accelerated learning of backend, infrastructure, and frontend concepts
 
 The focus remains on understanding system design decisions, PostgreSQL internals, backend engineering practices, and operational workflows rather than relying on autonomous code generation.
 
@@ -420,23 +449,35 @@ uvicorn src.main:app --reload --port 8001
 
 ---
 
+## Run the frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The frontend runs at `http://localhost:3000`.
+
+---
+
 ## Access the API
 
 Swagger UI:
 
-```bash
+```
 http://localhost:8001/docs
 ```
 
 ReDoc:
 
-```bash
+```
 http://localhost:8001/redoc
 ```
 
 Health check:
 
-```bash
+```
 http://localhost:8001/health
 ```
 
@@ -444,13 +485,13 @@ http://localhost:8001/health
 
 # Current Development Status
 
-Implemented phases include:
+## Backend — Complete
 
-- Foundation
-- Authentication
+- Foundation & project structure
+- Authentication (JWT, token rotation, revocation)
 - Security hardening
 - Database instance modeling
-- Provisioning engine
+- Provisioning engine (Docker-based)
 - Monitoring & observability
 - Backup & PITR
 - Infrastructure scaling groundwork
@@ -458,9 +499,22 @@ Implemented phases include:
 - Alerting & notifications system
 - Administration panel & audit log
 
-Planned future phases include:
+## Frontend — In Progress
 
-- Next.js frontend (in progress)
+| Feature | Status |
+|---|---|
+| Authentication (login, logout, token rotation, protected routes) | ✅ Complete |
+| Instance list with status badges | ✅ Complete |
+| Instance detail page (dynamic routing) | ✅ Complete |
+| Start / Stop / Delete actions | ✅ Complete |
+| Live metrics polling + bar chart | ✅ Complete |
+| Slow queries & locks visualization | 🔶 In progress |
+| Backups management | 🔶 In progress |
+| Maintenance & alerts interface | 🔶 In progress |
+| Consolidated dashboard | 🔶 Planned |
+
+## Planned Future Phases
+
 - Replication & high availability
 - CI/CD pipelines
 - Automated testing
@@ -472,7 +526,6 @@ Planned future phases include:
 
 Potential future improvements include:
 
-- Next.js administration frontend (in progress)
 - Real-time monitoring dashboards
 - Multi-user support
 - Role-based access control
@@ -497,8 +550,9 @@ The project focuses on:
 - lifecycle management
 - security hardening
 - PostgreSQL internals
+- full-stack product development
 
-It represents an effort to bridge backend development and infrastructure-oriented system design through a product-oriented approach.
+It represents an effort to bridge backend development, infrastructure-oriented system design, and modern frontend engineering through a product-oriented approach.
 
 ---
 
