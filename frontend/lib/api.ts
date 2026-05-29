@@ -30,11 +30,76 @@ function getToken(): string | null {
   return localStorage.getItem("access_token");
 }
 
+function getRefreshToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("refresh_token");
+}
+
+// Grava o par de tokens em localStorage E no cookie auth_token.
+// O cookie é o que o middleware.ts (server-side) lê para proteger as rotas;
+// o localStorage é o que este cliente lê para montar o header Authorization.
+// Os dois precisam andar juntos — por isso uma única função centraliza a escrita.
+function setSession(accessToken: string, refreshToken: string): void {
+  localStorage.setItem("access_token", accessToken);
+  localStorage.setItem("refresh_token", refreshToken);
+  document.cookie = `auth_token=${accessToken}; path=/; SameSite=Lax`;
+}
+
+// Apaga a sessão por completo (localStorage + cookie). Usada quando o refresh
+// falha — o usuário precisa logar de novo.
+function clearSession(): void {
+  localStorage.removeItem("access_token");
+  localStorage.removeItem("refresh_token");
+  document.cookie =
+    "auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+}
+
+// Dedupe: se várias requisições tomarem 401 ao mesmo tempo, todas reutilizam
+// a MESMA promessa de refresh, em vez de dispararem N refreshes concorrentes.
+// Análogo ao singleton get_provisioner() do backend (@lru_cache).
+let refreshPromise: Promise<boolean> | null = null;
+
+// Tenta renovar o access token usando o refresh token.
+// Retorna true se conseguiu (e já gravou os novos tokens), false caso contrário.
+async function refreshAccessToken(): Promise<boolean> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return false;
+
+  if (!refreshPromise) {
+    // O endpoint /auth/refresh lê o refresh token do header Authorization
+    // (Bearer), não do corpo — igual ao backend em routers/auth.py.
+    refreshPromise = fetch(`${API_BASE}/auth/refresh`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${refreshToken}` },
+    })
+      .then(async (res) => {
+        if (!res.ok) return false;
+        const data = await res.json();
+        setSession(data.access_token, data.refresh_token);
+        return true;
+      })
+      .catch(() => false)
+      .finally(() => {
+        // Libera o "lock" para futuras renovações depois que esta terminar.
+        refreshPromise = null;
+      });
+  }
+
+  return refreshPromise;
+}
+
 async function request<T>(
   path: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  retry = true
 ): Promise<T> {
   const token = getToken();
+
+  // Não fazemos refresh nos próprios endpoints de autenticação:
+  // - /auth/login pode dar 401 por senha errada (não é token expirado)
+  // - /auth/refresh é a própria renovação (evita recursão infinita)
+  const isAuthEndpoint =
+    path.startsWith("/auth/login") || path.startsWith("/auth/refresh");
 
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
@@ -45,8 +110,25 @@ async function request<T>(
     },
   });
 
+  // Coração da correção: token expirou → tenta renovar uma vez e repete.
+  if (response.status === 401 && retry && !isAuthEndpoint) {
+    const refreshed = await refreshAccessToken();
+    if (refreshed) {
+      // retry=false garante que repetimos a chamada UMA única vez.
+      return request<T>(path, options, false);
+    }
+    // Refresh falhou → sessão morta: limpa tudo e manda para o login.
+    clearSession();
+    if (typeof window !== "undefined") {
+      window.location.href = "/login";
+    }
+    throw new Error("Session expired");
+  }
+
   if (!response.ok) {
-    const body = await response.json().catch(() => ({ detail: response.statusText }));
+    const body = await response
+      .json()
+      .catch(() => ({ detail: response.statusText }));
     throw new Error(body.detail ?? "Request failed");
   }
 
