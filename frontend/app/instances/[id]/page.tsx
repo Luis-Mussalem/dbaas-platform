@@ -84,7 +84,9 @@ export default function InstanceDetailPage() {
   // from instance.status. When setInstance() is called, these update automatically.
   const canStart = instance.status === "stopped" || instance.status === "failed";
   const canStop = instance.status === "running";
-  const canDelete = !["deleting", "deleted"].includes(instance.status);
+  // Backend (soft_delete_instance) só permite deletar se NÃO estiver running.
+  // Mantemos a UI alinhada: só liberamos Delete para stopped/failed.
+  const canDelete = instance.status === "stopped" || instance.status === "failed";
   const isTransitioning = ["pending", "provisioning", "deleting"].includes(
     instance.status
   );
