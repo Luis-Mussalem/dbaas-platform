@@ -404,7 +404,20 @@ class DockerProvisioner(ProvisionerBase):
             raise RuntimeError(
                 "Docker não atribuiu uma porta ao container após o start"
             )
-        return int(port_bindings[0]["HostPort"])
+        host_port = int(port_bindings[0]["HostPort"])
+
+        # Aguardar o PostgreSQL aceitar conexões antes de retornar. O container
+        # inicia em milissegundos, mas o PG leva alguns segundos. Sem esta espera,
+        # o status RUNNING seria reportado antes do banco aceitar conexões — e
+        # consultas ao vivo (health, slow-queries) falhariam nessa janela.
+        self._wait_until_database_ready(
+            host="127.0.0.1",
+            port=host_port,
+            user="postgres",
+            password=settings.PROVISIONER_SUPERUSER_PASSWORD,
+            dbname="postgres",
+        )
+        return host_port
 
     def stop(self, instance_id: uuid.UUID) -> None:
         """Parar um container em execução com timeout de 10 segundos."""
