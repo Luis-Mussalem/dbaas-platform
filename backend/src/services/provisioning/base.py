@@ -43,8 +43,13 @@ class ProvisionerBase(ABC):
         ...
 
     @abstractmethod
-    def start(self, instance_id: uuid.UUID) -> None:
-        """Iniciar um container parado. Levanta RuntimeError em falha."""
+    def start(self, instance_id: uuid.UUID) -> int:
+        """
+        Iniciar um container parado e retornar a porta publicada no host.
+
+        Portas dinâmicas mudam entre stop/start; o serviço usa o retorno para
+        ressincronizar a connection_uri. Levanta RuntimeError em falha.
+        """
         ...
 
     @abstractmethod

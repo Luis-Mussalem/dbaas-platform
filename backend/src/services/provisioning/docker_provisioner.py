@@ -383,14 +383,28 @@ class DockerProvisioner(ProvisionerBase):
             container_name=container_name,
         )
 
-    def start(self, instance_id: uuid.UUID) -> None:
-        """Iniciar um container parado."""
+    def start(self, instance_id: uuid.UUID) -> int:
+        """
+        Iniciar um container parado e retornar a porta publicada no host.
+
+        Portas publicadas dinamicamente (("127.0.0.1", None)) NÃO são preservadas
+        pelo Docker entre stop/start — cada start pode receber uma porta nova.
+        Relemos o mapeamento após o start e devolvemos a porta atual.
+        """
         container_name = self._container_name(instance_id)
         try:
             container = self._client.containers.get(container_name)
             container.start()
         except docker.errors.NotFound as exc:
             raise RuntimeError(f"Container {container_name} não encontrado") from exc
+
+        container.reload()
+        port_bindings = container.ports.get("5432/tcp")
+        if not port_bindings:
+            raise RuntimeError(
+                "Docker não atribuiu uma porta ao container após o start"
+            )
+        return int(port_bindings[0]["HostPort"])
 
     def stop(self, instance_id: uuid.UUID) -> None:
         """Parar um container em execução com timeout de 10 segundos."""

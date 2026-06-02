@@ -2,11 +2,12 @@ import asyncio
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
+from urllib.parse import urlparse, urlunparse
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from src.core.encryption import encrypt_value
+from src.core.encryption import decrypt_value, encrypt_value
 from src.models.database_instance import DatabaseInstance, InstanceStatus
 from src.schemas.instance import InstanceCreate, InstanceUpdate
 from src.services.provisioning import get_provisioner
@@ -20,6 +21,27 @@ VALID_TRANSITIONS: dict[InstanceStatus, list[InstanceStatus]] = {
     InstanceStatus.DELETED: [],
     InstanceStatus.FAILED: [InstanceStatus.PENDING, InstanceStatus.DELETED],
 }
+
+
+def _sync_connection_port(instance: DatabaseInstance, new_port: int) -> None:
+    """
+    Ressincronizar a porta e a connection_uri cifrada após um restart.
+
+    Portas publicadas dinamicamente pelo Docker NÃO são preservadas entre
+    stop/start — cada start pode receber uma porta nova. Sem isto, a
+    connection_uri salva aponta para a porta velha e métricas/backups quebram.
+
+    Decripta a URI, troca apenas a porta e re-cifra. O db_password permanece
+    somente em memória durante esta função.
+    """
+    instance.port = new_port
+    if instance.connection_uri:
+        parsed = urlparse(decrypt_value(instance.connection_uri))
+        netloc = f"{parsed.username}:{parsed.password}@{parsed.hostname}:{new_port}"
+        new_uri = urlunparse(
+            (parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, parsed.fragment)
+        )
+        instance.connection_uri = encrypt_value(new_uri)
 
 
 def get_instance_by_id(db: Session, instance_id: uuid.UUID) -> Optional[DatabaseInstance]:
@@ -177,7 +199,7 @@ async def transition_status(
 
     elif instance.status == InstanceStatus.STOPPED and new_status == InstanceStatus.RUNNING:
         try:
-            await asyncio.to_thread(provisioner.start, instance.id)
+            new_port = await asyncio.to_thread(provisioner.start, instance.id)
         except Exception as exc:
             instance.status = InstanceStatus.FAILED
             db.commit()
@@ -185,6 +207,9 @@ async def transition_status(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=f"Falha ao iniciar a instância: {exc}",
             ) from exc
+        # O Docker pode publicar uma porta diferente a cada start — ressincroniza
+        # a porta e a connection_uri para métricas/backups continuarem válidos.
+        _sync_connection_port(instance, new_port)
 
     instance.status = new_status
     db.commit()
