@@ -21,6 +21,7 @@ import type { Instance, SlowQuery } from "@/lib/types";
 import { StatusBadge } from "@/components/StatusBadge";
 import { StatCard } from "@/components/StatCard";
 import { ConnString } from "@/components/ConnString";
+import { BackupsTab } from "@/components/BackupsTab";
 import { EmptyState } from "@/components/EmptyState";
 import { formatBytes } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -198,9 +199,7 @@ export default function InstanceDetailPage() {
 
       {/* ── Conteúdo da aba ── */}
       {tab === "overview" && <OverviewTab instance={instance} metrics={metrics?.metrics ?? {}} />}
-      {tab === "backups" && (
-        <EmptyState title="Backups" subtitle="Próxima sub-etapa (4b-2): listar, criar e restaurar." />
-      )}
+      {tab === "backups" && <BackupsTab instance={instance} />}
       {tab === "metrics" && (
         <EmptyState title="Métricas" subtitle="Gráficos entram com métricas-como-série no backend." />
       )}
