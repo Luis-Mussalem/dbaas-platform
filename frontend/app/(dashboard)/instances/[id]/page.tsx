@@ -1,50 +1,81 @@
 "use client";
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { getInstance } from "@/lib/api";
-import { updateInstanceStatus, deleteInstance } from "@/lib/api";
-import dynamic from "next/dynamic";
-import { useMetrics } from "@/hooks/use-metrics";
-import { Button } from "@/components/ui/button";
-import type { Instance } from "@/lib/types";
 
-// recharts não roda em SSR sob o Turbopack (usa `require` internamente).
-// Carregamos o gráfico apenas no cliente (ssr: false) para evitar o
-// "ReferenceError: require is not defined" durante a renderização no servidor.
-const MetricsChart = dynamic(
-  () => import("@/components/MetricsChart").then((m) => m.MetricsChart),
-  { ssr: false }
-);
+import { useCallback, useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import {
+  ChevronLeft,
+  Play,
+  Square,
+  Trash2,
+  RefreshCw,
+  Database,
+} from "lucide-react";
+import {
+  getInstance,
+  updateInstanceStatus,
+  deleteInstance,
+  getSlowQueries,
+} from "@/lib/api";
+import { useMetrics } from "@/hooks/use-metrics";
+import type { Instance, SlowQuery } from "@/lib/types";
+import { StatusBadge } from "@/components/StatusBadge";
+import { StatCard } from "@/components/StatCard";
+import { ConnString } from "@/components/ConnString";
+import { EmptyState } from "@/components/EmptyState";
+import { formatBytes } from "@/lib/format";
+import { cn } from "@/lib/utils";
+
+const TABS = [
+  { id: "overview", label: "Visão geral" },
+  { id: "backups", label: "Backups" },
+  { id: "metrics", label: "Métricas" },
+  { id: "logs", label: "Logs" },
+];
+
+const BTN_SM =
+  "inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-3 text-[13px] font-medium text-fg-2 transition hover:bg-surface-2 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50";
+const BTN_DANGER =
+  "inline-flex h-8 items-center gap-1.5 rounded-md border border-danger/30 px-3 text-[13px] font-medium text-danger transition hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-50";
 
 export default function InstanceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+
   const [instance, setInstance] = useState<Instance | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isActing, setIsActing] = useState(false);
+  const [tab, setTab] = useState("overview");
 
   const { metrics } = useMetrics(id);
 
-  useEffect(() => {
-    getInstance(id)
-      .then(setInstance)
-      .catch((err) =>
-        setError(err instanceof Error ? err.message : "Failed to load")
-      )
-      .finally(() => setIsLoading(false));
+  // useCallback: mantém a mesma referência da função entre renders, para o
+  // botão "Atualizar" e o useEffect compartilharem a mesma busca.
+  const load = useCallback(async () => {
+    try {
+      const data = await getInstance(id);
+      setInstance(data);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao carregar");
+    } finally {
+      setIsLoading(false);
+    }
   }, [id]);
 
-  // ─── Action handlers ────────────────────────────────────────────────────────
+  useEffect(() => {
+    load();
+  }, [load]);
 
-  async function handleStatusChange(action: "start" | "stop") {
+  async function handleStatus(action: "start" | "stop") {
     if (!instance) return;
     setIsActing(true);
+    setError(null);
     try {
       const updated = await updateInstanceStatus(instance.id, action);
-      setInstance(updated); // React re-renders with new status automatically
+      setInstance(updated);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Action failed");
+      setError(err instanceof Error ? err.message : "Ação falhou");
     } finally {
       setIsActing(false);
     }
@@ -52,191 +83,231 @@ export default function InstanceDetailPage() {
 
   async function handleDelete() {
     if (!instance) return;
-    // window.confirm() is the simplest way to ask for confirmation in the browser
-    // Returns true if user clicked OK, false if clicked Cancel
-    const confirmed = window.confirm(
-      `Delete "${instance.name}"? This cannot be undone.`
-    );
-    if (!confirmed) return;
-
+    if (
+      !window.confirm(
+        `Excluir "${instance.name}"? Esta ação não pode ser desfeita.`
+      )
+    )
+      return;
     setIsActing(true);
+    setError(null);
     try {
       await deleteInstance(instance.id);
-      router.push("/"); // Navigate back to the list after deletion
+      router.push("/instances");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Delete failed");
+      setError(err instanceof Error ? err.message : "Falha ao excluir");
       setIsActing(false);
     }
   }
 
-  // ─── Loading / error states ──────────────────────────────────────────────────
+  if (isLoading) return <p className="text-sm text-fg-3">Carregando…</p>;
+  if (!instance)
+    return <p className="text-sm text-danger">{error ?? "Instância não encontrada"}</p>;
 
-  if (isLoading) {
-    return (
-      <main className="flex flex-1 items-center justify-center">
-        <p className="text-zinc-500 text-sm">Loading...</p>
-      </main>
-    );
-  }
-
-  if (error || !instance) {
-    return (
-      <main className="flex flex-1 items-center justify-center">
-        <p className="text-red-400 text-sm">{error ?? "Instance not found"}</p>
-      </main>
-    );
-  }
-
-  // ─── Derived state: which buttons to show ────────────────────────────────────
-  // These are NOT stored in useState — they are recalculated on every render
-  // from instance.status. When setInstance() is called, these update automatically.
+  // Estado derivado das ações (alinhado às regras do backend).
   const canStart = instance.status === "stopped" || instance.status === "failed";
   const canStop = instance.status === "running";
-  // Backend (soft_delete_instance) só permite deletar se NÃO estiver running.
-  // Mantemos a UI alinhada: só liberamos Delete para stopped/failed.
   const canDelete = instance.status === "stopped" || instance.status === "failed";
-  const isTransitioning = ["pending", "provisioning", "deleting"].includes(
-    instance.status
-  );
+
+  const ramGb = instance.memory_mb ? instance.memory_mb / 1024 : null;
 
   return (
-    <main className="flex flex-1 flex-col p-8 gap-6 max-w-2xl mx-auto w-full">
-      <div className="flex items-center gap-3">
-        <button
-          onClick={() => router.back()}
-          className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
-        >
-          ← Back
-        </button>
-        <h1 className="text-xl font-semibold text-zinc-100">{instance.name}</h1>
-        <span className="text-xs text-zinc-500 uppercase tracking-wide">
-          {instance.status}
-        </span>
-      </div>
-
-      <div className="rounded-lg border border-zinc-800 bg-zinc-900 divide-y divide-zinc-800">
-        <Section title="Engine">
-          <Row label="Version" value={`PostgreSQL ${instance.engine_version}`} />
-          <Row label="Status" value={instance.status} />
-        </Section>
-
-        {(instance.host || instance.port || instance.db_name || instance.db_user) && (
-          <Section title="Connection">
-            {instance.host && <Row label="Host" value={instance.host} />}
-            {instance.port && <Row label="Port" value={String(instance.port)} />}
-            {instance.db_name && <Row label="Database" value={instance.db_name} />}
-            {instance.db_user && <Row label="User" value={instance.db_user} />}
-          </Section>
-        )}
-
-        {(instance.cpu || instance.memory_mb || instance.storage_gb) && (
-          <Section title="Resources">
-            {instance.cpu && <Row label="CPU" value={`${instance.cpu} vCPU`} />}
-            {instance.memory_mb && (
-              <Row label="Memory" value={`${instance.memory_mb / 1024} GB`} />
-            )}
-            {instance.storage_gb && (
-              <Row label="Storage" value={`${instance.storage_gb} GB`} />
-            )}
-          </Section>
-        )}
-
-        {metrics && Object.keys(metrics.metrics).length > 0 && (
-          <Section title="Metrics">
-            <MetricsChart snapshot={metrics} />
-            {Object.entries(metrics.metrics).map(([key, value]) => (
-              <Row
-                key={key}
-                label={key.replace(/_/g, " ")}
-                value={String(Number(value.toFixed(2)))}
-              />
-            ))}
-          </Section>
-        )}
-
-        {instance.notes && (
-          <Section title="Notes">
-            <p className="px-4 py-3 text-sm text-zinc-400">{instance.notes}</p>
-          </Section>
-        )}
-
-        {/* ─── Actions section ─────────────────────────────────────────────── */}
-        {/* Only renders if instance is not already deleted */}
-        {canDelete && (
-          <Section title="Actions">
-            <div className="px-4 py-3 flex items-center gap-3">
-
-              {/* Start button: visible only when instance can be started */}
-              {canStart && (
-                <Button
-                  onClick={() => handleStatusChange("start")}
-                  disabled={isActing || isTransitioning}
-                  className="bg-green-600 hover:bg-green-500 text-white"
-                >
-                  {isActing ? "Starting..." : "Start"}
-                </Button>
-              )}
-
-              {/* Stop button: visible only when instance is running */}
-              {canStop && (
-                <Button
-                  onClick={() => handleStatusChange("stop")}
-                  disabled={isActing || isTransitioning}
-                  variant="outline"
-                  className="border-zinc-600 text-zinc-300 hover:bg-zinc-800"
-                >
-                  {isActing ? "Stopping..." : "Stop"}
-                </Button>
-              )}
-
-              {/* Transitioning message: shows when status is in-progress */}
-              {isTransitioning && (
-                <p className="text-xs text-zinc-500">
-                  {instance.status === "provisioning" && "Provisioning..."}
-                  {instance.status === "pending" && "Pending..."}
-                  {instance.status === "deleting" && "Deleting..."}
-                </p>
-              )}
-
-              {/* Delete: always shown (except deleted/deleting), destructive */}
-              <Button
-                onClick={handleDelete}
-                disabled={isActing || isTransitioning}
-                variant="ghost"
-                className="ml-auto text-red-400 hover:text-red-300 hover:bg-red-950/30"
-              >
-                Delete
-              </Button>
+    <div className="flex flex-col gap-4">
+      {/* ── Hero ── */}
+      <div className="rounded-xl border border-border bg-surface p-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => router.back()}
+              className="flex h-8 w-8 items-center justify-center rounded-md border border-border text-fg-2 transition-colors hover:bg-surface-2 hover:text-foreground"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-linear-to-br from-primary to-info text-primary-foreground">
+              <Database size={18} />
             </div>
-          </Section>
-        )}
-      </div>
-    </main>
-  );
-}
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="font-mono text-xl font-semibold">{instance.name}</h1>
+                <StatusBadge status={instance.status} />
+              </div>
+              <div className="mt-0.5 text-xs text-fg-3">
+                PostgreSQL {instance.engine_version} · {instance.cpu ?? "—"} vCPU ·{" "}
+                {ramGb ?? "—"} GB RAM · {instance.storage_gb ?? "—"} GB SSD
+              </div>
+            </div>
+          </div>
 
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div>
-      <p className="px-4 pt-3 pb-1 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-        {title}
-      </p>
-      {children}
+          <div className="flex items-center gap-2">
+            <button onClick={load} disabled={isActing} className={BTN_SM}>
+              <RefreshCw size={13} /> Atualizar
+            </button>
+            {canStart && (
+              <button onClick={() => handleStatus("start")} disabled={isActing} className={BTN_SM}>
+                <Play size={13} /> {isActing ? "Iniciando…" : "Iniciar"}
+              </button>
+            )}
+            {canStop && (
+              <button onClick={() => handleStatus("stop")} disabled={isActing} className={BTN_SM}>
+                <Square size={13} /> {isActing ? "Parando…" : "Parar"}
+              </button>
+            )}
+            {canDelete && (
+              <button onClick={handleDelete} disabled={isActing} className={BTN_DANGER}>
+                <Trash2 size={13} /> Excluir
+              </button>
+            )}
+          </div>
+        </div>
+
+        {error && (
+          <div className="mt-3 rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+            {error}
+          </div>
+        )}
+
+        {instance.host && (
+          <div className="mt-4">
+            <ConnString
+              host={instance.host}
+              port={instance.port}
+              db={instance.db_name}
+              user={instance.db_user}
+            />
+          </div>
+        )}
+
+        {/* ── Abas ── */}
+        <div className="mt-4 flex gap-1 border-b border-border">
+          {TABS.map((tb) => (
+            <button
+              key={tb.id}
+              onClick={() => setTab(tb.id)}
+              className={cn(
+                "-mb-px border-b-2 px-3 py-2 text-[13px] font-medium transition",
+                tab === tb.id
+                  ? "border-brand text-brand"
+                  : "border-transparent text-fg-3 hover:text-fg-2"
+              )}
+            >
+              {tb.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Conteúdo da aba ── */}
+      {tab === "overview" && <OverviewTab instance={instance} metrics={metrics?.metrics ?? {}} />}
+      {tab === "backups" && (
+        <EmptyState title="Backups" subtitle="Próxima sub-etapa (4b-2): listar, criar e restaurar." />
+      )}
+      {tab === "metrics" && (
+        <EmptyState title="Métricas" subtitle="Gráficos entram com métricas-como-série no backend." />
+      )}
+      {tab === "logs" && (
+        <EmptyState title="Logs" subtitle="Sem endpoint de logs por instância ainda." />
+      )}
     </div>
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+// ── Aba: Visão geral ──
+function OverviewTab({
+  instance,
+  metrics,
+}: {
+  instance: Instance;
+  metrics: Record<string, number>;
+}) {
+  const connActive = metrics.connections_active;
+  const connMax = metrics.connections_max;
+  const cacheHit = metrics.cache_hit_ratio;
+  const sizeBytes = metrics.db_size_bytes;
+
   return (
-    <div className="flex items-center justify-between px-4 py-2">
-      <span className="text-sm text-zinc-500">{label}</span>
-      <span className="text-sm text-zinc-100 font-mono">{value}</span>
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard
+          label="Conexões"
+          value={
+            connActive != null
+              ? `${Math.round(connActive)}${connMax ? `/${Math.round(connMax)}` : ""}`
+              : "—"
+          }
+          sub="ativas / máx"
+        />
+        <StatCard
+          label="Cache hit"
+          value={cacheHit != null ? `${cacheHit.toFixed(1)}%` : "—"}
+          sub="meta > 95%"
+          accent={cacheHit != null && cacheHit < 95 ? "warn" : "ok"}
+        />
+        <StatCard label="Tamanho" value={formatBytes(sizeBytes)} sub="banco" />
+        <StatCard label="Status" value={instance.status} />
+      </div>
+
+      <SlowQueries instance={instance} />
+    </div>
+  );
+}
+
+// ── Tabela de queries lentas (pg_stat_statements) ──
+function SlowQueries({ instance }: { instance: Instance }) {
+  const [rows, setRows] = useState<SlowQuery[] | null>(null);
+  const [unavailable, setUnavailable] = useState(false);
+
+  useEffect(() => {
+    // Endpoint exige instância RUNNING; senão nem busca.
+    if (instance.status !== "running") {
+      setRows([]);
+      return;
+    }
+    getSlowQueries(instance.id)
+      .then((r) => setRows(r.queries))
+      .catch(() => setUnavailable(true));
+  }, [instance.id, instance.status]);
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-border bg-surface">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <h2 className="text-sm font-semibold">Queries lentas</h2>
+        <span className="text-xs text-fg-3">pg_stat_statements</span>
+      </div>
+
+      {unavailable ? (
+        <p className="px-4 py-8 text-center text-sm text-fg-3">
+          Indisponível (instância parada ou sem dados).
+        </p>
+      ) : rows === null ? (
+        <p className="px-4 py-8 text-center text-sm text-fg-3">Carregando…</p>
+      ) : rows.length === 0 ? (
+        <p className="px-4 py-8 text-center text-sm text-fg-3">
+          Sem queries lentas registradas.
+        </p>
+      ) : (
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-[11.5px] uppercase tracking-wide text-fg-3">
+              <th className="px-4 py-2 font-medium">Query</th>
+              <th className="px-4 py-2 text-right font-medium">Média</th>
+              <th className="px-4 py-2 text-right font-medium">Chamadas</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((q, i) => (
+              <tr key={i} className="border-t border-border">
+                <td className="max-w-0 truncate px-4 py-2 font-mono text-xs text-fg-2">
+                  {q.query}
+                </td>
+                <td className="whitespace-nowrap px-4 py-2 text-right font-mono text-warn">
+                  {q.mean_exec_time_ms} ms
+                </td>
+                <td className="whitespace-nowrap px-4 py-2 text-right font-mono">{q.calls}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }
