@@ -3,10 +3,18 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { getInstance } from "@/lib/api";
 import { updateInstanceStatus, deleteInstance } from "@/lib/api";
+import dynamic from "next/dynamic";
 import { useMetrics } from "@/hooks/use-metrics";
 import { Button } from "@/components/ui/button";
 import type { Instance } from "@/lib/types";
-import { MetricsChart } from "@/components/MetricsChart";
+
+// recharts não roda em SSR sob o Turbopack (usa `require` internamente).
+// Carregamos o gráfico apenas no cliente (ssr: false) para evitar o
+// "ReferenceError: require is not defined" durante a renderização no servidor.
+const MetricsChart = dynamic(
+  () => import("@/components/MetricsChart").then((m) => m.MetricsChart),
+  { ssr: false }
+);
 
 export default function InstanceDetailPage() {
   const { id } = useParams<{ id: string }>();
