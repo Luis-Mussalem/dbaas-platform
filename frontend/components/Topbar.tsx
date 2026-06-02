@@ -62,9 +62,9 @@ export function Topbar() {
         {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
       </button>
 
-      {/* Nova instância → leva para a tela de Instâncias */}
+      {/* Nova instância → abre o wizard de criação */}
       <Link
-        href="/instances"
+        href="/instances/new"
         className="flex h-[30px] items-center gap-1.5 rounded-md bg-primary px-3 text-[13px] font-medium text-primary-foreground transition hover:brightness-110"
       >
         <Plus size={14} />
