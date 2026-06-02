@@ -59,7 +59,7 @@ export function Sidebar() {
     <aside className="flex min-w-0 flex-col overflow-hidden border-r border-border bg-sidebar px-3 py-3.5">
       {/* Brand */}
       <div className="flex items-center gap-2 px-1.5 pb-3.5 text-[15px] font-semibold">
-        <div className="flex h-[26px] w-[26px] items-center justify-center rounded-[7px] bg-primary text-[14px] font-bold text-primary-foreground">
+        <div className="flex h-6.5 w-6.5 items-center justify-center rounded-[7px] bg-primary text-[14px] font-bold text-primary-foreground">
           D
         </div>
         <span>DBaaS</span>
@@ -70,7 +70,7 @@ export function Sidebar() {
 
       {/* Workspace switcher (decorativo por enquanto — single-operator) */}
       <button className="mb-3.5 flex items-center gap-2 rounded-md border border-border bg-surface px-2.5 py-2 text-left transition-colors hover:bg-surface-2">
-        <div className="h-[22px] w-[22px] flex-shrink-0 rounded-md bg-gradient-to-br from-primary to-info" />
+        <div className="h-5.5 w-5.5 shrink-0 rounded-md bg-linear-to-br from-primary to-info" />
         <div className="min-w-0 flex-1">
           <div className="truncate text-[13px] font-medium">Aurora Pagamentos</div>
           <div className="text-[11px] text-fg-3">Workspace</div>
@@ -105,7 +105,7 @@ export function Sidebar() {
           <button
             onClick={handleLogout}
             title="Sair"
-            className="flex h-[26px] w-[26px] items-center justify-center rounded-md border border-border bg-surface text-fg-2 transition-colors hover:bg-surface-2 hover:text-foreground"
+            className="flex h-6.5 w-6.5 items-center justify-center rounded-md border border-border bg-surface text-fg-2 transition-colors hover:bg-surface-2 hover:text-foreground"
           >
             <LogOut size={14} />
           </button>
@@ -135,7 +135,7 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
           : "text-fg-2 hover:bg-surface-2 hover:text-foreground"
       )}
     >
-      <Icon size={16} className="flex-shrink-0" />
+      <Icon size={16} className="shrink-0" />
       <span>{item.label}</span>
       {item.badge && (
         <span className="ml-auto rounded-full bg-bg-2 px-1.5 text-[11px] text-fg-3">

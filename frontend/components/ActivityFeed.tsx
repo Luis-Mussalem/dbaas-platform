@@ -52,7 +52,7 @@ export function ActivityFeed() {
               key={log.id}
               className="flex items-center gap-3 border-b border-border py-2 last:border-0"
             >
-              <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md bg-bg-2 text-fg-3">
+              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-bg-2 text-fg-3">
                 <Activity size={13} />
               </div>
               <p className="flex-1 text-[12.5px] leading-snug text-fg-2">
@@ -61,7 +61,7 @@ export function ActivityFeed() {
                   <span className="font-mono text-foreground"> {shortId(log.resource_id)}</span>
                 )}
               </p>
-              <span className="flex-shrink-0 font-mono text-[11px] text-fg-3">
+              <span className="shrink-0 font-mono text-[11px] text-fg-3">
                 {timeAgo(log.timestamp)}
               </span>
             </li>

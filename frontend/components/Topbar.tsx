@@ -29,7 +29,7 @@ export function Topbar() {
   const { theme, toggleTheme } = useTheme();
 
   return (
-    <header className="flex h-[52px] flex-shrink-0 items-center gap-3 border-b border-border bg-background px-5">
+    <header className="flex h-13 shrink-0 items-center gap-3 border-b border-border bg-background px-5">
       {/* Breadcrumb */}
       <div className="flex items-center gap-1.5 text-[13px] text-fg-3">
         {crumbs.map((c, i) => (
@@ -43,7 +43,7 @@ export function Topbar() {
       </div>
 
       {/* Busca (decorativa por enquanto) */}
-      <div className="ml-4 flex h-[30px] w-60 cursor-text items-center gap-2 rounded-md border border-border bg-surface px-2.5 text-[12.5px] text-fg-3">
+      <div className="ml-4 flex h-7.5 w-60 cursor-text items-center gap-2 rounded-md border border-border bg-surface px-2.5 text-[12.5px] text-fg-3">
         <Search size={14} />
         <span className="flex-1">Buscar…</span>
         <span className="rounded border border-border bg-bg-2 px-1.5 font-mono text-[10.5px]">
@@ -57,7 +57,7 @@ export function Topbar() {
       <button
         onClick={toggleTheme}
         title="Alternar tema"
-        className="flex h-[30px] w-[30px] items-center justify-center rounded-md border border-border bg-surface text-fg-2 transition-colors hover:bg-surface-2 hover:text-foreground"
+        className="flex h-7.5 w-7.5 items-center justify-center rounded-md border border-border bg-surface text-fg-2 transition-colors hover:bg-surface-2 hover:text-foreground"
       >
         {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
       </button>
@@ -65,7 +65,7 @@ export function Topbar() {
       {/* Nova instância → abre o wizard de criação */}
       <Link
         href="/instances/new"
-        className="flex h-[30px] items-center gap-1.5 rounded-md bg-primary px-3 text-[13px] font-medium text-primary-foreground transition hover:brightness-110"
+        className="flex h-7.5 items-center gap-1.5 rounded-md bg-primary px-3 text-[13px] font-medium text-primary-foreground transition hover:brightness-110"
       >
         <Plus size={14} />
         Nova instância
