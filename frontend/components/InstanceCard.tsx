@@ -1,68 +1,104 @@
-import { cn } from "@/lib/utils";
-import type { Instance, InstanceStatus } from "@/lib/types";
+"use client";
 
-// ─── Status badge styles ───────────────────────────────────────────────────────
+import Link from "next/link";
+import { Database } from "lucide-react";
+import type { Instance } from "@/lib/types";
+import { useMetrics } from "@/hooks/use-metrics";
+import { formatBytes } from "@/lib/format";
+import { StatusBadge } from "@/components/StatusBadge";
 
-const STATUS_STYLES: Record<InstanceStatus, string> = {
-  running:      "bg-green-500/10 text-green-400",
-  stopped:      "bg-zinc-500/10 text-zinc-400",
-  pending:      "bg-yellow-500/10 text-yellow-400",
-  provisioning: "bg-blue-500/10 text-blue-400",
-  deleting:     "bg-red-500/10 text-red-400",
-  deleted:      "bg-zinc-700/20 text-zinc-500",
-  failed:       "bg-red-700/10 text-red-500",
-};
+export function InstanceCard({ instance }: { instance: Instance }) {
+  // Métricas ao vivo do banco (poll a cada 10s pelo hook). Para instâncias
+  // não-RUNNING, o backend devolve a última leitura armazenada (ou vazio).
+  const { metrics } = useMetrics(instance.id);
+  const m = metrics?.metrics ?? {};
 
-// ─── Props ─────────────────────────────────────────────────────────────────────
+  const connActive = m.connections_active;
+  const connMax = m.connections_max;
+  const cacheHit = m.cache_hit_ratio;
+  const sizeBytes = m.db_size_bytes;
 
-interface InstanceCardProps {
-  instance: Instance;
-  onClick?: () => void;
-}
+  // Barra de armazenamento: tamanho atual do banco vs capacidade contratada.
+  const capacityBytes = instance.storage_gb ? instance.storage_gb * 1024 ** 3 : null;
+  const storagePct =
+    capacityBytes && sizeBytes ? Math.min(100, (sizeBytes / capacityBytes) * 100) : null;
 
-// ─── Component ─────────────────────────────────────────────────────────────────
-
-export function InstanceCard({ instance, onClick }: InstanceCardProps) {
   return (
-    <div
-      onClick={onClick}
-      className={cn(
-        "rounded-lg border border-zinc-800 bg-zinc-900 p-4",
-        onClick && "cursor-pointer hover:border-zinc-700 transition-colors"
-      )}
+    <Link
+      href={`/instances/${instance.id}`}
+      className="flex flex-col gap-3.5 rounded-xl border border-border bg-surface p-4 transition hover:-translate-y-0.5 hover:border-border-strong hover:shadow-lg"
     >
-      <div className="flex items-center justify-between gap-4">
-        <div className="min-w-0">
-          <p className="font-medium text-zinc-100 truncate">{instance.name}</p>
-          <p className="text-sm text-zinc-500 mt-0.5">
-            PostgreSQL {instance.engine_version}
-            {instance.host && ` · ${instance.host}:${instance.port}`}
-          </p>
+      {/* topo: nome + status */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-linear-to-br from-primary to-info text-primary-foreground">
+            <Database size={16} />
+          </div>
+          <div>
+            <div className="text-[14.5px] font-semibold text-foreground">{instance.name}</div>
+            <div className="text-xs text-fg-3">PostgreSQL {instance.engine_version}</div>
+          </div>
         </div>
-
-        <span
-          className={cn(
-            "shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium uppercase tracking-wide",
-            STATUS_STYLES[instance.status]
-          )}
-        >
-          {instance.status}
-        </span>
+        <StatusBadge status={instance.status} />
       </div>
 
-      {(instance.cpu || instance.memory_mb || instance.storage_gb) && (
-        <div className="flex gap-4 mt-3 pt-3 border-t border-zinc-800">
-          {instance.cpu && (
-            <p className="text-xs text-zinc-500">{instance.cpu} vCPU</p>
-          )}
-          {instance.memory_mb && (
-            <p className="text-xs text-zinc-500">{instance.memory_mb / 1024} GB RAM</p>
-          )}
-          {instance.storage_gb && (
-            <p className="text-xs text-zinc-500">{instance.storage_gb} GB disk</p>
-          )}
+      {/* métricas ao vivo */}
+      <div className="flex items-center justify-between">
+        <Metric
+          label="conexões"
+          value={
+            connActive != null
+              ? `${Math.round(connActive)}${connMax ? `/${Math.round(connMax)}` : ""}`
+              : "—"
+          }
+        />
+        <Metric
+          label="cache hit"
+          value={cacheHit != null ? `${cacheHit.toFixed(1)}%` : "—"}
+          align="right"
+        />
+        <Metric label="tamanho" value={formatBytes(sizeBytes)} align="right" />
+      </div>
+
+      {/* armazenamento */}
+      <div>
+        <div className="mb-1.5 flex items-center justify-between text-[11.5px] text-fg-3">
+          <span>Armazenamento</span>
+          <span className="font-mono text-fg-2">
+            {storagePct != null
+              ? `${storagePct.toFixed(0)}%`
+              : instance.storage_gb
+                ? `${instance.storage_gb} GB`
+                : "—"}
+          </span>
         </div>
-      )}
+        <div className="h-1 overflow-hidden rounded-full bg-bg-2">
+          <div
+            className="h-full rounded-full transition-all"
+            style={{
+              width: `${storagePct ?? 0}%`,
+              backgroundColor: (storagePct ?? 0) > 85 ? "var(--warn)" : "var(--brand)",
+            }}
+          />
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function Metric({
+  label,
+  value,
+  align = "left",
+}: {
+  label: string;
+  value: string;
+  align?: "left" | "right";
+}) {
+  return (
+    <div className={align === "right" ? "text-right" : ""}>
+      <div className="font-mono text-base font-semibold tabular-nums">{value}</div>
+      <div className="text-[11.5px] text-fg-3">{label}</div>
     </div>
   );
 }
