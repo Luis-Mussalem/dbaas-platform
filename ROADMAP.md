@@ -461,6 +461,37 @@ Complete navigation between platform sections functional.
 
 ---
 
+## FRONTEND F7 — SQL Console `[ ]` ⏸️ DEFERRED
+
+> **Status: postponed (decided 2026-06-03).** This is the only remaining frontend
+> step that requires **new backend code**, so it was pulled out of the current
+> frontend-only sequence to keep momentum. It returns later as a dedicated
+> end-to-end block (backend endpoint + UI together) — a strong portfolio piece
+> precisely because it is full-stack in a single feature.
+>
+> The frontend sequence continues without it: after the instance-detail tabs
+> (Overview / Backups / Maintenance / Alerts — all done), the next built screen
+> is **Audit Log** (`/audit`, reuses existing `getAuditLogs()`, no backend work).
+> Note: `Metrics` and `Logs` instance tabs also remain placeholders — they depend
+> on backend not yet built (time-series metrics endpoint / per-instance log stream).
+
+| Deliverable | Description |
+|-------------|-------------|
+| Backend `POST /instances/{id}/query` | Read-only SQL execution against the instance database. **Reuse the existing SELECT-only guard** from `collect_explain` ([backend/src/collectors/pg_stats.py](backend/src/collectors/pg_stats.py)): block `;`, require `startswith select`, blacklist DML/DDL, size cap — extract it into a shared helper and force a `LIMIT`. Layer: router → service → `get_connection()` ([backend/src/services/metrics.py](backend/src/services/metrics.py)) |
+| SQL Console screen | `/sql` — instance picker, query editor, results table, error panel |
+| Safety | Server rejects non-SELECT / `;` / DML / DDL with `422`; client surfaces the error |
+
+**Completion criterion:** A valid `SELECT` returns rows in the UI; `;`, DML, DDL and
+non-SELECT queries are rejected with `422`. The `/sql` placeholder route is wired to
+the real feature.
+
+**Why deferred (record):** every other frontend screen reuses an existing typed API
+in `lib/api.ts`; the SQL Console alone needs a brand-new endpoint. Building it now
+would interleave backend work into a frontend streak, so it is scheduled as a
+self-contained full-stack milestone instead.
+
+---
+
 ## Dependency Map
 
 ```
@@ -485,6 +516,7 @@ PHASE 0 (Foundation)
                                                                             └─→ F4 (Backups UI)
                                                                                   └─→ F5 (Maintenance & Alerts UI)
                                                                                         └─→ F6 (Consolidated Dashboard)
+                                                                                              └─→ F7 (SQL Console) ⏸️ DEFERRED — needs new backend endpoint
 ```
 
 ## Public / Private Split
