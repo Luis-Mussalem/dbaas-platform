@@ -28,9 +28,30 @@ export function useBackups(instanceId: string): UseBackupsResult {
     }
   }, [instanceId]);
 
+  // Busca inicial inline (setState dentro do .then/.catch, após o await) — evita
+  // o aviso de "setState síncrono no effect". `active` descarta a resposta se o
+  // componente desmontar antes dela chegar.
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    let active = true;
+    listBackups(instanceId)
+      .then((data) => {
+        if (active) {
+          setBackups(data);
+          setError(null);
+        }
+      })
+      .catch((err) => {
+        if (active) {
+          setError(err instanceof Error ? err.message : "Falha ao carregar backups");
+        }
+      })
+      .finally(() => {
+        if (active) setIsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [instanceId]);
 
   return { backups, isLoading, error, refresh };
 }
