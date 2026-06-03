@@ -22,6 +22,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { StatCard } from "@/components/StatCard";
 import { ConnString } from "@/components/ConnString";
 import { BackupsTab } from "@/components/BackupsTab";
+import { MaintenanceTab } from "@/components/MaintenanceTab";
 import { EmptyState } from "@/components/EmptyState";
 import { formatBytes } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -29,6 +30,8 @@ import { cn } from "@/lib/utils";
 const TABS = [
   { id: "overview", label: "Visão geral" },
   { id: "backups", label: "Backups" },
+  { id: "maintenance", label: "Manutenção" },
+  { id: "alerts", label: "Alertas" },
   { id: "metrics", label: "Métricas" },
   { id: "logs", label: "Logs" },
 ];
@@ -200,6 +203,10 @@ export default function InstanceDetailPage() {
       {/* ── Conteúdo da aba ── */}
       {tab === "overview" && <OverviewTab instance={instance} metrics={metrics?.metrics ?? {}} />}
       {tab === "backups" && <BackupsTab instance={instance} />}
+      {tab === "maintenance" && <MaintenanceTab instance={instance} />}
+      {tab === "alerts" && (
+        <EmptyState title="Alertas" subtitle="Próxima sub-etapa (4b-4): regras e eventos." />
+      )}
       {tab === "metrics" && (
         <EmptyState title="Métricas" subtitle="Gráficos entram com métricas-como-série no backend." />
       )}
