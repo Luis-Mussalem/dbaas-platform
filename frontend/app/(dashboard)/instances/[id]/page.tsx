@@ -23,6 +23,7 @@ import { StatCard } from "@/components/StatCard";
 import { ConnString } from "@/components/ConnString";
 import { BackupsTab } from "@/components/BackupsTab";
 import { MaintenanceTab } from "@/components/MaintenanceTab";
+import { AlertsTab } from "@/components/AlertsTab";
 import { EmptyState } from "@/components/EmptyState";
 import { formatBytes } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -222,9 +223,7 @@ export default function InstanceDetailPage() {
       {tab === "overview" && <OverviewTab instance={instance} metrics={metrics?.metrics ?? {}} />}
       {tab === "backups" && <BackupsTab instance={instance} />}
       {tab === "maintenance" && <MaintenanceTab instance={instance} />}
-      {tab === "alerts" && (
-        <EmptyState title="Alertas" subtitle="Próxima sub-etapa (4b-4): regras e eventos." />
-      )}
+      {tab === "alerts" && <AlertsTab instance={instance} />}
       {tab === "metrics" && (
         <EmptyState title="Métricas" subtitle="Gráficos entram com métricas-como-série no backend." />
       )}
