@@ -12,6 +12,9 @@ interface AuthContextValue {
   isLoading: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
+  // Re-busca /auth/me e atualiza o `user` global. Chamado após editar o perfil
+  // para que a Sidebar (e quem mais lê o contexto) reflita o novo email na hora.
+  refreshUser: () => Promise<void>;
 }
 
 // ─── Context creation ──────────────────────────────────────────────────────────
@@ -60,6 +63,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setToken(response.access_token);
   }
 
+  async function refreshUser(): Promise<void> {
+    const u = await getCurrentUser();
+    setUser(u);
+  }
+
   function logout(): void {
     const refreshToken = localStorage.getItem("refresh_token");
     // Fire-and-forget: blacklist tokens on backend (best-effort, never blocks UI)
@@ -72,7 +80,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }
 
   return (
-    <AuthContext.Provider value={{ token, user, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ token, user, isLoading, login, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

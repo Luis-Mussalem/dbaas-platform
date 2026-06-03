@@ -88,6 +88,31 @@ async function refreshAccessToken(): Promise<boolean> {
   return refreshPromise;
 }
 
+// Normaliza o corpo de erro do backend para UMA string legível.
+// - HTTPException comum → `detail` é string (ex.: "User not found").
+// - Erro de validação 422 → `detail` é uma LISTA de { loc, msg, type }; sem
+//   isto, `new Error(lista)` viraria "[object Object]" na tela.
+// O prefixo "Value error, " (que o Pydantic adiciona a ValueError) é removido.
+function extractErrorMessage(body: unknown): string {
+  if (typeof body === "string") return body;
+  if (body && typeof body === "object") {
+    const detail = (body as { detail?: unknown }).detail;
+    if (typeof detail === "string") return detail;
+    if (Array.isArray(detail)) {
+      return detail
+        .map((e) =>
+          e && typeof e === "object" && "msg" in e
+            ? String((e as { msg: unknown }).msg)
+            : String(e)
+        )
+        .join("; ")
+        .replace(/^Value error, /, "");
+    }
+    if (detail && typeof detail === "object") return JSON.stringify(detail);
+  }
+  return "Request failed";
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {},
@@ -129,7 +154,7 @@ async function request<T>(
     const body = await response
       .json()
       .catch(() => ({ detail: response.statusText }));
-    throw new Error(body.detail ?? "Request failed");
+    throw new Error(extractErrorMessage(body));
   }
 
   if (response.status === 204) {
@@ -162,6 +187,19 @@ export async function logout(refreshToken: string | null = null): Promise<void> 
 
 export async function getCurrentUser(): Promise<User> {
   return request<User>("/auth/me");
+}
+
+// Atualiza o próprio usuário (email e/ou senha). O backend só permite alterar a
+// própria conta (PATCH /users/{id} retorna 403 para outro id) — coerente com o
+// modelo single-operator. Campos omitidos não são alterados.
+export async function updateUser(
+  userId: string,
+  data: { email?: string; password?: string }
+): Promise<User> {
+  return request<User>(`/users/${userId}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
 }
 
 // ─── Instances ────────────────────────────────────────────────────────────────
