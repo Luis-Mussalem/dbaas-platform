@@ -67,9 +67,27 @@ export default function InstanceDetailPage() {
     }
   }, [id]);
 
+  // Busca inicial inline (setState dentro do .then/.catch) — evita o aviso de
+  // "setState síncrono no effect". O botão "Atualizar" segue usando `load`.
   useEffect(() => {
-    load();
-  }, [load]);
+    let active = true;
+    getInstance(id)
+      .then((data) => {
+        if (active) {
+          setInstance(data);
+          setError(null);
+        }
+      })
+      .catch((err) => {
+        if (active) setError(err instanceof Error ? err.message : "Falha ao carregar");
+      })
+      .finally(() => {
+        if (active) setIsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [id]);
 
   async function handleStatus(action: "start" | "stop") {
     if (!instance) return;

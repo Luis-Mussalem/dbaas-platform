@@ -27,9 +27,30 @@ export function useMaintenance(instanceId: string): UseMaintenanceResult {
     }
   }, [instanceId]);
 
+  // Busca inicial inline: o setState acontece DENTRO do .then/.catch (após o
+  // await), não no corpo do effect — então não dispara o aviso de "setState
+  // síncrono no effect". `active` descarta a resposta se o componente desmontar.
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    let active = true;
+    listMaintenanceTasks(instanceId)
+      .then((data) => {
+        if (active) {
+          setTasks(data);
+          setError(null);
+        }
+      })
+      .catch((err) => {
+        if (active) {
+          setError(err instanceof Error ? err.message : "Falha ao carregar histórico");
+        }
+      })
+      .finally(() => {
+        if (active) setIsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [instanceId]);
 
   return { tasks, isLoading, error, refresh };
 }
