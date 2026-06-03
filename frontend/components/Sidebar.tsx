@@ -6,8 +6,6 @@ import {
   LayoutDashboard,
   Database,
   Terminal,
-  Users,
-  CreditCard,
   ScrollText,
   Settings,
   HelpCircle,
@@ -24,9 +22,7 @@ type NavItem = { href: string; label: string; icon: LucideIcon; badge?: string }
 const WORKSPACE_NAV: NavItem[] = [
   { href: "/", label: "Painel", icon: LayoutDashboard },
   { href: "/instances", label: "Instâncias", icon: Database, badge: "5" },
-  { href: "/sql", label: "Console SQL", icon: Terminal },
-  { href: "/users", label: "Usuários", icon: Users },
-  { href: "/billing", label: "Cobrança", icon: CreditCard },
+  { href: "/sql", label: "Console SQL", icon: Terminal, badge: "Em breve" },
 ];
 
 const ACCOUNT_NAV: NavItem[] = [
