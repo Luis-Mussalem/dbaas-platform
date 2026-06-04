@@ -48,11 +48,20 @@ export interface TokenResponse {
 
 // ─── User ─────────────────────────────────────────────────────────────────────
 
+// Empresa (tenant). Multi-tenant: um usuário comum pertence a uma empresa;
+// o superuser não tem empresa única (company = null) e enxerga todas.
+export interface Company {
+  id: string;
+  name: string;
+  created_at: string;
+}
+
 export interface User {
   id: string;
   email: string;
   is_active: boolean;
   is_superuser: boolean;
+  company: Company | null;
   created_at: string;
   updated_at: string;
 }

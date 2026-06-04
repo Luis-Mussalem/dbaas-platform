@@ -9,19 +9,20 @@ import {
   ScrollText,
   Settings,
   HelpCircle,
-  ChevronDown,
   LogOut,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
+import { useInstances } from "@/hooks/use-instances";
+import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
 
 // Itens de navegação — `href` é a URL real (a fonte da verdade do "ativo").
 type NavItem = { href: string; label: string; icon: LucideIcon; badge?: string };
 
 const WORKSPACE_NAV: NavItem[] = [
   { href: "/", label: "Painel", icon: LayoutDashboard },
-  { href: "/instances", label: "Instâncias", icon: Database, badge: "5" },
+  { href: "/instances", label: "Instâncias", icon: Database },
   { href: "/sql", label: "Console SQL", icon: Terminal, badge: "Em breve" },
 ];
 
@@ -41,7 +42,11 @@ function isActive(pathname: string, href: string): boolean {
 export function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  const { instances } = useInstances();
   const router = useRouter();
+
+  // Badge de "Instâncias" = contagem real (oculta quando 0), em vez de um número fixo.
+  const instanceCount = instances.length;
 
   function handleLogout() {
     logout();
@@ -64,22 +69,22 @@ export function Sidebar() {
         </span>
       </div>
 
-      {/* Workspace switcher (decorativo por enquanto — single-operator) */}
-      <button className="mb-3.5 flex items-center gap-2 rounded-md border border-border bg-surface px-2.5 py-2 text-left transition-colors hover:bg-surface-2">
-        <div className="h-5.5 w-5.5 shrink-0 rounded-md bg-linear-to-br from-primary to-info" />
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-[13px] font-medium">Aurora Pagamentos</div>
-          <div className="text-[11px] text-fg-3">Workspace</div>
-        </div>
-        <ChevronDown size={14} className="text-fg-3" />
-      </button>
+      {/* Workspace: empresa atual (switcher p/ superuser, rótulo fixo p/ comum) */}
+      <WorkspaceSwitcher />
 
       {/* Navegação */}
       <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto">
         <NavSection label="Workspace" />
-        {WORKSPACE_NAV.map((item) => (
-          <NavLink key={item.href} item={item} active={isActive(pathname, item.href)} />
-        ))}
+        {WORKSPACE_NAV.map((item) => {
+          // Injeta a contagem real no item de Instâncias; os demais ficam como definidos.
+          const withBadge =
+            item.href === "/instances" && instanceCount > 0
+              ? { ...item, badge: String(instanceCount) }
+              : item;
+          return (
+            <NavLink key={item.href} item={withBadge} active={isActive(pathname, item.href)} />
+          );
+        })}
         <NavSection label="Conta" />
         {ACCOUNT_NAV.map((item) => (
           <NavLink key={item.href} item={item} active={isActive(pathname, item.href)} />

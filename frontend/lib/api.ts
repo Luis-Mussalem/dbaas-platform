@@ -1,5 +1,6 @@
 import type {
   User,
+  Company,
   TokenResponse,
   Instance,
   InstanceCreate,
@@ -200,6 +201,15 @@ export async function updateUser(
     method: "PATCH",
     body: JSON.stringify(data),
   });
+}
+
+// ─── Companies (multi-tenant) ─────────────────────────────────────────────────
+
+// Lista todas as empresas. O backend restringe a superuser (403 para os demais),
+// então só o switcher do superuser chama isto. O usuário comum recebe a própria
+// empresa via /auth/me (campo `company`), sem precisar desta lista.
+export async function listCompanies(): Promise<Company[]> {
+  return request<Company[]>("/companies");
 }
 
 // ─── Instances ────────────────────────────────────────────────────────────────
