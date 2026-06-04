@@ -66,9 +66,17 @@ npm run build                               # production build
 **DBaaS Platform** — PostgreSQL database management platform focused on
 **provisioning, monitoring, automating, and making databases unbreakable**.
 
-DBA-as-a-Service for SMBs — a solo operator tool to manage multiple client
-databases with monitoring, backup, automated maintenance, and proactive alerts.
-Single-operator: no multi-user or multi-tenant system needed for now.
+DBA-as-a-Service for SMBs — manages multiple client databases with monitoring,
+backup, automated maintenance, and proactive alerts.
+
+**Direction — multi-tenant (in progress):** the platform is evolving toward serving
+**multiple companies, each with its own employees**. A regular user sees only their
+own company; the **admin superuser** sees and switches between all companies.
+A **minimal base** is already in place: `Company` model, `users.company_id`,
+`get_current_superuser`, `GET/POST /companies` (superuser-only), and the Workspace
+switcher in the UI. **Full tenancy** (per-company scoping of instances/backups/etc.,
+employee management, user↔company assignment, RBAC) is a future phase — see ROADMAP.
+Until then, resources are NOT yet scoped by company.
 Public repository (portfolio for recruiters) — only generic, reusable
 architecture is committed.
 

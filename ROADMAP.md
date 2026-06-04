@@ -352,6 +352,38 @@ Replication lag monitored. Replica can be promoted to primary via API.
 
 ---
 
+## PHASE 11 — Multi-Tenancy (Companies & Employees) `[~]`
+
+> Product pivot: the platform evolves from single-operator to **serving multiple
+> companies, each with its own employees**. A regular user sees only their own
+> company; the **admin superuser** sees and switches between all companies.
+
+**Minimal base — DONE `[x]`** (delivered alongside the frontend Workspace work):
+
+| Deliverable | Description |
+|-------------|-------------|
+| `Company` model | `companies` table (`backend/src/models/company.py`) + Alembic migration |
+| User ↔ Company | `users.company_id` FK (nullable; `NULL` = platform-level/superuser) + `company` relationship (eager `joined`) |
+| Superuser gate | `get_current_superuser` (`backend/src/core/dependencies.py`) — first real use of `is_superuser` |
+| Companies API | `GET /companies` + `POST /companies`, both superuser-only (`backend/src/routers/companies.py`) |
+| `UserRead.company` | `/auth/me` now returns the user's company |
+| Workspace UI | `WorkspaceSwitcher` — dropdown for superuser, fixed label for regular user |
+
+**Remaining — TODO `[ ]`**:
+
+| Deliverable | Description |
+|-------------|-------------|
+| Resource scoping | `company_id` (owner) on `DatabaseInstance` and derived resources; query filtering so each user sees only their company's databases. **Currently resources are NOT scoped by company.** |
+| Active-company context | The superuser's selected company (today only persisted in `localStorage`) actually filters the data shown |
+| Employee management | Create/list users within a company; assign `user.company_id`; superuser-only company management screens |
+| RBAC | Roles beyond `is_superuser` (e.g., company admin vs. member) if needed |
+| Audit scoping | Audit log filtered/segmented per company |
+
+**Completion criterion:** A regular user only sees and manages their own company's
+databases; the superuser can switch companies and the data follows the selection.
+
+---
+
 ## FRONTEND F0 — Next.js Project Setup `[ ]`
 
 > First contact with JavaScript/TypeScript. Configure the frontend project
