@@ -5,6 +5,8 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 
+from src.schemas.company import CompanyRead
+
 PASSWORD_MIN_LENGTH = 12
 PASSWORD_PATTERN = re.compile(
     r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':\"\\|,.<>\/?`~])"
@@ -41,6 +43,7 @@ class UserRead(UserBase):
     id: uuid.UUID
     is_active: bool
     is_superuser: bool
+    company: Optional[CompanyRead] = None
     created_at: datetime
     updated_at: datetime
 

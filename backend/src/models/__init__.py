@@ -1,3 +1,4 @@
+from src.models.company import Company
 from src.models.user import User
 from src.models.database_instance import DatabaseInstance
 from src.models.token_blacklist import TokenBlacklist
@@ -8,6 +9,7 @@ from src.models.alert import AlertRule, AlertEvent, AlertCondition, AlertSeverit
 from src.models.audit_log import AuditLog
 
 __all__ = [
+    "Company",
     "User",
     "DatabaseInstance",
     "TokenBlacklist",

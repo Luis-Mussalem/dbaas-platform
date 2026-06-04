@@ -54,6 +54,24 @@ def get_current_user(
     return user
 
 
+def get_current_superuser(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """
+    Exige que o usuário autenticado seja superuser (admin da plataforma).
+
+    Reusa get_current_user (autenticação) e adiciona a checagem de papel.
+    Primeiro ponto onde is_superuser passa a ser efetivamente verificado —
+    base para o multi-tenant: só o superuser enxerga/gerencia todas as empresas.
+    """
+    if not current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Superuser privileges required",
+        )
+    return current_user
+
+
 def get_instance_or_404(instance_id: uuid.UUID, db: Session) -> DatabaseInstance:
     instance = (
         db.query(DatabaseInstance)
