@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Search, Plus, Sun, Moon } from "lucide-react";
+import { Plus, Sun, Moon } from "lucide-react";
 import { useTheme } from "@/context/ThemeProvider";
 
 // Mapa de URL → título exibido no breadcrumb.
@@ -10,8 +10,6 @@ const TITLES: Record<string, string> = {
   "/": "Painel",
   "/instances": "Instâncias",
   "/sql": "Console SQL",
-  "/users": "Usuários",
-  "/billing": "Cobrança",
   "/audit": "Logs & Auditoria",
   "/settings": "Configurações",
   "/help": "Ajuda",
@@ -40,15 +38,6 @@ export function Topbar() {
             </span>
           </span>
         ))}
-      </div>
-
-      {/* Busca (decorativa por enquanto) */}
-      <div className="ml-4 flex h-7.5 w-60 cursor-text items-center gap-2 rounded-md border border-border bg-surface px-2.5 text-[12.5px] text-fg-3">
-        <Search size={14} />
-        <span className="flex-1">Buscar…</span>
-        <span className="rounded border border-border bg-bg-2 px-1.5 font-mono text-[10.5px]">
-          ⌘K
-        </span>
       </div>
 
       <div className="flex-1" />

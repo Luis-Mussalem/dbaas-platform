@@ -67,8 +67,8 @@ export default function SettingsPage() {
   async function savePassword(e: React.FormEvent) {
     e.preventDefault();
     if (!user) return;
-    if (pwd.length < 8) {
-      setPwdMsg({ kind: "error", text: "A senha deve ter ao menos 8 caracteres." });
+    if (pwd.length < 12) {
+      setPwdMsg({ kind: "error", text: "A senha deve ter ao menos 12 caracteres." });
       return;
     }
     if (pwd !== pwd2) {
@@ -145,7 +145,9 @@ export default function SettingsPage() {
         <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold">
           <KeyRound size={15} className="text-fg-2" /> Senha
         </h2>
-        <p className="mb-3 text-xs text-fg-3">Mínimo de 8 caracteres.</p>
+        <p className="mb-3 text-xs text-fg-3">
+          Mínimo de 12 caracteres, com maiúscula, minúscula, dígito e símbolo.
+        </p>
         <div className="flex flex-col gap-3 sm:max-w-md">
           <input
             type="password"
