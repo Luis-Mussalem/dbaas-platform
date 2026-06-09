@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
@@ -11,6 +12,8 @@ from src.core.encryption import decrypt_value, encrypt_value
 from src.models.database_instance import DatabaseInstance, InstanceStatus
 from src.schemas.instance import InstanceCreate, InstanceUpdate
 from src.services.provisioning import get_provisioner
+
+logger = logging.getLogger(__name__)
 
 VALID_TRANSITIONS: dict[InstanceStatus, list[InstanceStatus]] = {
     InstanceStatus.PENDING: [InstanceStatus.PROVISIONING, InstanceStatus.FAILED],
@@ -113,9 +116,12 @@ async def create_instance(db: Session, data: InstanceCreate) -> DatabaseInstance
     except Exception as exc:
         instance.status = InstanceStatus.FAILED
         db.commit()
+        # Loga o detalhe internamente; ao cliente vai só mensagem genérica —
+        # str(exc) pode expor hostnames/portas/erros do Docker.
+        logger.error("Provisioning failed for instance %s: %s", instance.id, exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Provisionamento falhou: {exc}",
+            detail="Provisioning failed. See server logs for details.",
         ) from exc
 
     # Construir URI de conexão e cifrá-la com Fernet antes de persistir.
@@ -192,9 +198,10 @@ async def transition_status(
         except Exception as exc:
             instance.status = InstanceStatus.FAILED
             db.commit()
+            logger.error("Failed to stop instance %s: %s", instance.id, exc)
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=f"Falha ao parar a instância: {exc}",
+                detail="Failed to stop the instance. See server logs for details.",
             ) from exc
 
     elif instance.status == InstanceStatus.STOPPED and new_status == InstanceStatus.RUNNING:
@@ -203,9 +210,10 @@ async def transition_status(
         except Exception as exc:
             instance.status = InstanceStatus.FAILED
             db.commit()
+            logger.error("Failed to start instance %s: %s", instance.id, exc)
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=f"Falha ao iniciar a instância: {exc}",
+                detail="Failed to start the instance. See server logs for details.",
             ) from exc
         # O Docker pode publicar uma porta diferente a cada start — ressincroniza
         # a porta e a connection_uri para métricas/backups continuarem válidos.
@@ -250,9 +258,10 @@ async def soft_delete_instance(db: Session, instance: DatabaseInstance) -> Datab
     except Exception as exc:
         instance.status = InstanceStatus.FAILED
         db.commit()
+        logger.error("Failed to remove container for instance %s: %s", instance.id, exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Falha ao remover o container da instância: {exc}",
+            detail="Failed to remove the instance container. See server logs for details.",
         ) from exc
 
     instance.deleted_at = datetime.now(timezone.utc)

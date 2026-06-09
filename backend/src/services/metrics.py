@@ -38,7 +38,16 @@ def get_connection(
     nunca aparece em stack traces.
     """
     uri = decrypt_value(instance.connection_uri)
-    with psycopg.connect(uri, connect_timeout=5) as conn:
+    # statement_timeout limita qualquer query nesta conexão (30s). Cobre as
+    # leituras de monitoramento — em especial EXPLAIN ANALYZE, que executa a
+    # query de verdade: sem o cap, um `SELECT pg_sleep(...)` seguraria o worker
+    # do thread pool indefinidamente. A conexão de manutenção (VACUUM/REINDEX)
+    # NÃO usa este helper de propósito — essas operações podem ser longas.
+    with psycopg.connect(
+        uri,
+        connect_timeout=5,
+        options="-c statement_timeout=30000",
+    ) as conn:
         yield conn
 
 
