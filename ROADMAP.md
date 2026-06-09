@@ -384,7 +384,7 @@ databases; the superuser can switch companies and the data follows the selection
 
 ---
 
-## FRONTEND F0 — Next.js Project Setup `[ ]`
+## FRONTEND F0 — Next.js Project Setup `[x]`
 
 > First contact with JavaScript/TypeScript. Configure the frontend project
 > within the monorepo, integrated with the backend API.
@@ -401,7 +401,7 @@ databases; the superuser can switch companies and the data follows the selection
 
 ---
 
-## FRONTEND F1 — Authentication `[ ]`
+## FRONTEND F1 — Authentication `[x]`
 
 > First real screen. Login → JWT → protected access.
 
@@ -416,7 +416,7 @@ databases; the superuser can switch companies and the data follows the selection
 
 ---
 
-## FRONTEND F2 — Instance Management `[ ]`
+## FRONTEND F2 — Instance Management `[x]`
 
 > Main platform screen: list, create, and manage databases.
 
@@ -431,7 +431,7 @@ databases; the superuser can switch companies and the data follows the selection
 
 ---
 
-## FRONTEND F3 — Metrics & Observability `[ ]`
+## FRONTEND F3 — Metrics & Observability `[~]`
 
 > Real-time visibility into each managed database.
 
@@ -444,9 +444,14 @@ databases; the superuser can switch companies and the data follows the selection
 
 **Completion criterion:** Metrics rendered with automatic updates.
 
+> **Status (parcial `[~]`):** slow queries e locks já renderizados na UI. Os
+> **gráficos (cache hit ratio, conexões) seguem stub** — dependem de um endpoint
+> de métricas-como-série no backend (mesmo bloqueio citado em F7 para as tabs
+> Metrics/Logs). `recharts` já está instalado; falta só a fonte de dados.
+
 ---
 
-## FRONTEND F4 — Backups `[ ]`
+## FRONTEND F4 — Backups `[x]`
 
 > Visibility and control over each instance's backups.
 
@@ -461,7 +466,7 @@ databases; the superuser can switch companies and the data follows the selection
 
 ---
 
-## FRONTEND F5 — Maintenance & Alerts `[ ]`
+## FRONTEND F5 — Maintenance & Alerts `[x]`
 
 > Control of automatic tasks and visibility of active alerts.
 
@@ -476,7 +481,7 @@ databases; the superuser can switch companies and the data follows the selection
 
 ---
 
-## FRONTEND F6 — Consolidated Dashboard `[ ]`
+## FRONTEND F6 — Consolidated Dashboard `[x]`
 
 > Top-level view: entire platform health on one page.
 > Depends on `GET /admin/dashboard` (PHASE 8 backend).
