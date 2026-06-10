@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 from src.core.encryption import encrypt_value
-from src.models.backup import Backup, BackupStatus, BackupStrategy, BackupType
+from src.models.backup import Backup, BackupStatus, BackupStrategy
 from src.models.database_instance import DatabaseInstance, InstanceStatus
 from src.schemas.backup import BackupScheduleCreate, BackupScheduleUpdate
 from src.services import backup as backup_service

@@ -1,6 +1,5 @@
 import asyncio
 import logging
-from datetime import datetime, timezone
 
 from src.core.database import SessionLocal
 from src.models.database_instance import DatabaseInstance, InstanceStatus

@@ -1,0 +1,97 @@
+name: CI
+
+# Roda em pushes na main e em qualquer Pull Request.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancela execuções antigas do mesmo branch quando um novo push chega.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Backend: lint (ruff) + testes (pytest) contra um PostgreSQL real.
+  # ---------------------------------------------------------------------------
+  backend:
+    name: Backend (ruff + pytest)
+    runs-on: ubuntu-latest
+
+    # PostgreSQL como service container — espelha o docker-compose local.
+    # A suíte conecta nele para criar o banco de teste dbaas_test.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: dbaas
+          POSTGRES_PASSWORD: change-me
+          POSTGRES_DB: dbaas
+        ports:
+          - 5432:5432
+        # Espera o Postgres aceitar conexões antes de rodar os steps.
+        options: >-
+          --health-cmd "pg_isready -U dbaas"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # Conexão com o service container (config.py usa estes nomes).
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: dbaas
+      POSTGRES_PASSWORD: change-me
+      # As demais variáveis sensíveis (JWT_SECRET_KEY, FERNET_KEY,
+      # PROVISIONER_SUPERUSER_PASSWORD, POSTGRES_DB) são definidas pelo
+      # próprio conftest.py antes de importar a aplicação.
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint (ruff)
+        run: ruff check src/ tests/
+
+      - name: Run tests with coverage
+        run: pytest --cov=src --cov-report=term-missing
+
+  # ---------------------------------------------------------------------------
+  # Frontend: build de produção do Next.js (pega quebras de compilação/TS).
+  # ---------------------------------------------------------------------------
+  frontend:
+    name: Frontend (next build)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build

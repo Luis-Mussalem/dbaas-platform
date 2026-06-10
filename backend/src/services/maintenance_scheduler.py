@@ -45,7 +45,7 @@ def poll_schedules_once() -> None:
     Esta função é chamada via asyncio.to_thread() — pode fazer operações
     bloqueantes (SQL + psycopg) sem travar o event loop dos requests HTTP.
     """
-    from src.services.maintenance import _TASK_RUNNERS, advance_schedule, run_task
+    from src.services.maintenance import advance_schedule, run_task
 
     now = datetime.now(timezone.utc)
     db = SessionLocal()

@@ -9,7 +9,6 @@ grava os SQLs executados e devolve linhas controladas. Assim validamos:
 
 get_config_recommendations é função pura (não conecta) — testada diretamente.
 """
-import uuid
 from contextlib import contextmanager
 
 import pytest
@@ -223,7 +222,6 @@ def test_schedule_create_list_advance_delete(db, instance):
     listed = maint.list_schedules(db, instance.id)
     assert [s.id for s in listed] == [sched.id]
 
-    first_next = sched.next_run_at
     maint.advance_schedule(db, sched)
     assert sched.next_run_at is not None  # recalculado a partir de agora
 

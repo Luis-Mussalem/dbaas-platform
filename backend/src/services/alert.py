@@ -5,7 +5,6 @@ from typing import Optional
 
 import psycopg
 import psycopg.rows
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from src.core.config import settings
