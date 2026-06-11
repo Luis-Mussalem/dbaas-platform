@@ -119,6 +119,40 @@ def test_create_instance_requires_auth(client):
     assert resp.status_code == 401
 
 
+def test_create_instance_persists_region_and_environment(
+    client, auth_headers, fake_provisioner, db
+):
+    headers, _ = auth_headers()
+    resp = client.post(
+        API,
+        headers=headers,
+        json={
+            "name": "prod-db",
+            "engine_version": "16",
+            "region": "sa-east-1",
+            "environment": "production",
+        },
+    )
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["region"] == "sa-east-1"
+    assert body["environment"] == "production"
+
+    inst = db.query(DatabaseInstance).filter_by(name="prod-db").first()
+    assert inst.region == "sa-east-1"
+    assert inst.environment.value == "production"
+
+
+def test_create_instance_rejects_invalid_environment(client, auth_headers, fake_provisioner):
+    headers, _ = auth_headers()
+    resp = client.post(
+        API,
+        headers=headers,
+        json={"name": "bad-env", "environment": "qa"},  # não é production/staging/development
+    )
+    assert resp.status_code == 422
+
+
 def test_create_instance_provisioning_failure_returns_generic_503(
     client, auth_headers, fake_provisioner, db
 ):

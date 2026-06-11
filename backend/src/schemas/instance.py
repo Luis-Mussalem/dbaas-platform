@@ -4,7 +4,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.models.database_instance import InstanceStatus
+from src.models.database_instance import Environment, InstanceStatus
 
 
 SUPPORTED_ENGINE_VERSIONS = Literal["14", "15", "16", "17"]
@@ -16,6 +16,8 @@ class InstanceBase(BaseModel):
     cpu: Optional[int] = Field(default=None, ge=1)
     memory_mb: Optional[int] = Field(default=None, ge=128)
     storage_gb: Optional[int] = Field(default=None, ge=1)
+    region: Optional[str] = Field(default=None, max_length=64)
+    environment: Optional[Environment] = None
     notes: Optional[str] = None
 
 
@@ -29,6 +31,8 @@ class InstanceUpdate(BaseModel):
     cpu: Optional[int] = Field(default=None, ge=1)
     memory_mb: Optional[int] = Field(default=None, ge=128)
     storage_gb: Optional[int] = Field(default=None, ge=1)
+    region: Optional[str] = Field(default=None, max_length=64)
+    environment: Optional[Environment] = None
     notes: Optional[str] = None
 
 
