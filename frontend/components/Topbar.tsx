@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import { Plus, Sun, Moon } from "lucide-react";
 import { useTheme } from "@/context/ThemeProvider";
+import { Segmented } from "@/components/Segmented";
 
 // Mapa de URL → título exibido no breadcrumb.
 const TITLES: Record<string, string> = {
@@ -26,6 +28,10 @@ export function Topbar() {
   const crumbs = useCrumbs(pathname);
   const { theme, toggleTheme } = useTheme();
 
+  // Controles cosméticos por enquanto (i18n real entra na Fase D do redesign).
+  // Mantidos para espelhar o layout do design; o estado é só visual.
+  const [lang, setLang] = useState<"pt" | "en">("pt");
+
   return (
     <header className="flex h-13 shrink-0 items-center gap-3 border-b border-border bg-background px-5">
       {/* Breadcrumb */}
@@ -41,6 +47,19 @@ export function Topbar() {
       </div>
 
       <div className="flex-1" />
+
+      {/* Idioma (cosmético até a Fase D de i18n) */}
+      <div className="hidden sm:block">
+        <Segmented
+          size="sm"
+          value={lang}
+          onChange={setLang}
+          options={[
+            { value: "pt", label: "PT" },
+            { value: "en", label: "EN" },
+          ]}
+        />
+      </div>
 
       {/* Toggle de tema (sol/lua) — usa o ThemeProvider da Etapa 1 */}
       <button
