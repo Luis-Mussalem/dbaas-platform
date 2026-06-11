@@ -95,3 +95,24 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  # ---------------------------------------------------------------------------
+  # Docker: valida que a imagem multi-stage do backend constrói sem erro.
+  # ---------------------------------------------------------------------------
+  docker:
+    name: Docker build (backend image)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          push: false
+          tags: dbaas-backend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
