@@ -15,6 +15,11 @@ The project simulates real-world DBaaS concepts commonly found in modern platfor
 ![React](https://img.shields.io/badge/React-61DAFB?style=for-the-badge&logo=react&logoColor=black)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)
 
+[![CI](https://github.com/Luis-Mussalem/dbaas-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/Luis-Mussalem/dbaas-platform/actions/workflows/ci.yml)
+![Tests](https://img.shields.io/badge/tests-151%20passing-brightgreen?style=flat-square)
+![Coverage](https://img.shields.io/badge/coverage-83%25-brightgreen?style=flat-square)
+![Ruff](https://img.shields.io/badge/lint-ruff-blue?style=flat-square)
+
 ![JWT Authentication](https://img.shields.io/badge/Auth-JWT-black?style=flat-square)
 ![PITR](https://img.shields.io/badge/PostgreSQL-PITR-blue?style=flat-square)
 ![Observability](https://img.shields.io/badge/Observability-pg__stat__views-purple?style=flat-square)
@@ -197,9 +202,13 @@ This project focuses heavily on backend engineering and operational concepts, in
 ## Frontend Interface
 - JWT authentication with token rotation (login, logout, protected routes)
 - Instance list with status badges and resource summary
-- Instance detail with live metrics polling (5-second interval)
+- Instance detail with tabbed views (overview, backups, maintenance, alerts)
 - Start / Stop / Delete actions with reactive status updates
-- Metrics bar chart (recharts)
+- Live monitoring: slow queries and active locks
+- Backups management — list, create, restore and scheduling
+- Maintenance actions and alert rules/events management
+- Consolidated dashboard and audit log
+- Workspace switcher (multi-tenant groundwork)
 - Responsive dark UI with Tailwind CSS
 
 ---
@@ -358,6 +367,37 @@ This mirrors backup strategies used in real PostgreSQL production environments.
 
 ---
 
+# Testing & Quality Assurance
+
+Quality is enforced automatically on every push and pull request.
+
+## Automated Test Suite
+- **151 tests** with **83% backend coverage** (`pytest` + `pytest-cov`)
+- Isolated PostgreSQL test database — never touches development data
+- External dependencies are faked, not invoked: Docker SDK, `subprocess`
+  (`pg_dump` / `pg_restore` / `pg_basebackup`) and live `psycopg` connections
+  are mocked, so the full suite runs **without Docker or a target database**
+- Coverage spans the business-critical layers: instance state machine, alert
+  evaluation engine, backup orchestration, maintenance executors, the
+  provisioner, and all background pollers/schedulers
+
+## Continuous Integration
+GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs three jobs in parallel:
+
+| Job | What it does |
+|---|---|
+| **Backend** | `ruff` lint + `pytest` against a PostgreSQL 16 service container |
+| **Frontend** | `npm ci` + `next build` (catches TypeScript/compile breakage) |
+| **Docker** | Builds the multi-stage backend image (validates the Dockerfile) |
+
+## Containerization
+- Multi-stage [`Dockerfile`](backend/Dockerfile): isolated build stage, lean runtime
+- Runs as a **non-root** user (defense in depth)
+- Ships `postgresql-client-16` so backup/restore work in-container
+- Base pinned to `python:3.12-slim-bookworm` for reproducible builds
+
+---
+
 # Engineering Challenges & Lessons Learned
 
 Throughout development, several operational and architectural issues were intentionally documented and resolved.
@@ -406,8 +446,8 @@ This approach was intentionally adopted to reinforce deep technical understandin
 ## Clone the repository
 
 ```bash
-git clone https://github.com/Luis-Mussalem/<repository-name>.git
-cd <repository-name>
+git clone https://github.com/Luis-Mussalem/dbaas-platform.git
+cd dbaas-platform
 ```
 
 ---
@@ -483,6 +523,27 @@ http://localhost:8001/health
 
 ---
 
+## Run the tests
+
+```bash
+cd backend
+pip install -r requirements-dev.txt
+ruff check src/ tests/      # lint
+pytest --cov=src            # tests + coverage
+```
+
+The suite runs against an isolated `dbaas_test` database and requires no Docker.
+
+---
+
+## Build the backend image
+
+```bash
+docker build -t dbaas-backend backend/
+```
+
+---
+
 # Current Development Status
 
 ## Backend — Complete
@@ -498,8 +559,10 @@ http://localhost:8001/health
 - Automated maintenance workflows
 - Alerting & notifications system
 - Administration panel & audit log
+- Automated testing (151 tests, 83% coverage)
+- Continuous integration & multi-stage Docker image
 
-## Frontend — In Progress
+## Frontend — Mostly Complete
 
 | Feature | Status |
 |---|---|
@@ -507,17 +570,17 @@ http://localhost:8001/health
 | Instance list with status badges | ✅ Complete |
 | Instance detail page (dynamic routing) | ✅ Complete |
 | Start / Stop / Delete actions | ✅ Complete |
-| Live metrics polling + bar chart | ✅ Complete |
-| Slow queries & locks visualization | 🔶 In progress |
-| Backups management | 🔶 In progress |
-| Maintenance & alerts interface | 🔶 In progress |
-| Consolidated dashboard | 🔶 Planned |
+| Slow queries & locks visualization | ✅ Complete |
+| Backups management (list, create, restore, schedule) | ✅ Complete |
+| Maintenance & alerts interface | ✅ Complete |
+| Consolidated dashboard + audit log | ✅ Complete |
+| Time-series metric charts (cache hit ratio, connections) | 🔶 Pending backend time-series endpoint |
+| SQL console | ⏸️ Deferred (full-stack milestone) |
 
 ## Planned Future Phases
 
 - Replication & high availability
-- CI/CD pipelines
-- Automated testing
+- Multi-tenant resource scoping (companies & employees)
 - Cloud deployment
 
 ---
@@ -527,14 +590,11 @@ http://localhost:8001/health
 Potential future improvements include:
 
 - Real-time monitoring dashboards
-- Multi-user support
-- Role-based access control
+- Role-based access control (RBAC)
 - Container orchestration
 - Distributed task queues
 - Cloud-native deployment
-- Observability stack integration
-- CI/CD automation
-- Full automated test coverage
+- Observability stack integration (Prometheus / Grafana)
 
 ---
 
