@@ -33,6 +33,9 @@ export type AlertMetricType =
 export type AlertCondition = "gt" | "gte" | "lt" | "lte" | "eq";
 export type AlertSeverity = "info" | "warning" | "critical";
 
+// Ambiente lógico da instância (espelha o enum Environment do backend).
+export type Environment = "production" | "staging" | "development";
+
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
 export interface LoginRequest {
@@ -80,6 +83,8 @@ export interface Instance {
   cpu: number | null;
   memory_mb: number | null;
   storage_gb: number | null;
+  region: string | null;
+  environment: Environment | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -92,6 +97,8 @@ export interface InstanceCreate {
   cpu?: number;
   memory_mb?: number;
   storage_gb?: number;
+  region?: string;
+  environment?: Environment;
   notes?: string;
 }
 
@@ -142,6 +149,20 @@ export interface HealthCheck {
   status: "healthy" | "unhealthy";
   response_time_ms: number;
   checked_at: string;
+}
+
+export type MetricWindow = "15m" | "1h" | "6h" | "24h";
+
+export interface MetricHistoryPoint {
+  collected_at: string;
+  value: number;
+}
+
+export interface MetricHistoryResponse {
+  instance_id: string;
+  metric_name: string;
+  window: MetricWindow;
+  points: MetricHistoryPoint[];
 }
 
 export interface SlowQuery {

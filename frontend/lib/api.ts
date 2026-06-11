@@ -7,6 +7,8 @@ import type {
   Backup,
   BackupSchedule,
   MetricsSnapshot,
+  MetricHistoryResponse,
+  MetricWindow,
   HealthCheck,
   SlowQueriesResponse,
   LocksResponse,
@@ -301,6 +303,19 @@ export async function getMetrics(instanceId: string): Promise<MetricsSnapshot> {
 
 export async function getHealth(instanceId: string): Promise<HealthCheck> {
   return request<HealthCheck>(`/instances/${instanceId}/health`);
+}
+
+// Série temporal de uma métrica (para sparklines/gráficos). Lê do histórico
+// já coletado pelo poller — funciona mesmo com a instância parada.
+export async function getMetricHistory(
+  instanceId: string,
+  metric: string,
+  window: MetricWindow = "1h"
+): Promise<MetricHistoryResponse> {
+  const qs = new URLSearchParams({ metric, window });
+  return request<MetricHistoryResponse>(
+    `/instances/${instanceId}/metrics/history?${qs.toString()}`
+  );
 }
 
 export async function getSlowQueries(
