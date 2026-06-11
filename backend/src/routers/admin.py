@@ -9,7 +9,7 @@ from src.models.user import User
 from src.schemas.admin import AuditLogRead, DashboardResponse
 from src.services import admin as admin_service
 
-router = APIRouter(prefix="/admin", tags=["Admin"])
+router = APIRouter(prefix="/admin", tags=["Administration"])
 
 
 @router.get("/dashboard", response_model=DashboardResponse)

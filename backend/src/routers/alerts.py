@@ -10,7 +10,7 @@ from src.models.user import User
 from src.schemas.alert import AlertEventRead, AlertRuleCreate, AlertRuleRead, AlertRuleUpdate
 from src.services import alert as alert_service
 
-router = APIRouter(tags=["alerts"])
+router = APIRouter(tags=["Alerts"])
 
 
 def _get_rule_or_404(rule_id: uuid.UUID, db: Session) -> AlertRule:

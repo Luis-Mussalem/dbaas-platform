@@ -21,7 +21,7 @@ from src.services import metrics as metrics_service
 
 router = APIRouter(
     prefix="/instances",
-    tags=["monitoring"],
+    tags=["Monitoring"],
 )
 
 

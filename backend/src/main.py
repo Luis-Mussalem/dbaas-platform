@@ -102,9 +102,39 @@ async def lifespan(app: FastAPI):
     logger.info("Encerramento concluído.")
 
 
+# Descrição exibida no topo do /docs (Swagger UI) e /redoc.
+# Mantida genérica e reutilizável — sem credenciais, clientes ou dados reais.
+API_DESCRIPTION = """
+Plataforma de gestão de bancos PostgreSQL — provisionamento, monitoramento,
+automação e proteção de dados (DBA-as-a-Service).
+
+**Pilares:** Monitoramento · Backup & Recovery · Manutenção Automática · Alertas Proativos
+
+Todas as rotas de domínio ficam sob `/api/v1/`. O `GET /health` permanece na
+raiz para probes de infraestrutura e load balancers.
+A maioria dos endpoints exige autenticação via Bearer JWT (`POST /api/v1/auth/login`).
+"""
+
+# Ordem e descrição das tags no /docs. O FastAPI renderiza os grupos na ordem
+# desta lista — do fluxo de acesso (auth) ao painel administrativo.
+openapi_tags = [
+    {"name": "Health", "description": "Liveness/readiness da API e conectividade com o banco da plataforma."},
+    {"name": "Authentication", "description": "Registro, login, refresh e logout. Emite e revoga tokens JWT."},
+    {"name": "Users", "description": "Gestão self-service da conta do usuário autenticado."},
+    {"name": "Companies", "description": "Empresas (multi-tenant). Restrito ao superusuário da plataforma."},
+    {"name": "Instances", "description": "Ciclo de vida das instâncias de banco: criar, iniciar, parar e remover."},
+    {"name": "Monitoring", "description": "Métricas, health, slow queries, locks, índices e bloat por instância."},
+    {"name": "Backups", "description": "Backups lógicos (pg_dump) e físicos (pg_basebackup), restore e agendamento."},
+    {"name": "Maintenance", "description": "VACUUM, ANALYZE, REINDEX, gestão de conexões e recomendações de tuning."},
+    {"name": "Alerts", "description": "Regras de alerta, avaliação automática e histórico de eventos."},
+    {"name": "Administration", "description": "Visão consolidada da plataforma e trilha de auditoria."},
+]
+
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
+    description=API_DESCRIPTION,
+    openapi_tags=openapi_tags,
     debug=settings.DEBUG,
     lifespan=lifespan,
 )
