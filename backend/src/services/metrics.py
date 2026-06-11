@@ -2,7 +2,7 @@ import logging
 import time
 import uuid
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Generator
 
 import psycopg
@@ -119,6 +119,34 @@ def get_latest_metrics(
     )
 
     return {name: value for name, value in rows}
+
+
+def get_metric_history(
+    db: Session,
+    instance_id: uuid.UUID,
+    metric_name: str,
+    minutes: int,
+) -> list[tuple[datetime, float]]:
+    """
+    Retorna a série temporal de UMA métrica na janela [agora - minutes, agora].
+
+    Lê da tabela metrics (banco da plataforma) — não conecta ao banco monitorado.
+    O poller persiste um ponto a cada ciclo (~60s), então a janela controla o
+    volume: 15m ≈ 15 pontos, 1h ≈ 60, 24h ≈ 1440. Ordenado por tempo crescente
+    para alimentar sparklines/gráficos diretamente.
+    """
+    since = datetime.now(timezone.utc) - timedelta(minutes=minutes)
+    rows = (
+        db.query(Metric.collected_at, Metric.value)
+        .filter(
+            Metric.instance_id == instance_id,
+            Metric.metric_name == metric_name,
+            Metric.collected_at >= since,
+        )
+        .order_by(Metric.collected_at.asc())
+        .all()
+    )
+    return [(row.collected_at, row.value) for row in rows]
 
 
 def check_health(instance: DatabaseInstance) -> dict:

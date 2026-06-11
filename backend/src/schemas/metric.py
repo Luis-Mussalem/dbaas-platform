@@ -11,6 +11,20 @@ class MetricsSnapshot(BaseModel):
     collected_at: datetime | None = None
 
 
+class MetricHistoryPoint(BaseModel):
+    collected_at: datetime
+    value: float
+
+
+class MetricHistoryResponse(BaseModel):
+    """Série temporal de uma única métrica, para sparklines e gráficos."""
+
+    instance_id: uuid.UUID
+    metric_name: str
+    window: str
+    points: list[MetricHistoryPoint]
+
+
 class HealthCheck(BaseModel):
     instance_id: uuid.UUID
     status: Literal["healthy", "unhealthy"]

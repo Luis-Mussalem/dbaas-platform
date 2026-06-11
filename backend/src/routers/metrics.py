@@ -4,7 +4,14 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from src.core.dependencies import get_current_user, get_db, get_instance_if_running
+from typing import Literal
+
+from src.core.dependencies import (
+    get_current_user,
+    get_db,
+    get_instance_if_running,
+    get_instance_or_404,
+)
 from src.models.database_instance import DatabaseInstance
 from src.models.user import User
 from src.schemas.metric import (
@@ -14,6 +21,8 @@ from src.schemas.metric import (
     HealthCheck,
     IndexStatsResponse,
     LocksResponse,
+    MetricHistoryPoint,
+    MetricHistoryResponse,
     MetricsSnapshot,
     SlowQueriesResponse,
 )
@@ -78,6 +87,41 @@ def get_metrics(
     return MetricsSnapshot(
         instance_id=instance_id,
         metrics=current_metrics,
+    )
+
+
+# Janelas suportadas → minutos. Mantém o contrato pequeno e previsível para a UI.
+_WINDOW_MINUTES = {"15m": 15, "1h": 60, "6h": 360, "24h": 1440}
+
+
+@router.get(
+    "/{instance_id}/metrics/history",
+    response_model=MetricHistoryResponse,
+    summary="Retornar a série temporal de uma métrica para sparklines/gráficos",
+)
+def get_metrics_history(
+    instance_id: uuid.UUID,
+    metric: str = Query(..., min_length=1, max_length=100, description="metric_name coletado pelo poller"),
+    window: Literal["15m", "1h", "6h", "24h"] = "1h",
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> MetricHistoryResponse:
+    """
+    Série histórica de uma única métrica na janela escolhida.
+
+    Lê da tabela metrics (banco da plataforma) — funciona mesmo com a instância
+    STOPPED, exibindo o histórico já coletado. Retorna lista vazia se a métrica
+    não foi coletada ainda.
+    """
+    get_instance_or_404(instance_id, db)
+    points = metrics_service.get_metric_history(
+        db, instance_id, metric, _WINDOW_MINUTES[window]
+    )
+    return MetricHistoryResponse(
+        instance_id=instance_id,
+        metric_name=metric,
+        window=window,
+        points=[MetricHistoryPoint(collected_at=ts, value=v) for ts, v in points],
     )
 
 
