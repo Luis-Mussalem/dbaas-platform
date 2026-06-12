@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Check, ChevronLeft, ChevronRight, X, Zap, RefreshCw } from "lucide-react";
 import { createInstance } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/context/ToastProvider";
 import type { Environment } from "@/lib/types";
 
 // Versões disponíveis (viram a tag postgres:<v>-alpine no provisionador).
@@ -62,6 +63,7 @@ export default function CreateInstancePage() {
   const [region, setRegion] = useState<string>("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const size = SIZES.find((s) => s.id === sizeId)!;
 
@@ -84,9 +86,12 @@ export default function CreateInstancePage() {
         ...(environment ? { environment } : {}),
         ...(region ? { region } : {}),
       });
+      toast.success(`Instância "${created.name}" provisionada.`);
       router.push(`/instances/${created.id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao provisionar");
+      const msg = err instanceof Error ? err.message : "Falha ao provisionar";
+      setError(msg);
+      toast.error(msg);
       setCreating(false);
     }
   }

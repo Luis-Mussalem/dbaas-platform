@@ -18,6 +18,7 @@ import {
 } from "@/lib/api";
 import { useMetrics } from "@/hooks/use-metrics";
 import { useMetricHistory } from "@/hooks/use-metric-history";
+import { useToast } from "@/context/ToastProvider";
 import type { Instance, SlowQuery } from "@/lib/types";
 import { StatusBadge } from "@/components/StatusBadge";
 import { EnvBadge } from "@/components/EnvBadge";
@@ -64,6 +65,7 @@ export default function InstanceDetailPage() {
   const [tab, setTab] = useState("overview");
 
   const { metrics } = useMetrics(id);
+  const { toast } = useToast();
 
   const load = useCallback(async () => {
     try {
@@ -104,8 +106,11 @@ export default function InstanceDetailPage() {
     try {
       const updated = await updateInstanceStatus(instance.id, action);
       setInstance(updated);
+      toast.success(action === "start" ? "Instância iniciada." : "Instância parada.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Ação falhou");
+      const msg = err instanceof Error ? err.message : "Ação falhou";
+      setError(msg);
+      toast.error(msg);
     } finally {
       setIsActing(false);
     }
@@ -118,9 +123,12 @@ export default function InstanceDetailPage() {
     setError(null);
     try {
       await deleteInstance(instance.id);
+      toast.success(`"${instance.name}" excluída.`);
       router.push("/instances");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao excluir");
+      const msg = err instanceof Error ? err.message : "Falha ao excluir";
+      setError(msg);
+      toast.error(msg);
       setIsActing(false);
     }
   }
@@ -256,8 +264,8 @@ function OverviewTab({
   const cacheHit = metrics.cache_hit_ratio;
   const sizeBytes = metrics.db_size_bytes;
 
-  // Sparkline real de conexões (última hora) para o primeiro card.
-  const connHistory = useMetricHistory(instance.id, "connections_active", "1h");
+  // Sparkline real de conexões (últimas 24h) para o primeiro card.
+  const connHistory = useMetricHistory(instance.id, "connections_active", "24h");
 
   return (
     <div className="flex flex-col gap-4">

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Copy, Check } from "lucide-react";
+import { useToast } from "@/context/ToastProvider";
 
 // String de conexão da instância. Os campos host/porta/banco/usuário são reais
 // (vêm do GET /instances/{id}); a SENHA é cifrada no backend e nunca devolvida
@@ -18,12 +19,14 @@ export function ConnString({
   user: string | null;
 }) {
   const [copied, setCopied] = useState(false);
+  const { toast } = useToast();
 
   const uri = `postgresql://${user ?? "user"}:••••••••@${host}:${port ?? 5432}/${db ?? ""}`;
 
   function copy() {
     navigator.clipboard?.writeText(uri).catch(() => {});
     setCopied(true);
+    toast.success("String de conexão copiada.");
     setTimeout(() => setCopied(false), 1400);
   }
 
