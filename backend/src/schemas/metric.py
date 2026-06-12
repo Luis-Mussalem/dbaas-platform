@@ -32,6 +32,35 @@ class HealthCheck(BaseModel):
     checked_at: datetime
 
 
+class ActiveConnection(BaseModel):
+    pid: int
+    user: str | None = None
+    state: str | None = None
+    wait_event: str | None = None
+    duration_seconds: float | None = None
+    query: str | None = None
+
+
+class ActiveConnectionsResponse(BaseModel):
+    instance_id: uuid.UUID
+    connections: list[ActiveConnection]
+
+
+class SchemaTable(BaseModel):
+    table: str
+    estimated_rows: int
+
+
+class SchemaGroup(BaseModel):
+    name: str  # nome do schema (ex.: public)
+    tables: list[SchemaTable]
+
+
+class SchemaResponse(BaseModel):
+    instance_id: uuid.UUID
+    schemas: list[SchemaGroup]
+
+
 class SlowQuery(BaseModel):
     query: str
     calls: int

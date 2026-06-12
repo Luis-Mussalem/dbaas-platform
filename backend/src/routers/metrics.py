@@ -15,6 +15,7 @@ from src.core.dependencies import (
 from src.models.database_instance import DatabaseInstance
 from src.models.user import User
 from src.schemas.metric import (
+    ActiveConnectionsResponse,
     BloatResponse,
     ExplainRequest,
     ExplainResponse,
@@ -24,6 +25,7 @@ from src.schemas.metric import (
     MetricHistoryPoint,
     MetricHistoryResponse,
     MetricsSnapshot,
+    SchemaResponse,
     SlowQueriesResponse,
 )
 from src.services import metrics as metrics_service
@@ -242,6 +244,47 @@ async def get_bloat(
         instance_id=instance_id,
         tables=rows,
     )
+
+
+@router.get(
+    "/{instance_id}/connections",
+    response_model=ActiveConnectionsResponse,
+    summary="Listar conexões ativas (pg_stat_activity)",
+)
+async def get_connections(
+    instance_id: uuid.UUID,
+    limit: int = Query(default=100, ge=1, le=500),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> ActiveConnectionsResponse:
+    """
+    Lista os backends conectados ao banco da instância (PID, usuário, estado,
+    espera, duração e query). Endpoint live — exige a instância RUNNING.
+    """
+    instance = _require_connected(instance_id, db)
+    rows = await asyncio.to_thread(
+        metrics_service.get_active_connections, instance, limit
+    )
+    return ActiveConnectionsResponse(instance_id=instance_id, connections=rows)
+
+
+@router.get(
+    "/{instance_id}/schema",
+    response_model=SchemaResponse,
+    summary="Explorar o schema do banco (tabelas por schema)",
+)
+async def get_schema(
+    instance_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> SchemaResponse:
+    """
+    Retorna as tabelas de usuário agrupadas por schema, com estimativa de linhas
+    (pg_class.reltuples). Endpoint live — exige a instância RUNNING.
+    """
+    instance = _require_connected(instance_id, db)
+    groups = await asyncio.to_thread(metrics_service.get_schema, instance)
+    return SchemaResponse(instance_id=instance_id, schemas=groups)
 
 
 @router.post(

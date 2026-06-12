@@ -10,11 +10,13 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from src.collectors.pg_stats import (
+    collect_active_connections,
     collect_base_metrics,
     collect_bloat,
     collect_explain,
     collect_index_stats,
     collect_locks,
+    collect_schema,
     collect_slow_queries,
 )
 from src.core.encryption import decrypt_value
@@ -212,3 +214,37 @@ def get_explain(instance: DatabaseInstance, query: str) -> list:
     """Executar EXPLAIN ANALYZE para uma query SELECT."""
     with get_connection(instance) as conn:
         return collect_explain(conn, query)
+
+
+def get_active_connections(
+    instance: DatabaseInstance,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    """Listar conexões ativas via pg_stat_activity."""
+    with get_connection(instance) as conn:
+        return collect_active_connections(conn, limit=limit)
+
+
+def get_schema(instance: DatabaseInstance) -> list[dict[str, Any]]:
+    """
+    Retornar as tabelas agrupadas por schema (com estimativa de linhas).
+
+    Agrupa as linhas planas do coletor em [{name, tables:[{table, estimated_rows}]}],
+    preservando a ordem (schema, tabela) já garantida pela query.
+    """
+    with get_connection(instance) as conn:
+        rows = collect_schema(conn)
+
+    groups: list[dict[str, Any]] = []
+    by_name: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        name = row["schema_name"]
+        group = by_name.get(name)
+        if group is None:
+            group = {"name": name, "tables": []}
+            by_name[name] = group
+            groups.append(group)
+        group["tables"].append(
+            {"table": row["table"], "estimated_rows": row["estimated_rows"]}
+        )
+    return groups
