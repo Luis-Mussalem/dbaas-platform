@@ -10,6 +10,8 @@ import {
   resolveAlertEvent,
 } from "@/lib/api";
 import { useAlerts } from "@/hooks/use-alerts";
+import { useToast } from "@/context/ToastProvider";
+import { useConfirm } from "@/context/ConfirmProvider";
 import type {
   Instance,
   AlertRule,
@@ -72,7 +74,8 @@ export function AlertsTab({ instance }: { instance: Instance }) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [showForm, setShowForm] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const { toast } = useToast();
+  const { confirm } = useConfirm();
 
   // Atualização imutável: nunca mutamos `form` direto — criamos um objeto novo
   // com spread (...f) trocando só o campo alterado. O genérico <K> garante que
@@ -84,11 +87,10 @@ export function AlertsTab({ instance }: { instance: Instance }) {
   async function create() {
     const threshold = Number(form.threshold);
     if (!form.name.trim() || Number.isNaN(threshold)) {
-      setActionError("Informe um nome e um limiar numérico.");
+      toast.error("Informe um nome e um limiar numérico.");
       return;
     }
     setBusy("create");
-    setActionError(null);
     try {
       await createAlertRule(instance.id, {
         name: form.name.trim(),
@@ -100,8 +102,9 @@ export function AlertsTab({ instance }: { instance: Instance }) {
       setForm(EMPTY_FORM);
       setShowForm(false);
       await refresh();
+      toast.success("Regra criada.");
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Falha ao criar regra");
+      toast.error(err instanceof Error ? err.message : "Falha ao criar regra");
     } finally {
       setBusy(null);
     }
@@ -109,12 +112,12 @@ export function AlertsTab({ instance }: { instance: Instance }) {
 
   async function seed() {
     setBusy("seed");
-    setActionError(null);
     try {
       await seedDefaultAlertRules(instance.id);
       await refresh();
+      toast.success("Regras padrão adicionadas.");
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Falha ao semear padrões");
+      toast.error(err instanceof Error ? err.message : "Falha ao semear padrões");
     } finally {
       setBusy(null);
     }
@@ -122,26 +125,30 @@ export function AlertsTab({ instance }: { instance: Instance }) {
 
   async function toggle(rule: AlertRule) {
     setBusy(rule.id);
-    setActionError(null);
     try {
       await updateAlertRule(rule.id, { is_active: !rule.is_active });
       await refresh();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Falha ao atualizar regra");
+      toast.error(err instanceof Error ? err.message : "Falha ao atualizar regra");
     } finally {
       setBusy(null);
     }
   }
 
   async function remove(rule: AlertRule) {
-    if (!window.confirm(`Excluir a regra "${rule.name}"?`)) return;
+    const ok = await confirm({
+      title: `Excluir a regra "${rule.name}"?`,
+      confirmText: "Excluir",
+      danger: true,
+    });
+    if (!ok) return;
     setBusy(rule.id);
-    setActionError(null);
     try {
       await deleteAlertRule(rule.id);
       await refresh();
+      toast.success("Regra excluída.");
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Falha ao excluir regra");
+      toast.error(err instanceof Error ? err.message : "Falha ao excluir regra");
     } finally {
       setBusy(null);
     }
@@ -149,12 +156,12 @@ export function AlertsTab({ instance }: { instance: Instance }) {
 
   async function resolve(event: AlertEvent) {
     setBusy(event.id);
-    setActionError(null);
     try {
       await resolveAlertEvent(event.id);
       await refresh();
+      toast.success("Alerta resolvido.");
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Falha ao resolver evento");
+      toast.error(err instanceof Error ? err.message : "Falha ao resolver evento");
     } finally {
       setBusy(null);
     }
@@ -162,12 +169,6 @@ export function AlertsTab({ instance }: { instance: Instance }) {
 
   return (
     <div className="flex flex-col gap-4">
-      {actionError && (
-        <div className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
-          {actionError}
-        </div>
-      )}
-
       {/* ── Eventos ativos ── */}
       <div className="overflow-hidden rounded-xl border border-border bg-surface">
         <div className="flex items-center justify-between border-b border-border px-4 py-3">

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Play, RefreshCw } from "lucide-react";
 import { runMaintenance } from "@/lib/api";
 import { useMaintenance } from "@/hooks/use-maintenance";
+import { useToast } from "@/context/ToastProvider";
 import type { Instance, TaskType, TaskStatus } from "@/lib/types";
 import { timeAgo } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -48,18 +49,18 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
 export function MaintenanceTab({ instance }: { instance: Instance }) {
   const { tasks, isLoading, error, refresh } = useMaintenance(instance.id);
   const [busy, setBusy] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const isRunning = instance.status === "running";
 
   async function run(type: TaskType) {
     setBusy(type);
-    setActionError(null);
     try {
       await runMaintenance(instance.id, { task_type: type });
       await refresh();
+      toast.success(`${TYPE_LABEL[type] ?? type} executado.`);
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Falha ao executar manutenção");
+      toast.error(err instanceof Error ? err.message : "Falha ao executar manutenção");
     } finally {
       setBusy(null);
     }
@@ -85,11 +86,6 @@ export function MaintenanceTab({ instance }: { instance: Instance }) {
             </button>
           ))}
         </div>
-        {actionError && (
-          <div className="mt-3 rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
-            {actionError}
-          </div>
-        )}
       </div>
 
       {/* histórico */}

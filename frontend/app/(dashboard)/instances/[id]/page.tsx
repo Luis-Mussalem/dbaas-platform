@@ -19,6 +19,7 @@ import {
 import { useMetrics } from "@/hooks/use-metrics";
 import { useMetricHistory } from "@/hooks/use-metric-history";
 import { useToast } from "@/context/ToastProvider";
+import { useConfirm } from "@/context/ConfirmProvider";
 import type { Instance, SlowQuery } from "@/lib/types";
 import { StatusBadge } from "@/components/StatusBadge";
 import { EnvBadge } from "@/components/EnvBadge";
@@ -66,6 +67,7 @@ export default function InstanceDetailPage() {
 
   const { metrics } = useMetrics(id);
   const { toast } = useToast();
+  const { confirm } = useConfirm();
 
   const load = useCallback(async () => {
     try {
@@ -118,7 +120,13 @@ export default function InstanceDetailPage() {
 
   async function handleDelete() {
     if (!instance) return;
-    if (!window.confirm(`Excluir "${instance.name}"? Esta ação não pode ser desfeita.`)) return;
+    const ok = await confirm({
+      title: `Excluir "${instance.name}"?`,
+      description: "Esta ação não pode ser desfeita.",
+      confirmText: "Excluir",
+      danger: true,
+    });
+    if (!ok) return;
     setIsActing(true);
     setError(null);
     try {

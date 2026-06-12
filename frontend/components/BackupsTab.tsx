@@ -4,6 +4,8 @@ import { useState } from "react";
 import { Save, Download, RefreshCw } from "lucide-react";
 import { createBackup, restoreBackup } from "@/lib/api";
 import { useBackups } from "@/hooks/use-backups";
+import { useToast } from "@/context/ToastProvider";
+import { useConfirm } from "@/context/ConfirmProvider";
 import type { Backup, BackupStatus, BackupStrategy, Instance } from "@/lib/types";
 import { formatBytes, timeAgo } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -32,36 +34,39 @@ export function BackupsTab({ instance }: { instance: Instance }) {
   const { backups, isLoading, error, refresh } = useBackups(instance.id);
   // `busy` guarda qual ação está em andamento: "logical", "physical" ou o id do backup em restore.
   const [busy, setBusy] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const { toast } = useToast();
+  const { confirm } = useConfirm();
 
   const isRunning = instance.status === "running";
 
   async function handleCreate(strategy: BackupStrategy) {
     setBusy(strategy);
-    setActionError(null);
     try {
       await createBackup(instance.id, strategy);
       await refresh();
+      toast.success(`Backup ${strategy === "logical" ? "lógico" : "físico"} criado.`);
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Falha ao criar backup");
+      toast.error(err instanceof Error ? err.message : "Falha ao criar backup");
     } finally {
       setBusy(null);
     }
   }
 
   async function handleRestore(backup: Backup) {
-    if (
-      !window.confirm(
-        "Restaurar este backup? Os dados atuais do banco serão substituídos. Esta ação é destrutiva."
-      )
-    )
-      return;
+    const ok = await confirm({
+      title: "Restaurar este backup?",
+      description:
+        "Os dados atuais do banco serão substituídos. Esta ação é destrutiva.",
+      confirmText: "Restaurar",
+      danger: true,
+    });
+    if (!ok) return;
     setBusy(backup.id);
-    setActionError(null);
     try {
       await restoreBackup(backup.id);
+      toast.success("Restauração iniciada.");
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Falha ao restaurar");
+      toast.error(err instanceof Error ? err.message : "Falha ao restaurar");
     } finally {
       setBusy(null);
     }
@@ -99,9 +104,9 @@ export function BackupsTab({ instance }: { instance: Instance }) {
           criar ou restaurar backups.
         </div>
       )}
-      {(actionError || error) && (
+      {error && (
         <div className="border-b border-border bg-danger/10 px-4 py-2 text-sm text-danger">
-          {actionError ?? error}
+          {error}
         </div>
       )}
 
