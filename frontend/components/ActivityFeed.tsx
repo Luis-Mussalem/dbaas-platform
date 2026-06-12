@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Activity } from "lucide-react";
+import { Activity, Cpu } from "lucide-react";
 import { getAuditLogs } from "@/lib/api";
 import type { AuditLog } from "@/lib/types";
 import { timeAgo } from "@/lib/format";
@@ -21,6 +21,18 @@ const ACTION_LABELS: Record<string, string> = {
   schedule_deleted: "removeu um agendamento de",
   maintenance_run: "rodou manutenção em",
 };
+
+// Cor semântica do avatar derivada da ação — sem inventar nomes de usuário
+// (o audit log guarda user_id/ação, não o nome da pessoa).
+function toneFor(action: string): string {
+  if (action.includes("created") || action === "login" || action === "register")
+    return "text-ok bg-ok/12";
+  if (action.includes("deleted")) return "text-danger bg-danger/12";
+  if (action.includes("maintenance") || action.includes("restore"))
+    return "text-warn bg-warn/12";
+  if (action.includes("status")) return "text-info bg-info/12";
+  return "text-fg-3 bg-bg-2";
+}
 
 function shortId(id: string): string {
   return id.length > 8 ? id.slice(0, 8) : id;
@@ -47,25 +59,35 @@ export function ActivityFeed() {
         <p className="py-4 text-center text-xs text-fg-3">Nenhuma atividade ainda.</p>
       ) : (
         <ul className="flex flex-col">
-          {logs.map((log) => (
-            <li
-              key={log.id}
-              className="flex items-center gap-3 border-b border-border py-2 last:border-0"
-            >
-              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-bg-2 text-fg-3">
-                <Activity size={13} />
-              </div>
-              <p className="flex-1 text-[12.5px] leading-snug text-fg-2">
-                {ACTION_LABELS[log.action] ?? log.action}
-                {log.resource_id && (
-                  <span className="font-mono text-foreground"> {shortId(log.resource_id)}</span>
-                )}
-              </p>
-              <span className="shrink-0 font-mono text-[11px] text-fg-3">
-                {timeAgo(log.timestamp)}
-              </span>
-            </li>
-          ))}
+          {logs.map((log) => {
+            const isSystem = !log.user_id;
+            return (
+              <li
+                key={log.id}
+                className="flex items-center gap-2.5 border-b border-border py-2 last:border-0"
+              >
+                <div
+                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${toneFor(
+                    log.action
+                  )}`}
+                >
+                  {isSystem ? <Cpu size={13} /> : <Activity size={13} />}
+                </div>
+                <p className="flex-1 text-[12.5px] leading-snug text-fg-2">
+                  <span className="font-medium text-foreground">
+                    {isSystem ? "sistema" : "operador"}
+                  </span>{" "}
+                  {ACTION_LABELS[log.action] ?? log.action}
+                  {log.resource_id && (
+                    <span className="font-mono text-foreground"> {shortId(log.resource_id)}</span>
+                  )}
+                </p>
+                <span className="shrink-0 font-mono text-[11px] text-fg-3">
+                  {timeAgo(log.timestamp)}
+                </span>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

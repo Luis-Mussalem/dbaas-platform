@@ -4,17 +4,28 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from src.core.dependencies import get_current_user, get_db, get_instance_if_running
+from typing import Literal
+
+from src.core.dependencies import (
+    get_current_user,
+    get_db,
+    get_instance_if_running,
+    get_instance_or_404,
+)
 from src.models.database_instance import DatabaseInstance
 from src.models.user import User
 from src.schemas.metric import (
+    ActiveConnectionsResponse,
     BloatResponse,
     ExplainRequest,
     ExplainResponse,
     HealthCheck,
     IndexStatsResponse,
     LocksResponse,
+    MetricHistoryPoint,
+    MetricHistoryResponse,
     MetricsSnapshot,
+    SchemaResponse,
     SlowQueriesResponse,
 )
 from src.services import metrics as metrics_service
@@ -78,6 +89,41 @@ def get_metrics(
     return MetricsSnapshot(
         instance_id=instance_id,
         metrics=current_metrics,
+    )
+
+
+# Janelas suportadas → minutos. Mantém o contrato pequeno e previsível para a UI.
+_WINDOW_MINUTES = {"15m": 15, "1h": 60, "6h": 360, "24h": 1440}
+
+
+@router.get(
+    "/{instance_id}/metrics/history",
+    response_model=MetricHistoryResponse,
+    summary="Retornar a série temporal de uma métrica para sparklines/gráficos",
+)
+def get_metrics_history(
+    instance_id: uuid.UUID,
+    metric: str = Query(..., min_length=1, max_length=100, description="metric_name coletado pelo poller"),
+    window: Literal["15m", "1h", "6h", "24h"] = "1h",
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> MetricHistoryResponse:
+    """
+    Série histórica de uma única métrica na janela escolhida.
+
+    Lê da tabela metrics (banco da plataforma) — funciona mesmo com a instância
+    STOPPED, exibindo o histórico já coletado. Retorna lista vazia se a métrica
+    não foi coletada ainda.
+    """
+    get_instance_or_404(instance_id, db)
+    points = metrics_service.get_metric_history(
+        db, instance_id, metric, _WINDOW_MINUTES[window]
+    )
+    return MetricHistoryResponse(
+        instance_id=instance_id,
+        metric_name=metric,
+        window=window,
+        points=[MetricHistoryPoint(collected_at=ts, value=v) for ts, v in points],
     )
 
 
@@ -198,6 +244,47 @@ async def get_bloat(
         instance_id=instance_id,
         tables=rows,
     )
+
+
+@router.get(
+    "/{instance_id}/connections",
+    response_model=ActiveConnectionsResponse,
+    summary="Listar conexões ativas (pg_stat_activity)",
+)
+async def get_connections(
+    instance_id: uuid.UUID,
+    limit: int = Query(default=100, ge=1, le=500),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> ActiveConnectionsResponse:
+    """
+    Lista os backends conectados ao banco da instância (PID, usuário, estado,
+    espera, duração e query). Endpoint live — exige a instância RUNNING.
+    """
+    instance = _require_connected(instance_id, db)
+    rows = await asyncio.to_thread(
+        metrics_service.get_active_connections, instance, limit
+    )
+    return ActiveConnectionsResponse(instance_id=instance_id, connections=rows)
+
+
+@router.get(
+    "/{instance_id}/schema",
+    response_model=SchemaResponse,
+    summary="Explorar o schema do banco (tabelas por schema)",
+)
+async def get_schema(
+    instance_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> SchemaResponse:
+    """
+    Retorna as tabelas de usuário agrupadas por schema, com estimativa de linhas
+    (pg_class.reltuples). Endpoint live — exige a instância RUNNING.
+    """
+    instance = _require_connected(instance_id, db)
+    groups = await asyncio.to_thread(metrics_service.get_schema, instance)
+    return SchemaResponse(instance_id=instance_id, schemas=groups)
 
 
 @router.post(

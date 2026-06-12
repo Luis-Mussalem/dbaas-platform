@@ -19,6 +19,20 @@ class InstanceStatus(str, PyEnum):
     FAILED = "failed"
 
 
+class Environment(str, PyEnum):
+    """
+    Ambiente lógico da instância — usado para agrupar/filtrar no painel.
+
+    Valores canônicos em inglês; a UI traduz para os rótulos exibidos
+    (produção / homologação / desenvolvimento). Nullable: instâncias antigas
+    ou sem classificação ficam sem ambiente.
+    """
+
+    PRODUCTION = "production"
+    STAGING = "staging"
+    DEVELOPMENT = "development"
+
+
 class DatabaseInstance(Base):
     __tablename__ = "database_instances"
 
@@ -80,6 +94,15 @@ class DatabaseInstance(Base):
     )
     notes: Mapped[str | None] = mapped_column(
         Text,
+        nullable=True,
+    )
+    region: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+        comment="Region code, e.g. sa-east-1 / us-east-1 / eu-west-1",
+    )
+    environment: Mapped[Environment | None] = mapped_column(
+        SAEnum(Environment, name="environment"),
         nullable=True,
     )
     created_at: Mapped[DateTime] = mapped_column(

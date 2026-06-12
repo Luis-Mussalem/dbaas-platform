@@ -2,7 +2,7 @@ import logging
 import time
 import uuid
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Generator
 
 import psycopg
@@ -10,11 +10,13 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from src.collectors.pg_stats import (
+    collect_active_connections,
     collect_base_metrics,
     collect_bloat,
     collect_explain,
     collect_index_stats,
     collect_locks,
+    collect_schema,
     collect_slow_queries,
 )
 from src.core.encryption import decrypt_value
@@ -121,6 +123,34 @@ def get_latest_metrics(
     return {name: value for name, value in rows}
 
 
+def get_metric_history(
+    db: Session,
+    instance_id: uuid.UUID,
+    metric_name: str,
+    minutes: int,
+) -> list[tuple[datetime, float]]:
+    """
+    Retorna a série temporal de UMA métrica na janela [agora - minutes, agora].
+
+    Lê da tabela metrics (banco da plataforma) — não conecta ao banco monitorado.
+    O poller persiste um ponto a cada ciclo (~60s), então a janela controla o
+    volume: 15m ≈ 15 pontos, 1h ≈ 60, 24h ≈ 1440. Ordenado por tempo crescente
+    para alimentar sparklines/gráficos diretamente.
+    """
+    since = datetime.now(timezone.utc) - timedelta(minutes=minutes)
+    rows = (
+        db.query(Metric.collected_at, Metric.value)
+        .filter(
+            Metric.instance_id == instance_id,
+            Metric.metric_name == metric_name,
+            Metric.collected_at >= since,
+        )
+        .order_by(Metric.collected_at.asc())
+        .all()
+    )
+    return [(row.collected_at, row.value) for row in rows]
+
+
 def check_health(instance: DatabaseInstance) -> dict:
     """
     Verificar conectividade e responsividade do banco com SELECT 1 cronometrado.
@@ -184,3 +214,37 @@ def get_explain(instance: DatabaseInstance, query: str) -> list:
     """Executar EXPLAIN ANALYZE para uma query SELECT."""
     with get_connection(instance) as conn:
         return collect_explain(conn, query)
+
+
+def get_active_connections(
+    instance: DatabaseInstance,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    """Listar conexões ativas via pg_stat_activity."""
+    with get_connection(instance) as conn:
+        return collect_active_connections(conn, limit=limit)
+
+
+def get_schema(instance: DatabaseInstance) -> list[dict[str, Any]]:
+    """
+    Retornar as tabelas agrupadas por schema (com estimativa de linhas).
+
+    Agrupa as linhas planas do coletor em [{name, tables:[{table, estimated_rows}]}],
+    preservando a ordem (schema, tabela) já garantida pela query.
+    """
+    with get_connection(instance) as conn:
+        rows = collect_schema(conn)
+
+    groups: list[dict[str, Any]] = []
+    by_name: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        name = row["schema_name"]
+        group = by_name.get(name)
+        if group is None:
+            group = {"name": name, "tables": []}
+            by_name[name] = group
+            groups.append(group)
+        group["tables"].append(
+            {"table": row["table"], "estimated_rows": row["estimated_rows"]}
+        )
+    return groups

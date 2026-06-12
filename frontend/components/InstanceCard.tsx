@@ -4,14 +4,22 @@ import Link from "next/link";
 import { Database } from "lucide-react";
 import type { Instance } from "@/lib/types";
 import { useMetrics } from "@/hooks/use-metrics";
+import { useMetricHistory } from "@/hooks/use-metric-history";
 import { formatBytes } from "@/lib/format";
-import { StatusBadge } from "@/components/StatusBadge";
+import { HealthBadge } from "@/components/StatusBadge";
+import { EnvBadge } from "@/components/EnvBadge";
+import { RegionTag } from "@/components/RegionTag";
+import { Sparkline } from "@/components/Sparkline";
 
 export function InstanceCard({ instance }: { instance: Instance }) {
   // Métricas ao vivo do banco (poll a cada 10s pelo hook). Para instâncias
   // não-RUNNING, o backend devolve a última leitura armazenada (ou vazio).
   const { metrics } = useMetrics(instance.id);
   const m = metrics?.metrics ?? {};
+
+  // Sparkline REAL: histórico de conexões nas últimas 24h (vem do endpoint de
+  // histórico que lê a tabela metrics). Vazio → o Sparkline mostra uma linha-base.
+  const connHistory = useMetricHistory(instance.id, "connections_active", "24h");
 
   const connActive = m.connections_active;
   const connMax = m.connections_max;
@@ -23,24 +31,48 @@ export function InstanceCard({ instance }: { instance: Instance }) {
   const storagePct =
     capacityBytes && sizeBytes ? Math.min(100, (sizeBytes / capacityBytes) * 100) : null;
 
+  // Cor do sparkline/saúde segue o status: parada = neutro, falhou = vermelho.
+  const sparkColor =
+    instance.status === "failed"
+      ? "var(--danger)"
+      : instance.status === "running"
+        ? "var(--brand)"
+        : "var(--fg-3)";
+
   return (
     <Link
       href={`/instances/${instance.id}`}
-      className="flex flex-col gap-3.5 rounded-xl border border-border bg-surface p-4 transition hover:-translate-y-0.5 hover:border-border-strong hover:shadow-lg"
+      className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-4 transition hover:-translate-y-0.5 hover:border-border-strong hover:shadow-lg"
     >
-      {/* topo: nome + status */}
+      {/* topo: ícone + nome + região  ·  saúde */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-linear-to-br from-primary to-info text-primary-foreground">
             <Database size={16} />
           </div>
-          <div>
-            <div className="text-[14.5px] font-semibold text-foreground">{instance.name}</div>
-            <div className="text-xs text-fg-3">PostgreSQL {instance.engine_version}</div>
+          <div className="min-w-0">
+            <div className="truncate text-[14.5px] font-semibold text-foreground">
+              {instance.name}
+            </div>
+            <div className="flex items-center gap-1.5 text-xs text-fg-3">
+              <RegionTag region={instance.region} />
+              {instance.region && <span className="text-fg-faint">·</span>}
+              <span>PostgreSQL {instance.engine_version}</span>
+            </div>
           </div>
         </div>
-        <StatusBadge status={instance.status} />
+        <HealthBadge status={instance.status} />
       </div>
+
+      {/* ambiente (tag) */}
+      {instance.environment && (
+        <div>
+          <EnvBadge environment={instance.environment} />
+        </div>
+      )}
+
+      {/* sparkline real: conexões na última hora */}
+      <Sparkline data={connHistory} color={sparkColor} className="h-12 w-full" />
 
       {/* métricas ao vivo */}
       <div className="flex items-center justify-between">

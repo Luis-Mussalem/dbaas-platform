@@ -17,23 +17,31 @@ import {
   getSlowQueries,
 } from "@/lib/api";
 import { useMetrics } from "@/hooks/use-metrics";
+import { useMetricHistory } from "@/hooks/use-metric-history";
+import { useToast } from "@/context/ToastProvider";
+import { useConfirm } from "@/context/ConfirmProvider";
 import type { Instance, SlowQuery } from "@/lib/types";
 import { StatusBadge } from "@/components/StatusBadge";
+import { EnvBadge } from "@/components/EnvBadge";
+import { RegionTag } from "@/components/RegionTag";
 import { StatCard } from "@/components/StatCard";
 import { ConnString } from "@/components/ConnString";
 import { BackupsTab } from "@/components/BackupsTab";
 import { MaintenanceTab } from "@/components/MaintenanceTab";
 import { AlertsTab } from "@/components/AlertsTab";
+import { MetricsTab } from "@/components/MetricsTab";
+import { ConnectionsTable } from "@/components/ConnectionsTable";
+import { SchemaExplorer } from "@/components/SchemaExplorer";
 import { EmptyState } from "@/components/EmptyState";
 import { formatBytes } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 const TABS = [
   { id: "overview", label: "Visão geral" },
+  { id: "metrics", label: "Métricas" },
   { id: "backups", label: "Backups" },
   { id: "maintenance", label: "Manutenção" },
   { id: "alerts", label: "Alertas" },
-  { id: "metrics", label: "Métricas" },
   { id: "logs", label: "Logs" },
 ];
 
@@ -41,6 +49,11 @@ const BTN_SM =
   "inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-3 text-[13px] font-medium text-fg-2 transition hover:bg-surface-2 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50";
 const BTN_DANGER =
   "inline-flex h-8 items-center gap-1.5 rounded-md border border-danger/30 px-3 text-[13px] font-medium text-danger transition hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-50";
+
+// Dias desde a criação ("ativo há Nd"), só informativo.
+function daysSince(iso: string): number {
+  return Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000));
+}
 
 export default function InstanceDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -53,9 +66,9 @@ export default function InstanceDetailPage() {
   const [tab, setTab] = useState("overview");
 
   const { metrics } = useMetrics(id);
+  const { toast } = useToast();
+  const { confirm } = useConfirm();
 
-  // useCallback: mantém a mesma referência da função entre renders, para o
-  // botão "Atualizar" e o useEffect compartilharem a mesma busca.
   const load = useCallback(async () => {
     try {
       const data = await getInstance(id);
@@ -68,8 +81,6 @@ export default function InstanceDetailPage() {
     }
   }, [id]);
 
-  // Busca inicial inline (setState dentro do .then/.catch) — evita o aviso de
-  // "setState síncrono no effect". O botão "Atualizar" segue usando `load`.
   useEffect(() => {
     let active = true;
     getInstance(id)
@@ -97,8 +108,11 @@ export default function InstanceDetailPage() {
     try {
       const updated = await updateInstanceStatus(instance.id, action);
       setInstance(updated);
+      toast.success(action === "start" ? "Instância iniciada." : "Instância parada.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Ação falhou");
+      const msg = err instanceof Error ? err.message : "Ação falhou";
+      setError(msg);
+      toast.error(msg);
     } finally {
       setIsActing(false);
     }
@@ -106,19 +120,23 @@ export default function InstanceDetailPage() {
 
   async function handleDelete() {
     if (!instance) return;
-    if (
-      !window.confirm(
-        `Excluir "${instance.name}"? Esta ação não pode ser desfeita.`
-      )
-    )
-      return;
+    const ok = await confirm({
+      title: `Excluir "${instance.name}"?`,
+      description: "Esta ação não pode ser desfeita.",
+      confirmText: "Excluir",
+      danger: true,
+    });
+    if (!ok) return;
     setIsActing(true);
     setError(null);
     try {
       await deleteInstance(instance.id);
+      toast.success(`"${instance.name}" excluída.`);
       router.push("/instances");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao excluir");
+      const msg = err instanceof Error ? err.message : "Falha ao excluir";
+      setError(msg);
+      toast.error(msg);
       setIsActing(false);
     }
   }
@@ -127,7 +145,6 @@ export default function InstanceDetailPage() {
   if (!instance)
     return <p className="text-sm text-danger">{error ?? "Instância não encontrada"}</p>;
 
-  // Estado derivado das ações (alinhado às regras do backend).
   const canStart = instance.status === "stopped" || instance.status === "failed";
   const canStop = instance.status === "running";
   const canDelete = instance.status === "stopped" || instance.status === "failed";
@@ -150,13 +167,23 @@ export default function InstanceDetailPage() {
               <Database size={18} />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <h1 className="font-mono text-xl font-semibold">{instance.name}</h1>
                 <StatusBadge status={instance.status} />
+                <EnvBadge environment={instance.environment} />
               </div>
-              <div className="mt-0.5 text-xs text-fg-3">
-                PostgreSQL {instance.engine_version} · {instance.cpu ?? "—"} vCPU ·{" "}
-                {ramGb ?? "—"} GB RAM · {instance.storage_gb ?? "—"} GB SSD
+              <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-fg-3">
+                <span>PostgreSQL {instance.engine_version}</span>
+                {instance.region && (
+                  <>
+                    <span className="text-fg-faint">·</span>
+                    <RegionTag region={instance.region} />
+                  </>
+                )}
+                <span className="text-fg-faint">·</span>
+                <span>{instance.cpu ?? "—"} vCPU · {ramGb ?? "—"} GB RAM · {instance.storage_gb ?? "—"} GB</span>
+                <span className="text-fg-faint">·</span>
+                <span>ativo há {daysSince(instance.created_at)}d</span>
               </div>
             </div>
           </div>
@@ -201,13 +228,13 @@ export default function InstanceDetailPage() {
         )}
 
         {/* ── Abas ── */}
-        <div className="mt-4 flex gap-1 border-b border-border">
+        <div className="mt-4 flex gap-1 overflow-x-auto border-b border-border">
           {TABS.map((tb) => (
             <button
               key={tb.id}
               onClick={() => setTab(tb.id)}
               className={cn(
-                "-mb-px border-b-2 px-3 py-2 text-[13px] font-medium transition",
+                "-mb-px shrink-0 border-b-2 px-3 py-2 text-[13px] font-medium transition",
                 tab === tb.id
                   ? "border-brand text-brand"
                   : "border-transparent text-fg-3 hover:text-fg-2"
@@ -221,12 +248,10 @@ export default function InstanceDetailPage() {
 
       {/* ── Conteúdo da aba ── */}
       {tab === "overview" && <OverviewTab instance={instance} metrics={metrics?.metrics ?? {}} />}
+      {tab === "metrics" && <MetricsTab instance={instance} />}
       {tab === "backups" && <BackupsTab instance={instance} />}
       {tab === "maintenance" && <MaintenanceTab instance={instance} />}
       {tab === "alerts" && <AlertsTab instance={instance} />}
-      {tab === "metrics" && (
-        <EmptyState title="Métricas" subtitle="Gráficos entram com métricas-como-série no backend." />
-      )}
       {tab === "logs" && (
         <EmptyState title="Logs" subtitle="Sem endpoint de logs por instância ainda." />
       )}
@@ -247,6 +272,9 @@ function OverviewTab({
   const cacheHit = metrics.cache_hit_ratio;
   const sizeBytes = metrics.db_size_bytes;
 
+  // Sparkline real de conexões (últimas 24h) para o primeiro card.
+  const connHistory = useMetricHistory(instance.id, "connections_active", "24h");
+
   return (
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -258,6 +286,7 @@ function OverviewTab({
               : "—"
           }
           sub="ativas / máx"
+          chart={connHistory.length > 1 ? connHistory : undefined}
         />
         <StatCard
           label="Cache hit"
@@ -267,6 +296,11 @@ function OverviewTab({
         />
         <StatCard label="Tamanho" value={formatBytes(sizeBytes)} sub="banco" />
         <StatCard label="Status" value={instance.status} />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+        <ConnectionsTable instance={instance} />
+        <SchemaExplorer instance={instance} />
       </div>
 
       <SlowQueries instance={instance} />
@@ -280,7 +314,6 @@ function SlowQueries({ instance }: { instance: Instance }) {
   const [unavailable, setUnavailable] = useState(false);
 
   useEffect(() => {
-    // Endpoint exige instância RUNNING; senão nem busca.
     if (instance.status !== "running") {
       setRows([]);
       return;

@@ -5,10 +5,28 @@ import { useRouter } from "next/navigation";
 import { Check, ChevronLeft, ChevronRight, X, Zap, RefreshCw } from "lucide-react";
 import { createInstance } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/context/ToastProvider";
+import type { Environment } from "@/lib/types";
 
 // Versões disponíveis (viram a tag postgres:<v>-alpine no provisionador).
 const PG_VERSIONS = ["17", "16", "15", "14"] as const;
 const RECOMMENDED = "16";
+
+// Ambientes (valor canônico → rótulo PT). Espelha o enum Environment do backend.
+const ENVIRONMENTS: { value: Environment; label: string }[] = [
+  { value: "production", label: "produção" },
+  { value: "staging", label: "homologação" },
+  { value: "development", label: "desenvolvimento" },
+];
+
+// Regiões disponíveis (código estilo AWS → cidade exibida).
+const REGIONS = [
+  { code: "sa-east-1", label: "🇧🇷 São Paulo" },
+  { code: "us-east-1", label: "🇺🇸 N. Virginia" },
+  { code: "eu-west-1", label: "🇮🇪 Ireland" },
+  { code: "eu-central-1", label: "🇩🇪 Frankfurt" },
+  { code: "ap-southeast-1", label: "🇸🇬 Singapore" },
+];
 
 // "Planos" do design viram presets de recursos reais (cpu/memória/disco).
 type Size = {
@@ -41,8 +59,11 @@ export default function CreateInstancePage() {
   const [name, setName] = useState("");
   const [version, setVersion] = useState<string>(RECOMMENDED);
   const [sizeId, setSizeId] = useState("starter");
+  const [environment, setEnvironment] = useState<Environment | "">("");
+  const [region, setRegion] = useState<string>("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const size = SIZES.find((s) => s.id === sizeId)!;
 
@@ -61,10 +82,16 @@ export default function CreateInstancePage() {
         cpu: size.cpu,
         memory_mb: size.memory_mb,
         storage_gb: size.storage_gb,
+        // Campos opcionais: só enviados quando o usuário escolheu.
+        ...(environment ? { environment } : {}),
+        ...(region ? { region } : {}),
       });
+      toast.success(`Instância "${created.name}" provisionada.`);
       router.push(`/instances/${created.id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao provisionar");
+      const msg = err instanceof Error ? err.message : "Falha ao provisionar";
+      setError(msg);
+      toast.error(msg);
       setCreating(false);
     }
   }
@@ -179,6 +206,48 @@ export default function CreateInstancePage() {
                 ))}
               </div>
             </div>
+
+            {/* Ambiente (opcional) — usado para agrupar/filtrar no Painel */}
+            <div className="flex flex-col gap-2">
+              <label className="text-[11px] font-medium uppercase tracking-wide text-fg-3">
+                Ambiente <span className="text-fg-faint">(opcional)</span>
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {ENVIRONMENTS.map((e) => (
+                  <button
+                    key={e.value}
+                    onClick={() => setEnvironment((cur) => (cur === e.value ? "" : e.value))}
+                    className={cn(
+                      "rounded-md border px-4 py-2 text-sm font-medium transition",
+                      environment === e.value
+                        ? "border-brand bg-brand-subtle text-brand"
+                        : "border-border hover:border-border-strong"
+                    )}
+                  >
+                    {e.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Região (opcional) */}
+            <div className="flex flex-col gap-2">
+              <label className="text-[11px] font-medium uppercase tracking-wide text-fg-3">
+                Região <span className="text-fg-faint">(opcional)</span>
+              </label>
+              <select
+                value={region}
+                onChange={(e) => setRegion(e.target.value)}
+                className="h-9 rounded-md border border-border-strong bg-surface px-3 text-sm outline-none focus:border-brand"
+              >
+                <option value="">Sem região</option>
+                {REGIONS.map((r) => (
+                  <option key={r.code} value={r.code}>
+                    {r.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
       )}
@@ -229,6 +298,14 @@ export default function CreateInstancePage() {
             <Review label="Versão" value={`PostgreSQL ${version}`} />
             <Review label="Recursos" value={`${size.cpu} vCPU · ${size.memory_mb / 1024} GB RAM`} />
             <Review label="Disco" value={`${size.storage_gb} GB`} />
+            <Review
+              label="Ambiente"
+              value={ENVIRONMENTS.find((e) => e.value === environment)?.label ?? "—"}
+            />
+            <Review
+              label="Região"
+              value={REGIONS.find((r) => r.code === region)?.label ?? "—"}
+            />
           </div>
           <div className="mt-5 rounded-md border border-info/25 bg-info/10 px-3 py-2.5 text-[12.5px] text-fg-2">
             Após criar, a string de conexão fica disponível no detalhe da instância — a senha é

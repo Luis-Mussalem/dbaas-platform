@@ -182,6 +182,69 @@ def collect_bloat(conn: psycopg.Connection) -> list[dict[str, Any]]:
         return cur.fetchall()
 
 
+def collect_active_connections(
+    conn: psycopg.Connection,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    """
+    Retornar as conexões (backends) ativas no banco via pg_stat_activity.
+
+    Exclui o próprio backend de monitoramento (pg_backend_pid) e backends
+    internos sem estado (state IS NULL). wait_event combina tipo:evento para
+    leitura direta ("Lock:transactionid"). duration_seconds é o tempo desde o
+    início da query atual — None para conexões idle (query_start nulo).
+    """
+    with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
+        cur.execute(
+            """
+            SELECT
+                pid,
+                usename AS "user",
+                state,
+                NULLIF(
+                    concat_ws(':', wait_event_type, wait_event), ''
+                ) AS wait_event,
+                EXTRACT(EPOCH FROM (now() - query_start))::float AS duration_seconds,
+                query
+            FROM pg_stat_activity
+            WHERE datname = current_database()
+              AND pid <> pg_backend_pid()
+              AND state IS NOT NULL
+            ORDER BY query_start ASC NULLS LAST
+            LIMIT %s
+            """,
+            (limit,),
+        )
+        return cur.fetchall()
+
+
+def collect_schema(conn: psycopg.Connection) -> list[dict[str, Any]]:
+    """
+    Retornar as tabelas de usuário com estimativa de linhas via pg_class.
+
+    Usa c.reltuples (estimativa mantida pelo ANALYZE) em vez de COUNT(*) —
+    barato e sem varrer as tabelas. Exclui schemas internos do PostgreSQL.
+    Retorna linhas planas (schema_name, table, estimated_rows); o agrupamento
+    por schema é feito na camada de cima.
+    """
+    with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
+        cur.execute(
+            """
+            SELECT
+                n.nspname                      AS schema_name,
+                c.relname                      AS "table",
+                GREATEST(c.reltuples, 0)::bigint AS estimated_rows
+            FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE c.relkind = 'r'
+              AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+              AND n.nspname NOT LIKE 'pg_%%'
+            ORDER BY n.nspname, c.relname
+            """
+        )
+        return cur.fetchall()
+
+
 _EXPLAIN_BLOCKED = {
     "insert", "update", "delete", "drop", "truncate",
     "create", "alter", "grant", "revoke", "copy",

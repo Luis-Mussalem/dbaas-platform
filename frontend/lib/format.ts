@@ -14,6 +14,22 @@ export function formatBytes(bytes: number | null | undefined): string {
   return `${value.toFixed(value < 10 && i > 0 ? 1 : 0)} ${units[i]}`;
 }
 
+// Número → string compacta com separador de milhar pt-BR (ex.: 1046 → "1.046").
+export function formatNumber(value: number | null | undefined): string {
+  if (value == null) return "—";
+  return value.toLocaleString("pt-BR", { maximumFractionDigits: 0 });
+}
+
+// Valor em reais → "R$ 1.482" (sem centavos). Usado em estimativas de custo.
+export function formatBRL(value: number | null | undefined): string {
+  if (value == null) return "—";
+  return value.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    maximumFractionDigits: 0,
+  });
+}
+
 // Timestamp ISO → "há X" em português, relativo a agora.
 export function timeAgo(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();

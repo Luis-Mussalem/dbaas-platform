@@ -93,6 +93,8 @@ async def create_instance(db: Session, data: InstanceCreate) -> DatabaseInstance
         cpu=data.cpu,
         memory_mb=data.memory_mb,
         storage_gb=data.storage_gb,
+        region=data.region,
+        environment=data.environment,
         notes=data.notes,
         status=InstanceStatus.PENDING,
     )
