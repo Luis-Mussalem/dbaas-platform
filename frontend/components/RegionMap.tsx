@@ -1,11 +1,12 @@
 "use client";
 
 import type { Instance } from "@/lib/types";
-import { regionInfo, type RegionInfo } from "@/lib/regions";
+import { regionInfo, project, type RegionInfo } from "@/lib/regions";
+import { WORLD_LAND_PATH } from "@/lib/world-geo";
 
-// Painel "Mapa de regiões": agrega as instâncias por região e mostra a
-// distribuição. O mapa em si é ILUSTRATIVO (pontos posicionados num retângulo
-// estilizado, sem biblioteca de geo) — a lista abaixo traz os números reais.
+// Painel "Mapa de regiões": agrega as instâncias por região e marca cada uma
+// sobre um mapa-múndi vetorial real (silhueta dos continentes, Natural Earth).
+// O contorno é ilustrativo; os marcadores e a lista trazem os números reais.
 export function RegionMap({ instances }: { instances: Instance[] }) {
   // Agrupa por região (ignora instâncias sem região definida).
   const counts = new Map<string, { info: RegionInfo; count: number }>();
@@ -28,26 +29,37 @@ export function RegionMap({ instances }: { instances: Instance[] }) {
       </div>
       <p className="mb-3 text-[11.5px] text-fg-3">Distribuição dos seus bancos</p>
 
-      {/* "mapa" estilizado: retângulo com grade sutil + um ponto por região */}
-      <div className="relative mb-3 h-28 overflow-hidden rounded-md border border-border bg-bg-2">
-        <div
-          className="absolute inset-0 opacity-40"
-          style={{
-            backgroundImage:
-              "linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px)",
-            backgroundSize: "16px 16px",
-          }}
-        />
-        {rows.map(({ info, count }) => (
-          <div
-            key={info.code}
-            className="absolute -translate-x-1/2 -translate-y-1/2"
-            style={{ left: `${info.pos.x}%`, top: `${info.pos.y}%` }}
-            title={`${info.city} · ${count}`}
-          >
-            <span className="block h-2.5 w-2.5 rounded-full bg-brand shadow-[0_0_0_4px_var(--brand-subtle)]" />
-          </div>
-        ))}
+      {/* Mapa-múndi vetorial (SVG 2:1). Continentes = path; bolhas = regiões. */}
+      <div className="mb-3 overflow-hidden rounded-md border border-border bg-bg-2">
+        <svg
+          viewBox="0 0 360 180"
+          className="block w-full"
+          role="img"
+          aria-label="Mapa-múndi com a distribuição das regiões"
+        >
+          {/* Silhueta dos continentes */}
+          <path
+            d={WORLD_LAND_PATH}
+            fill="var(--fg-faint)"
+            fillOpacity={0.22}
+            stroke="var(--fg-3)"
+            strokeOpacity={0.3}
+            strokeWidth={0.3}
+            vectorEffect="non-scaling-stroke"
+          />
+
+          {/* Marcadores das regiões com instâncias (anel + ponto) */}
+          {rows.map(({ info, count }) => {
+            const p = project(info.lat, info.lon);
+            return (
+              <g key={info.code}>
+                <title>{`${info.city} · ${count}`}</title>
+                <circle cx={p.x} cy={p.y} r={6} fill="var(--brand)" opacity={0.18} />
+                <circle cx={p.x} cy={p.y} r={2.6} fill="var(--brand)" />
+              </g>
+            );
+          })}
+        </svg>
       </div>
 
       {rows.length === 0 ? (
