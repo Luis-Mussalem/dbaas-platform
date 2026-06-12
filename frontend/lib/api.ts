@@ -11,6 +11,8 @@ import type {
   MetricWindow,
   HealthCheck,
   SlowQueriesResponse,
+  ActiveConnectionsResponse,
+  SchemaResponse,
   LocksResponse,
   MaintenanceTask,
   MaintenanceSchedule,
@@ -324,6 +326,18 @@ export async function getSlowQueries(
   return request<SlowQueriesResponse>(
     `/instances/${instanceId}/slow-queries`
   );
+}
+
+export async function getConnections(
+  instanceId: string
+): Promise<ActiveConnectionsResponse> {
+  return request<ActiveConnectionsResponse>(
+    `/instances/${instanceId}/connections`
+  );
+}
+
+export async function getSchema(instanceId: string): Promise<SchemaResponse> {
+  return request<SchemaResponse>(`/instances/${instanceId}/schema`);
 }
 
 export async function getLocks(instanceId: string): Promise<LocksResponse> {

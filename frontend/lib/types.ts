@@ -165,6 +165,35 @@ export interface MetricHistoryResponse {
   points: MetricHistoryPoint[];
 }
 
+export interface ActiveConnection {
+  pid: number;
+  user: string | null;
+  state: string | null;
+  wait_event: string | null;
+  duration_seconds: number | null;
+  query: string | null;
+}
+
+export interface ActiveConnectionsResponse {
+  instance_id: string;
+  connections: ActiveConnection[];
+}
+
+export interface SchemaTable {
+  table: string;
+  estimated_rows: number;
+}
+
+export interface SchemaGroup {
+  name: string;
+  tables: SchemaTable[];
+}
+
+export interface SchemaResponse {
+  instance_id: string;
+  schemas: SchemaGroup[];
+}
+
 export interface SlowQuery {
   query: string;
   calls: number;
