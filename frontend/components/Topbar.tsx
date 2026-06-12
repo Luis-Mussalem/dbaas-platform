@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Plus, Sun, Moon } from "lucide-react";
 import { useTheme } from "@/context/ThemeProvider";
 import { Segmented } from "@/components/Segmented";
+import { InstanceSearch } from "@/components/InstanceSearch";
 
 // Mapa de URL → título exibido no breadcrumb.
 const TITLES: Record<string, string> = {
@@ -47,6 +48,9 @@ export function Topbar() {
       </div>
 
       <div className="flex-1" />
+
+      {/* Busca rápida de instâncias (atalho "/") */}
+      <InstanceSearch />
 
       {/* Idioma (cosmético até a Fase D de i18n) */}
       <div className="hidden sm:block">
