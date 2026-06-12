@@ -17,9 +17,9 @@ export function InstanceCard({ instance }: { instance: Instance }) {
   const { metrics } = useMetrics(instance.id);
   const m = metrics?.metrics ?? {};
 
-  // Sparkline REAL: histórico de conexões na última hora (vem do endpoint de
+  // Sparkline REAL: histórico de conexões nas últimas 24h (vem do endpoint de
   // histórico que lê a tabela metrics). Vazio → o Sparkline mostra uma linha-base.
-  const connHistory = useMetricHistory(instance.id, "connections_active", "1h");
+  const connHistory = useMetricHistory(instance.id, "connections_active", "24h");
 
   const connActive = m.connections_active;
   const connMax = m.connections_max;
