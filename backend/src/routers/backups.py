@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -27,6 +28,8 @@ from src.services.backup import (
     restore_logical_backup,
     update_schedule,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Backups"])
 
@@ -75,9 +78,12 @@ async def create_backup(
                 create_physical_backup, db, instance
             )
     except RuntimeError as exc:
+        # str(exc) carrega stderr do pg_dump/pg_basebackup (host, porta, mensagens
+        # internas) — fica só no log do servidor; o cliente recebe mensagem genérica.
+        logger.error("Backup failed for instance %s: %s", instance_id, exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(exc),
+            detail="Backup operation failed. Check server logs for details.",
         ) from exc
 
     return backup
@@ -187,9 +193,12 @@ async def restore_backup(
     try:
         await asyncio.to_thread(restore_logical_backup, db, backup, instance)
     except (FileNotFoundError, RuntimeError, ValueError) as exc:
+        # Mesmo motivo do create_backup: o erro real (caminho de arquivo, stderr do
+        # pg_restore) vai para o log; o cliente recebe apenas uma mensagem genérica.
+        logger.error("Restore failed for backup %s: %s", backup_id, exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(exc),
+            detail="Restore operation failed. Check server logs for details.",
         ) from exc
 
 
