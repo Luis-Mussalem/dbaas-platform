@@ -36,26 +36,26 @@ _ACTION_TO_STATUS = {
 async def create(
     data: InstanceCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
-    return await create_instance(db, data)
+    return await create_instance(db, data, current_user)
 
 
 @router.get("", response_model=list[InstanceRead])
 def list_all(
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
-    return list_instances(db)
+    return list_instances(db, current_user)
 
 
 @router.get("/{instance_id}", response_model=InstanceRead)
 def get_one(
     instance_id: uuid.UUID,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
-    instance = get_instance_by_id(db, instance_id)
+    instance = get_instance_by_id(db, instance_id, current_user)
     if not instance:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instance not found")
     return instance
@@ -66,9 +66,9 @@ def update(
     instance_id: uuid.UUID,
     data: InstanceUpdate,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
-    instance = get_instance_by_id(db, instance_id)
+    instance = get_instance_by_id(db, instance_id, current_user)
     if not instance:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instance not found")
     return update_instance(db, instance, data)
@@ -79,9 +79,9 @@ async def change_status(
     instance_id: uuid.UUID,
     body: StatusAction,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
-    instance = get_instance_by_id(db, instance_id)
+    instance = get_instance_by_id(db, instance_id, current_user)
     if not instance:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instance not found")
     return await transition_status(db, instance, _ACTION_TO_STATUS[body.action])
@@ -91,9 +91,9 @@ async def change_status(
 async def delete(
     instance_id: uuid.UUID,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
-    instance = get_instance_by_id(db, instance_id)
+    instance = get_instance_by_id(db, instance_id, current_user)
     if not instance:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instance not found")
     return await soft_delete_instance(db, instance)

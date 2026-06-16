@@ -74,10 +74,18 @@ def list_events(
     db: Session,
     instance_id: Optional[uuid.UUID] = None,
     only_open: bool = False,
+    company_id: Optional[uuid.UUID] = None,
 ) -> list[AlertEvent]:
     q = db.query(AlertEvent)
     if instance_id:
         q = q.filter(AlertEvent.instance_id == instance_id)
+    # Scoping da lista global: junta à instância dona e filtra pela empresa.
+    # None = superuser (sem filtro). Endpoints por-instância já escoparam via
+    # get_instance_or_404, então só a lista global passa company_id.
+    if company_id is not None:
+        q = q.join(
+            DatabaseInstance, AlertEvent.instance_id == DatabaseInstance.id
+        ).filter(DatabaseInstance.company_id == company_id)
     if only_open:
         q = q.filter(AlertEvent.resolved_at.is_(None))
     return q.order_by(AlertEvent.triggered_at.desc()).all()

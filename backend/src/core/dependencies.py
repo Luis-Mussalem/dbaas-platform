@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from src.core.config import settings
 from src.core.database import get_db
+from src.core.scoping import scope_instance_query
 from src.models.database_instance import DatabaseInstance, InstanceStatus
 from src.models.user import User
 from src.services.auth import is_token_blacklisted
@@ -72,15 +73,17 @@ def get_current_superuser(
     return current_user
 
 
-def get_instance_or_404(instance_id: uuid.UUID, db: Session) -> DatabaseInstance:
-    instance = (
-        db.query(DatabaseInstance)
-        .filter(
-            DatabaseInstance.id == instance_id,
-            DatabaseInstance.deleted_at.is_(None),
-        )
-        .first()
+def get_instance_or_404(
+    instance_id: uuid.UUID, db: Session, current_user: User
+) -> DatabaseInstance:
+    # Scoping multi-tenant: usuário comum só acha instâncias da própria empresa;
+    # uma instância de outra empresa vira 404 (mesma resposta de "não existe" —
+    # não vaza que ela existe). Superuser passa direto (vê todas).
+    query = db.query(DatabaseInstance).filter(
+        DatabaseInstance.id == instance_id,
+        DatabaseInstance.deleted_at.is_(None),
     )
+    instance = scope_instance_query(query, current_user).first()
     if not instance:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -89,8 +92,10 @@ def get_instance_or_404(instance_id: uuid.UUID, db: Session) -> DatabaseInstance
     return instance
 
 
-def get_instance_if_running(instance_id: uuid.UUID, db: Session) -> DatabaseInstance:
-    instance = get_instance_or_404(instance_id, db)
+def get_instance_if_running(
+    instance_id: uuid.UUID, db: Session, current_user: User
+) -> DatabaseInstance:
+    instance = get_instance_or_404(instance_id, db, current_user)
     if instance.status != InstanceStatus.RUNNING:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

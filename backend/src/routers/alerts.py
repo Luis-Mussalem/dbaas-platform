@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from src.core.database import get_db
 from src.core.dependencies import get_current_user, get_instance_or_404
+from src.core.scoping import visible_company_id
 from src.models.alert import AlertEvent, AlertRule
 from src.models.user import User
 from src.schemas.alert import AlertEventRead, AlertRuleCreate, AlertRuleRead, AlertRuleUpdate
@@ -44,9 +45,9 @@ def create_alert_rule(
     instance_id: uuid.UUID,
     data: AlertRuleCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
-    get_instance_or_404(instance_id, db)
+    get_instance_or_404(instance_id, db, current_user)
     return alert_service.create_rule(db, instance_id, data)
 
 
@@ -57,9 +58,9 @@ def create_alert_rule(
 def list_alert_rules(
     instance_id: uuid.UUID,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
-    get_instance_or_404(instance_id, db)
+    get_instance_or_404(instance_id, db, current_user)
     return alert_service.list_rules(db, instance_id)
 
 
@@ -70,9 +71,12 @@ def list_alert_rules(
 def get_alert_rule(
     rule_id: uuid.UUID,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
-    return _get_rule_or_404(rule_id, db)
+    rule = _get_rule_or_404(rule_id, db)
+    # Scoping: a instância dona da regra precisa ser visível ao usuário.
+    get_instance_or_404(rule.instance_id, db, current_user)
+    return rule
 
 
 @router.patch(
@@ -83,9 +87,10 @@ def update_alert_rule(
     rule_id: uuid.UUID,
     data: AlertRuleUpdate,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     rule = _get_rule_or_404(rule_id, db)
+    get_instance_or_404(rule.instance_id, db, current_user)
     return alert_service.update_rule(db, rule, data)
 
 
@@ -96,9 +101,10 @@ def update_alert_rule(
 def delete_alert_rule(
     rule_id: uuid.UUID,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     rule = _get_rule_or_404(rule_id, db)
+    get_instance_or_404(rule.instance_id, db, current_user)
     alert_service.delete_rule(db, rule)
 
 
@@ -114,7 +120,7 @@ def delete_alert_rule(
 def seed_default_alert_rules(
     instance_id: uuid.UUID,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Cria as 5 regras padrão para a instância.
@@ -123,7 +129,7 @@ def seed_default_alert_rules(
     Use após provisionar uma nova instância para ativar o monitoramento
     automático com os thresholds recomendados.
     """
-    get_instance_or_404(instance_id, db)
+    get_instance_or_404(instance_id, db, current_user)
     return alert_service.seed_default_rules(db, instance_id)
 
 
@@ -139,14 +145,14 @@ def list_instance_alert_events(
     instance_id: uuid.UUID,
     only_open: bool = False,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Lista eventos de alerta de uma instância específica.
 
     ?only_open=true retorna apenas eventos ainda não resolvidos.
     """
-    get_instance_or_404(instance_id, db)
+    get_instance_or_404(instance_id, db, current_user)
     return alert_service.list_events(db, instance_id, only_open=only_open)
 
 
@@ -157,10 +163,17 @@ def list_instance_alert_events(
 def list_all_alert_events(
     only_open: bool = False,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
-    """Lista todos os eventos da plataforma. ?only_open=true filtra abertos."""
-    return alert_service.list_events(db, only_open=only_open)
+    """
+    Lista os eventos da plataforma visíveis ao usuário. ?only_open=true filtra abertos.
+
+    Escopado por empresa: usuário comum vê só eventos das instâncias da sua
+    empresa; superuser (visible_company_id=None) vê todos.
+    """
+    return alert_service.list_events(
+        db, only_open=only_open, company_id=visible_company_id(current_user)
+    )
 
 
 @router.post(
@@ -170,7 +183,7 @@ def list_all_alert_events(
 def resolve_alert_event(
     event_id: uuid.UUID,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Resolve manualmente um evento de alerta aberto.
@@ -182,6 +195,8 @@ def resolve_alert_event(
     Retorna 409 se o evento já foi resolvido.
     """
     event = _get_event_or_404(event_id, db)
+    # Scoping: a instância dona do evento precisa ser visível ao usuário.
+    get_instance_or_404(event.instance_id, db, current_user)
     if event.resolved_at is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
