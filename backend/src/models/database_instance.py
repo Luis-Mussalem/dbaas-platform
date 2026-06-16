@@ -1,12 +1,13 @@
 import uuid
 from enum import Enum as PyEnum
 
-from sqlalchemy import DateTime, Integer, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database import Base
+from src.models.company import Company
 
 
 class InstanceStatus(str, PyEnum):
@@ -105,6 +106,17 @@ class DatabaseInstance(Base):
         SAEnum(Environment, name="environment"),
         nullable=True,
     )
+    # Empresa dona da instância (multi-tenant). Raiz do scoping: backups, alertas
+    # e manutenção herdam o dono via instance_id. Nullable: instâncias de
+    # sistema/legado e as criadas por superuser sem empresa ficam visíveis só ao
+    # superuser. Mesmo padrão de users.company_id (FK opcional, SET NULL).
+    company_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("companies.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    company: Mapped["Company | None"] = relationship("Company", lazy="joined")
     created_at: Mapped[DateTime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
