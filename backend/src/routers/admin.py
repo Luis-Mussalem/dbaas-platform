@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from src.core.database import get_db
-from src.core.dependencies import get_current_superuser
+from src.core.dependencies import get_current_user
 from src.models.user import User
 from src.schemas.admin import AuditLogRead, DashboardResponse
 from src.services import admin as admin_service
@@ -15,7 +15,7 @@ router = APIRouter(prefix="/admin", tags=["Administration"])
 @router.get("/dashboard", response_model=DashboardResponse)
 def get_dashboard(
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_superuser),
+    _: User = Depends(get_current_user),
 ):
     """
     Visão consolidada da saúde da plataforma.
@@ -37,7 +37,7 @@ def get_audit_log(
     resource_type: str | None = Query(None, description="Filtrar por tipo de recurso (ex: instance, backup)"),
     user_id: uuid.UUID | None = Query(None, description="Filtrar por usuário"),
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_superuser),
+    _: User = Depends(get_current_user),
 ):
     """
     Histórico de ações auditadas na plataforma.
