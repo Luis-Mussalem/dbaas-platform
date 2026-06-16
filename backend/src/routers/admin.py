@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from src.core.database import get_db
 from src.core.dependencies import get_current_user
+from src.core.scoping import visible_company_id
 from src.models.user import User
 from src.schemas.admin import AuditLogRead, DashboardResponse
 from src.services import admin as admin_service
@@ -15,7 +16,7 @@ router = APIRouter(prefix="/admin", tags=["Administration"])
 @router.get("/dashboard", response_model=DashboardResponse)
 def get_dashboard(
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Visão consolidada da saúde da plataforma.
@@ -26,7 +27,7 @@ def get_dashboard(
     - Backups nas últimas 24h (total e falhos)
     - Tarefas de manutenção pendentes ou em execução
     """
-    return admin_service.get_dashboard(db)
+    return admin_service.get_dashboard(db, company_id=visible_company_id(current_user))
 
 
 @router.get("/audit-log", response_model=list[AuditLogRead])

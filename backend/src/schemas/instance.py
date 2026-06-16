@@ -41,6 +41,8 @@ class InstanceRead(InstanceBase):
 
     id: uuid.UUID
     status: InstanceStatus
+    # Empresa dona (multi-tenant). NULL para instâncias de superuser sem empresa.
+    company_id: Optional[uuid.UUID] = None
     host: Optional[str] = None
     port: Optional[int] = None
     db_name: Optional[str] = None
