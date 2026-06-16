@@ -47,7 +47,10 @@ function getRefreshToken(): string | null {
 function setSession(accessToken: string, refreshToken: string): void {
   localStorage.setItem("access_token", accessToken);
   localStorage.setItem("refresh_token", refreshToken);
-  document.cookie = `auth_token=${accessToken}; path=/; SameSite=Lax`;
+  // Secure só em HTTPS: em http://localhost o flag impediria a gravação do
+  // cookie e o middleware derrubaria o usuário para /login em dev.
+  const secure = window.location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `auth_token=${accessToken}; path=/; SameSite=Lax${secure}`;
 }
 
 // Apaga a sessão por completo (localStorage + cookie). Usada quando o refresh
