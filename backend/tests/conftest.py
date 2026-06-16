@@ -17,6 +17,7 @@ aplicação (inclusive o AuditMiddleware, que abre seu próprio SessionLocal)
 passa a apontar para o banco de teste automaticamente. Sem monkeypatch.
 """
 import os
+import uuid
 
 from cryptography.fernet import Fernet
 
@@ -37,6 +38,7 @@ from src.core.database import Base, SessionLocal, engine  # noqa: E402
 from src.core.rate_limit import limiter  # noqa: E402
 from src.core.security import create_access_token, hash_password  # noqa: E402
 from src.main import app  # noqa: E402  (importa app → registra todos os models no metadata)
+from src.models.company import Company  # noqa: E402
 from src.models.user import User  # noqa: E402
 
 # Senha forte reutilizada nos testes (atende à política: 12+ chars, maiúscula,
@@ -147,12 +149,14 @@ def make_user(db):
         password: str = TEST_PASSWORD,
         is_superuser: bool = False,
         is_active: bool = True,
+        company_id: uuid.UUID | None = None,
     ) -> User:
         user = User(
             email=email,
             hashed_password=hash_password(password),
             is_superuser=is_superuser,
             is_active=is_active,
+            company_id=company_id,
         )
         db.add(user)
         db.commit()
@@ -174,9 +178,25 @@ def auth_headers(make_user):
     def _build(
         email: str = "user@example.com",
         is_superuser: bool = False,
+        company_id: uuid.UUID | None = None,
     ) -> tuple[dict, User]:
-        user = make_user(email=email, is_superuser=is_superuser)
+        user = make_user(
+            email=email, is_superuser=is_superuser, company_id=company_id
+        )
         token = create_access_token({"sub": str(user.id)})
         return {"Authorization": f"Bearer {token}"}, user
 
     return _build
+
+
+@pytest.fixture
+def make_company(db):
+    """Fábrica de empresas persistidas no banco de teste (multi-tenant)."""
+    def _make(name: str = "Acme Inc") -> Company:
+        company = Company(name=name)
+        db.add(company)
+        db.commit()
+        db.refresh(company)
+        return company
+
+    return _make
