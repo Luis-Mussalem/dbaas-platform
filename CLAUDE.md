@@ -74,16 +74,19 @@ backup, automated maintenance, and proactive alerts.
 own company; the **admin superuser** sees and switches between all companies.
 A **minimal base** is already in place: `Company` model, `users.company_id`,
 `get_current_superuser`, `GET/POST /companies` (superuser-only), and the Workspace
-switcher in the UI. **Full tenancy** (per-company scoping of instances/backups/etc.,
-employee management, user↔company assignment, RBAC) is a future phase — see ROADMAP.
-Until then, resources are NOT yet scoped by company.
+switcher in the UI. **Stage A — per-company resource scoping — is DONE**: instances
+(and their backups/alerts/maintenance/metrics, via the `get_instance_or_404` choke-point)
+and the admin dashboard are filtered by `company_id`; the superuser bypasses the filter.
+**Remaining** (see ROADMAP PHASE 11): superuser active-company selection (Stage B),
+employee management, RBAC (company-admin role), and audit-log scoping.
 Public repository (portfolio for recruiters) — only generic, reusable
 architecture is committed.
 
 **Pillars:** Monitoring · Backup & Recovery · Automated Maintenance · Proactive Alerts
 
-**Current status:** Phases 0–8 complete (backend). Frontend F0 in progress.
-See [ROADMAP.md](ROADMAP.md) for full phase detail and dependency map.
+**Current status:** Backend phases 0–8 complete; PHASE 11 (multi-tenant) **Stage A
+resource scoping done**. Frontend F0–F6 implemented (F3 metrics charts partial, F7 SQL
+console deferred). See [ROADMAP.md](ROADMAP.md) for full phase detail and dependency map.
 
 ---
 

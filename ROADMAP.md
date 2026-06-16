@@ -369,15 +369,24 @@ Replication lag monitored. Replica can be promoted to primary via API.
 | `UserRead.company` | `/auth/me` now returns the user's company |
 | Workspace UI | `WorkspaceSwitcher` — dropdown for superuser, fixed label for regular user |
 
+**Stage A — Resource scoping — DONE `[x]`**:
+
+| Deliverable | Description |
+|-------------|-------------|
+| `company_id` on instances | FK on `DatabaseInstance` (nullable, indexed) + Alembic migration with backfill |
+| Central scoping helper | `backend/src/core/scoping.py` — `scope_instance_query` / `visible_company_id`; superuser bypasses the filter |
+| Scoped access | `get_instance_or_404` / `get_instance_if_running` + `list_instances` / `get_instance_by_id` filter by company; derived resources (backups, alerts, maintenance, metrics) inherit via the instance choke-point; `create` sets the creator's `company_id` |
+| Admin dashboard | aggregates scoped by company; `InstanceRead.company_id` exposed |
+| Tests | `backend/tests/test_company_scoping.py` — cross-company isolation (list, 404, superuser bypass, derived backups, global alert events) |
+
 **Remaining — TODO `[ ]`**:
 
 | Deliverable | Description |
 |-------------|-------------|
-| Resource scoping | `company_id` (owner) on `DatabaseInstance` and derived resources; query filtering so each user sees only their company's databases. **Currently resources are NOT scoped by company.** |
-| Active-company context | The superuser's selected company (today only persisted in `localStorage`) actually filters the data shown |
+| Active-company context (Stage B) | The superuser's selected company (today only in `localStorage`) actually filters the data shown — e.g. an `X-Company-Id` header wired to the `WorkspaceSwitcher` |
 | Employee management | Create/list users within a company; assign `user.company_id`; superuser-only company management screens |
-| RBAC | Roles beyond `is_superuser` (e.g., company admin vs. member) if needed |
-| Audit scoping | Audit log filtered/segmented per company |
+| RBAC | Roles beyond `is_superuser` (e.g., company admin vs. member) |
+| Audit scoping | Audit log filtered/segmented per company (deferred — system events have `NULL user_id`; see TODO in `services/admin.py`) |
 
 **Completion criterion:** A regular user only sees and manages their own company's
 databases; the superuser can switch companies and the data follows the selection.
