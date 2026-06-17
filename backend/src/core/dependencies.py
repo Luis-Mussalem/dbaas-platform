@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from src.core.config import settings
 from src.core.database import get_db
-from src.core.scoping import scope_instance_query
+from src.core.scoping import scope_instance_query, is_company_admin
 from src.models.database_instance import DatabaseInstance, InstanceStatus
 from src.models.user import User
 from src.services.auth import is_token_blacklisted
@@ -92,6 +92,25 @@ def get_current_superuser(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Superuser privileges required",
+        )
+    return current_user
+
+
+def get_current_company_admin(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """
+    Exige que o usuário autenticado seja superuser ou admin de uma empresa.
+
+    Reusa get_current_user e adiciona a checagem de rol (role). O serviço
+    é responsável por validar se o admin gerencia de fato o recurso-alvo
+    (defense in depth). Este dependência apenas comprova "você é admin em
+    algum lugar".
+    """
+    if not is_company_admin(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin privileges required",
         )
     return current_user
 

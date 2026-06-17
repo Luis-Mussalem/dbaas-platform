@@ -1,11 +1,17 @@
 import re
 import uuid
 from datetime import datetime
+from enum import Enum as PyEnum
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 
 from src.schemas.company import CompanyRead
+
+
+class UserRole(str, PyEnum):
+    ADMIN = "admin"
+    MEMBER = "member"
 
 PASSWORD_MIN_LENGTH = 12
 PASSWORD_PATTERN = re.compile(
@@ -43,6 +49,7 @@ class UserRead(UserBase):
     id: uuid.UUID
     is_active: bool
     is_superuser: bool
+    role: UserRole
     company_id: Optional[uuid.UUID] = None
     company: Optional[CompanyRead] = None
     created_at: datetime
@@ -65,6 +72,7 @@ class UserAdminCreate(UserBase):
     password: str
     company_id: Optional[uuid.UUID] = None
     is_superuser: bool = False
+    role: UserRole = UserRole.MEMBER
 
     @field_validator("password")
     @classmethod
@@ -77,3 +85,4 @@ class UserAdminUpdate(BaseModel):
     is_active: Optional[bool] = None
     is_superuser: Optional[bool] = None
     company_id: Optional[uuid.UUID] = None
+    role: Optional[UserRole] = None

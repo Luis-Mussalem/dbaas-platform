@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from src.core.database import get_db
-from src.core.dependencies import get_current_superuser, get_current_user
+from src.core.dependencies import get_current_company_admin, get_current_user
 from src.core.security import hash_password
 from src.models.user import User
 from src.schemas.user import UserAdminCreate, UserAdminUpdate, UserRead, UserUpdate
@@ -23,18 +23,18 @@ router = APIRouter(prefix="/users", tags=["Users"])
 def list_users_admin(
     company_id: Optional[uuid.UUID] = Query(default=None),
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_superuser),
+    current_user: User = Depends(get_current_company_admin),
 ):
-    return list_users(db, company_id=company_id)
+    return list_users(db, acting_user=current_user, company_id=company_id)
 
 
 @router.post("", response_model=UserRead, status_code=status.HTTP_201_CREATED)
 def create_user_admin_endpoint(
     data: UserAdminCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_superuser),
+    current_user: User = Depends(get_current_company_admin),
 ):
-    return create_user_admin(db, data)
+    return create_user_admin(db, data, acting_user=current_user)
 
 
 @router.patch("/{user_id}/admin", response_model=UserRead)
@@ -42,7 +42,7 @@ def update_user_admin_endpoint(
     user_id: uuid.UUID,
     data: UserAdminUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_superuser),
+    current_user: User = Depends(get_current_company_admin),
 ):
     return update_user_admin(db, user_id, data, acting_user=current_user)
 

@@ -1,12 +1,19 @@
 import uuid
+from enum import Enum as PyEnum
 from typing import Optional
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import Enum as SAEnum
 
 from src.core.database import Base
 from src.models.company import Company
+
+
+class UserRole(str, PyEnum):
+    ADMIN = "admin"
+    MEMBER = "member"
 
 
 class User(Base):
@@ -36,6 +43,12 @@ class User(Base):
         Boolean,
         default=False,
         nullable=False,
+    )
+    role: Mapped[UserRole] = mapped_column(
+        SAEnum(UserRole, name="userrole", values_callable=lambda e: [m.value for m in e]),
+        nullable=False,
+        default=UserRole.MEMBER,
+        server_default=UserRole.MEMBER.value,
     )
     # Vínculo com a empresa (multi-tenant). NULL = usuário de nível-plataforma
     # (superuser, sem empresa única); preenchido = funcionário daquela empresa.

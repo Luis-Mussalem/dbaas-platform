@@ -4,8 +4,9 @@ from typing import Optional
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from src.core.scoping import assert_can_manage_target
 from src.core.security import hash_password
-from src.models.user import User
+from src.models.user import User, UserRole
 from src.schemas.user import UserAdminCreate, UserAdminUpdate
 from src.services.auth import get_user_by_email, get_user_by_id
 from src.services.company import get_company_by_id
@@ -32,16 +33,51 @@ def _guard_last_superuser(db: Session, target_user_id: uuid.UUID) -> None:
         )
 
 
-def list_users(db: Session, company_id: Optional[uuid.UUID] = None) -> list[User]:
+def _guard_last_company_admin(db: Session, target_user: User) -> None:
+    """Bloqueia demover/desativar o último admin ativo de uma empresa."""
+    if target_user.company_id is None:
+        return
+    active_admins = (
+        db.query(User)
+        .filter(
+            User.company_id == target_user.company_id,
+            User.role == UserRole.ADMIN,
+            User.is_active.is_(True),
+        )
+        .count()
+    )
+    if active_admins <= 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot deactivate or demote the last active admin of this company",
+        )
+
+
+def list_users(
+    db: Session, acting_user: User, company_id: Optional[uuid.UUID] = None
+) -> list[User]:
+    """Lista usuários, com scoping automático para company admins."""
     q = db.query(User)
-    if company_id is not None:
+    if not acting_user.is_superuser:
+        q = q.filter(User.company_id == acting_user.company_id)
+    elif company_id is not None:
         q = q.filter(User.company_id == company_id)
     return q.order_by(User.email).all()
 
 
-def create_user_admin(db: Session, data: UserAdminCreate) -> User:
+def create_user_admin(db: Session, data: UserAdminCreate, acting_user: User) -> User:
     if get_user_by_email(db, data.email):
         raise HTTPException(status_code=400, detail="Email already registered")
+
+    # Company admin guards — antes de permitir criar qualquer coisa
+    if not acting_user.is_superuser:
+        if acting_user.company_id is None:
+            raise HTTPException(status_code=403, detail="Admin has no company")
+        if data.is_superuser:
+            raise HTTPException(status_code=403, detail="Cannot create superusers")
+        if data.company_id is not None and data.company_id != acting_user.company_id:
+            raise HTTPException(status_code=403, detail="Cannot create users in another company")
+        data.company_id = acting_user.company_id
 
     if not data.is_superuser and data.company_id is None:
         raise HTTPException(
@@ -57,6 +93,7 @@ def create_user_admin(db: Session, data: UserAdminCreate) -> User:
         hashed_password=hash_password(data.password),
         company_id=data.company_id,
         is_superuser=data.is_superuser,
+        role=data.role,
     )
     db.add(user)
     db.commit()
@@ -76,6 +113,14 @@ def update_user_admin(
 
     updates = data.model_dump(exclude_unset=True)
 
+    # Company admin guards — before any other check
+    if not acting_user.is_superuser:
+        assert_can_manage_target(acting_user, user)
+        if "is_superuser" in updates:
+            raise HTTPException(status_code=403, detail="Cannot modify superuser flag")
+        if "company_id" in updates and updates["company_id"] != acting_user.company_id:
+            raise HTTPException(status_code=403, detail="Cannot move user to another company")
+
     # Lockout guards — only check when the field is explicitly sent.
     # last-superuser runs first: it's the stronger system-level constraint,
     # and self-lockout is not meaningful when there's only one superuser left.
@@ -83,6 +128,12 @@ def update_user_admin(
         if user.is_superuser:
             _guard_last_superuser(db, user_id)
         _guard_self_lockout(acting_user, user_id)
+
+    # Guard last company admin — when demoting or deactivating a company admin
+    if user.role == UserRole.ADMIN and user.company_id is not None:
+        if (updates.get("is_active") is False or
+            (updates.get("role") is not None and updates["role"] != UserRole.ADMIN)):
+            _guard_last_company_admin(db, user)
 
     if "email" in updates and updates["email"] != user.email:
         if get_user_by_email(db, updates["email"]):

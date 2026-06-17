@@ -13,8 +13,10 @@ Regra única:
 import uuid
 from typing import Optional
 
+from fastapi import HTTPException
+
 from src.models.database_instance import DatabaseInstance
-from src.models.user import User
+from src.models.user import User, UserRole
 
 
 def visible_company_id(user: User) -> Optional[uuid.UUID]:
@@ -42,3 +44,25 @@ def scope_instance_query(query, user: User):
     if user.is_superuser and company_id is None:
         return query
     return query.filter(DatabaseInstance.company_id == company_id)
+
+
+def is_company_admin(user: User) -> bool:
+    """Retorna True se o usuário é superuser ou admin de uma empresa."""
+    return user.is_superuser or getattr(user, "role", None) == UserRole.ADMIN
+
+
+def assert_can_manage_target(acting_user: User, target_user: User) -> None:
+    """
+    Valida se acting_user pode gerenciar target_user.
+
+    Raises HTTPException 404 se:
+    - target é superuser (infovisível a company admin)
+    - target pertence a outra empresa (company admin só gerencia sua própria empresa)
+
+    Regra: superuser pode gerenciar qualquer um; company admin só gerencia
+    usuários da própria empresa que não são superuser.
+    """
+    if acting_user.is_superuser:
+        return
+    if target_user.is_superuser or target_user.company_id != acting_user.company_id:
+        raise HTTPException(status_code=404, detail="User not found")
