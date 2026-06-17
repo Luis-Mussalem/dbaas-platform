@@ -34,7 +34,6 @@ export default function RootLayout({
       // silencia o aviso do React quando essa classe difere entre os dois.
       suppressHydrationWarning
       className={`${inter.variable} ${jetbrainsMono.variable} dark h-full antialiased`}
-      data-dir="habitat"
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <ThemeProvider>

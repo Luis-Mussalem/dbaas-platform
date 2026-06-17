@@ -38,7 +38,7 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  /* ── tokens extras do design DBaaS (direção "habitat") ── */
+  /* ── tokens extras do design DBaaS ── */
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
   --color-bg-2: var(--bg-2);
@@ -67,7 +67,7 @@
 }
 
 /* ─────────────────────────────────────────────────────────────
-   Habitat / Light  → :root
+   Light  → :root
    Definimos os PRIMITIVOS do design (--bg, --surface, --fg...) com os
    valores do styles.css, e os tokens do shadcn (--background, --card,
    --primary...) como ALIASES que apontam para esses primitivos.
@@ -126,7 +126,7 @@
   --sidebar-ring: var(--brand);
 }
 
-/* ── Habitat / Dark → só os primitivos mudam ── */
+/* ── Dark → só os primitivos mudam ── */
 .dark {
   --bg: #0e1311;
   --bg-2: #161c19;

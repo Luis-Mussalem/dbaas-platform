@@ -1,7 +1,7 @@
 "use client";
 
 // Controle segmentado genérico (pílula com N opções, uma ativa).
-// Usado nos filtros de ambiente do Painel e no toggle Habitat/Console do topo.
+// Usado nos filtros de ambiente do Painel e no toggle de visão do topo.
 // Componente "controlado": quem usa passa `value` e recebe `onChange` — o estado
 // vive no pai (mesmo padrão de um <select> controlado no React).
 

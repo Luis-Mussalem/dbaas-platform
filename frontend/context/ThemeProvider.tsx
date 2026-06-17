@@ -46,7 +46,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const root = document.documentElement;
     root.classList.toggle("dark", theme === "dark");
-    root.setAttribute("data-dir", "habitat");
     localStorage.setItem(STORAGE_KEY, theme);
   }, [theme]);
 
