@@ -16,7 +16,7 @@ The project simulates real-world DBaaS concepts commonly found in modern platfor
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)
 
 [![CI](https://github.com/Luis-Mussalem/dbaas-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/Luis-Mussalem/dbaas-platform/actions/workflows/ci.yml)
-![Tests](https://img.shields.io/badge/tests-174%20passing-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-227%20passing-brightgreen?style=flat-square)
 ![Coverage](https://img.shields.io/badge/coverage-83%25-brightgreen?style=flat-square)
 ![Ruff](https://img.shields.io/badge/lint-ruff-blue?style=flat-square)
 
@@ -105,7 +105,7 @@ This project focuses heavily on backend engineering and operational concepts, in
 - croniter
 
 ## Frontend
-- Next.js 15 (App Router)
+- Next.js 16 (App Router)
 - TypeScript
 - React 19
 - Tailwind CSS v4
@@ -203,6 +203,9 @@ This project focuses heavily on backend engineering and operational concepts, in
 - Company model with per-company resource scoping — regular users see only their company's instances
 - Superuser active-company switcher: `WorkspaceSwitcher` writes the selected company to `X-Company-Id` header, backend filters accordingly
 - All derived resources (backups, alerts, metrics, maintenance) inherit scoping via the instance choke-point
+- Employee management — company-scoped user CRUD (create, edit, deactivate)
+- Company-admin RBAC: two orthogonal axes — platform `is_superuser` × intra-company `admin`/`member` role; company admins manage their own company, with a guard against removing the last active admin
+- Per-company audit scoping — each company sees only its own audit trail
 - Superuser bypasses the filter and sees all companies simultaneously
 
 ---
@@ -381,7 +384,7 @@ This mirrors backup strategies used in real PostgreSQL production environments.
 Quality is enforced automatically on every push and pull request.
 
 ## Automated Test Suite
-- **174 tests** with **83% backend coverage** (`pytest` + `pytest-cov`)
+- **227 tests** with **83% backend coverage** (`pytest` + `pytest-cov`)
 - Isolated PostgreSQL test database — never touches development data
 - External dependencies are faked, not invoked: Docker SDK, `subprocess`
   (`pg_dump` / `pg_restore` / `pg_basebackup`) and live `psycopg` connections
@@ -568,7 +571,8 @@ docker build -t dbaas-backend backend/
 - Automated maintenance workflows
 - Alerting & notifications system
 - Administration panel & audit log
-- Automated testing (174 tests, 83% coverage)
+- Multi-tenancy (companies, per-company scoping, employee management, company-admin RBAC, audit scoping)
+- Automated testing (227 tests, 83% coverage)
 - Continuous integration & multi-stage Docker image
 
 ## Frontend — Mostly Complete
@@ -589,7 +593,6 @@ docker build -t dbaas-backend backend/
 ## Planned Future Phases
 
 - Replication & high availability
-- Multi-tenancy — employee management, RBAC, audit scoping (company-level roles and audit trail; Stages A & B of multi-tenancy are already complete)
 - Cloud deployment
 
 ---
@@ -599,7 +602,6 @@ docker build -t dbaas-backend backend/
 Potential future improvements include:
 
 - Real-time monitoring dashboards
-- Role-based access control (RBAC)
 - Container orchestration
 - Distributed task queues
 - Cloud-native deployment

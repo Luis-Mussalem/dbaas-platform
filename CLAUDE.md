@@ -13,10 +13,11 @@ The platform manages multiple client PostgreSQL databases and is evolving toward
 **multi-tenancy**: many companies, each with its own employees. A regular user sees
 only their own company; the admin superuser sees and switches between all.
 
-- **Multi-tenant status** — PHASE 11 Stages A and B complete: instances and their
-  derived resources are filtered by `company_id`; the superuser's active company is
-  selected via the `WorkspaceSwitcher` and propagated as an `X-Company-Id` header.
-  Remaining: employee management, RBAC, audit scoping.
+- **Multi-tenant status** — PHASE 11 complete (Stages A–E): instances and their derived
+  resources are filtered by `company_id`; the superuser's active company is selected via
+  the `WorkspaceSwitcher` and propagated as an `X-Company-Id` header; employee management,
+  company-admin RBAC (`is_superuser` × `admin`/`member`), and per-company audit scoping
+  are all in place.
 - **Progress** — backend phases 0–8 complete; frontend F0–F6 complete (F7 deferred).
   Full phase detail and dependency map in [ROADMAP.md](ROADMAP.md).
 
@@ -25,7 +26,7 @@ only their own company; the admin superuser sees and switches between all.
 ```
 dbaas-platform/
 ├── backend/    Python / FastAPI — src/ (models, schemas, routers, services, core), alembic/
-├── frontend/   Next.js 15 — App Router, TypeScript, Tailwind, shadcn/ui
+├── frontend/   Next.js 16 — App Router, TypeScript, Tailwind, shadcn/ui
 ├── data/       Runtime backups (gitignored — only structure tracked)
 └── docker-compose.yaml
 ```
@@ -41,7 +42,7 @@ skip a layer. All database access uses SQLAlchemy **sync** sessions (never `Asyn
 | ORM         | SQLAlchemy 2.0 — sync `Session` + `psycopg`             |
 | Migrations  | Alembic 1.17 — run from `backend/`                      |
 | Database    | PostgreSQL 16 Alpine                                     |
-| Frontend    | Next.js 15 — App Router, TypeScript, Tailwind, shadcn/ui|
+| Frontend    | Next.js 16 — App Router, TypeScript, React 19, Tailwind v4, shadcn/ui|
 | Tooling     | Ruff (lint), Pytest (tests), Docker Compose             |
 
 ## Commands

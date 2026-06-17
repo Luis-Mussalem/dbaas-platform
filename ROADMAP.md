@@ -352,7 +352,7 @@ Replication lag monitored. Replica can be promoted to primary via API.
 
 ---
 
-## PHASE 11 — Multi-Tenancy (Companies & Employees) `[~]`
+## PHASE 11 — Multi-Tenancy (Companies & Employees) `[x]`
 
 > Product pivot: the platform evolves from single-operator to **serving multiple
 > companies, each with its own employees**. A regular user sees only their own
@@ -406,11 +406,12 @@ Replication lag monitored. Replica can be promoted to primary via API.
 | Frontend | Sidebar + employees page guard accept `role === "admin"`; non-superuser admin sees no company filter / superuser controls, gets a member/admin role selector (`frontend/`) |
 | Tests | `backend/tests/test_rbac.py` — 24 cases: scoping, role gate, escalation guards, invisible-target 404s, last-company-admin guard, cross-company isolation, member self-service |
 
-**Remaining — TODO `[ ]`**:
+**Stage E — Audit scoping — DONE `[x]`**:
 
 | Deliverable | Description |
 |-------------|-------------|
-| Audit scoping | Audit log filtered/segmented per company (deferred — system events have `NULL user_id`; see TODO in `services/admin.py`) |
+| Per-company audit log | `write_audit_log()` / `get_dashboard()` / `list_audit_logs()` thread `company_id` (`backend/src/services/admin.py`); the audit middleware resolves the acting user's company (or the superuser's `X-Company-Id`) so each company sees only its own trail; superuser sees all. System events with `NULL user_id` (login/register) stay platform-level |
+| Tests | `backend/tests/test_audit_scoping.py` — per-company isolation of the audit log, superuser bypass, null-user system events |
 
 **Completion criterion:** A regular user only sees and manages their own company's
 databases; the superuser can switch companies and the data follows the selection.
