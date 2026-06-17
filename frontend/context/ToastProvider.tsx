@@ -4,6 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -65,22 +66,17 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     [remove],
   );
 
-  // `toast` é estável (useRef) — componentes podem usá-lo em effects sem
-  // recriá-lo a cada render.
-  const apiRef = useRef<ToastApi>({
-    success: (m) => push("success", m),
-    error: (m) => push("error", m),
-    info: (m) => push("info", m),
-  });
-  // Mantém os closures apontando para o `push` atual.
-  apiRef.current = {
-    success: (m) => push("success", m),
-    error: (m) => push("error", m),
-    info: (m) => push("info", m),
-  };
+  const toast = useMemo<ToastApi>(
+    () => ({
+      success: (m) => push("success", m),
+      error: (m) => push("error", m),
+      info: (m) => push("info", m),
+    }),
+    [push],
+  );
 
   return (
-    <ToastContext.Provider value={{ toast: apiRef.current }}>
+    <ToastContext.Provider value={{ toast }}>
       {children}
 
       {/* Pilha de toasts — fixa no canto inferior direito. */}
