@@ -25,6 +25,8 @@ import type {
   AlertCondition,
   AlertSeverity,
   AlertMetricType,
+  UserAdminCreate,
+  UserAdminUpdate,
 } from "@/lib/types";
 
 const API_BASE =
@@ -40,6 +42,14 @@ function getRefreshToken(): string | null {
   return localStorage.getItem("refresh_token");
 }
 
+// Empresa-ativa do superuser (Stage B). Gravada pelo WorkspaceSwitcher em
+// "active_company_id"; enviada no header X-Company-Id para o backend filtrar.
+// Ausente = superuser vê todas; para usuário comum o backend ignora o header.
+function getActiveCompany(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("active_company_id");
+}
+
 // Grava o par de tokens em localStorage E no cookie auth_token.
 // O cookie é o que o middleware.ts (server-side) lê para proteger as rotas;
 // o localStorage é o que este cliente lê para montar o header Authorization.
@@ -47,7 +57,10 @@ function getRefreshToken(): string | null {
 function setSession(accessToken: string, refreshToken: string): void {
   localStorage.setItem("access_token", accessToken);
   localStorage.setItem("refresh_token", refreshToken);
-  document.cookie = `auth_token=${accessToken}; path=/; SameSite=Lax`;
+  // Secure só em HTTPS: em http://localhost o flag impediria a gravação do
+  // cookie e o middleware derrubaria o usuário para /login em dev.
+  const secure = window.location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `auth_token=${accessToken}; path=/; SameSite=Lax${secure}`;
 }
 
 // Apaga a sessão por completo (localStorage + cookie). Usada quando o refresh
@@ -131,11 +144,14 @@ async function request<T>(
   const isAuthEndpoint =
     path.startsWith("/auth/login") || path.startsWith("/auth/refresh");
 
+  const activeCompany = getActiveCompany();
+
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(activeCompany ? { "X-Company-Id": activeCompany } : {}),
       ...options.headers,
     },
   });
@@ -461,6 +477,33 @@ export async function resolveAlertEvent(eventId: string): Promise<AlertEvent> {
   return request<AlertEvent>(`/alerts/events/${eventId}/resolve`, {
     method: "POST",
   });
+}
+
+// ─── Users (admin) ────────────────────────────────────────────────────────────
+
+// Usa o query param company_id explícito — independente do WorkspaceSwitcher,
+// pois o admin quer controlar o filtro da tabela manualmente.
+export async function listUsers(companyId?: string): Promise<User[]> {
+  const qs = companyId ? `?company_id=${companyId}` : "";
+  return request<User[]>(`/users${qs}`);
+}
+
+export async function createUserAdmin(data: UserAdminCreate): Promise<User> {
+  return request<User>("/users", { method: "POST", body: JSON.stringify(data) });
+}
+
+export async function updateUserAdmin(
+  userId: string,
+  data: UserAdminUpdate
+): Promise<User> {
+  return request<User>(`/users/${userId}/admin`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deactivateUser(userId: string): Promise<User> {
+  return updateUserAdmin(userId, { is_active: false });
 }
 
 // ─── Admin ────────────────────────────────────────────────────────────────────

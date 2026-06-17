@@ -58,7 +58,7 @@ def run_maintenance(
     instance_id: uuid.UUID,
     data: MaintenanceTaskCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Executar uma tarefa de manutenção imediatamente na instância.
@@ -69,7 +69,7 @@ def run_maintenance(
 
     Requer que a instância esteja `RUNNING`.
     """
-    instance = get_instance_if_running(instance_id, db)
+    instance = get_instance_if_running(instance_id, db, current_user)
     try:
         return svc.run_task(db, instance, data)
     except ValueError as exc:
@@ -88,13 +88,13 @@ def list_maintenance_history(
     instance_id: uuid.UUID,
     limit: int = 50,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Retornar histórico das últimas tarefas de manutenção da instância.
     Ordenado por `scheduled_at` decrescente.
     """
-    get_instance_or_404(instance_id, db)
+    get_instance_or_404(instance_id, db, current_user)
     return svc.get_task_history(db, instance_id, limit=limit)
 
 
@@ -108,7 +108,7 @@ def create_schedule(
     instance_id: uuid.UUID,
     data: MaintenanceScheduleCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Criar um agendamento recorrente de manutenção com expressão cron.
@@ -120,7 +120,7 @@ def create_schedule(
     `VACUUM_FULL` não pode ser agendado automaticamente (usa lock exclusivo).
     Execute-o manualmente via `POST /maintenance/run`.
     """
-    get_instance_or_404(instance_id, db)
+    get_instance_or_404(instance_id, db, current_user)
     return svc.create_schedule(db, instance_id, data)
 
 
@@ -132,10 +132,10 @@ def create_schedule(
 def list_schedules(
     instance_id: uuid.UUID,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """Retornar todos os agendamentos de manutenção da instância."""
-    get_instance_or_404(instance_id, db)
+    get_instance_or_404(instance_id, db, current_user)
     return svc.list_schedules(db, instance_id)
 
 
@@ -148,10 +148,10 @@ def delete_schedule(
     instance_id: uuid.UUID,
     schedule_id: uuid.UUID,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """Remover permanentemente um agendamento de manutenção."""
-    get_instance_or_404(instance_id, db)
+    get_instance_or_404(instance_id, db, current_user)
     schedule = _require_schedule(schedule_id, instance_id, db)
     svc.delete_schedule(db, schedule)
 
@@ -164,7 +164,7 @@ def delete_schedule(
 def get_config_recommendations(
     instance_id: uuid.UUID,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Retornar recomendações de parâmetros PostgreSQL baseadas nos recursos da instância.

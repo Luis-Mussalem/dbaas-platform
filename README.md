@@ -16,7 +16,7 @@ The project simulates real-world DBaaS concepts commonly found in modern platfor
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)
 
 [![CI](https://github.com/Luis-Mussalem/dbaas-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/Luis-Mussalem/dbaas-platform/actions/workflows/ci.yml)
-![Tests](https://img.shields.io/badge/tests-151%20passing-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-174%20passing-brightgreen?style=flat-square)
 ![Coverage](https://img.shields.io/badge/coverage-83%25-brightgreen?style=flat-square)
 ![Ruff](https://img.shields.io/badge/lint-ruff-blue?style=flat-square)
 
@@ -105,7 +105,7 @@ This project focuses heavily on backend engineering and operational concepts, in
 - croniter
 
 ## Frontend
-- Next.js 16 (App Router)
+- Next.js 15 (App Router)
 - TypeScript
 - React 19
 - Tailwind CSS v4
@@ -199,17 +199,26 @@ This project focuses heavily on backend engineering and operational concepts, in
 
 ---
 
+## Multi-Tenancy
+- Company model with per-company resource scoping — regular users see only their company's instances
+- Superuser active-company switcher: `WorkspaceSwitcher` writes the selected company to `X-Company-Id` header, backend filters accordingly
+- All derived resources (backups, alerts, metrics, maintenance) inherit scoping via the instance choke-point
+- Superuser bypasses the filter and sees all companies simultaneously
+
+---
+
 ## Frontend Interface
 - JWT authentication with token rotation (login, logout, protected routes)
 - Instance list with status badges and resource summary
-- Instance detail with tabbed views (overview, backups, maintenance, alerts)
+- Instance detail with tabbed views (overview, backups, maintenance, alerts, metrics)
 - Start / Stop / Delete actions with reactive status updates
+- Time-series metric charts (cache hit ratio, connections) with 15m/1h/6h/24h window selector
 - Live monitoring: slow queries and active locks
 - Backups management — list, create, restore and scheduling
 - Maintenance actions and alert rules/events management
 - Consolidated dashboard and audit log
-- Workspace switcher (multi-tenant groundwork)
-- Responsive dark UI with Tailwind CSS
+- Workspace switcher — active-company selection propagated to every API call
+- Redesigned dark UI: collapsible sidebar, world-map region picker, light/dark themes
 
 ---
 
@@ -372,7 +381,7 @@ This mirrors backup strategies used in real PostgreSQL production environments.
 Quality is enforced automatically on every push and pull request.
 
 ## Automated Test Suite
-- **151 tests** with **83% backend coverage** (`pytest` + `pytest-cov`)
+- **174 tests** with **83% backend coverage** (`pytest` + `pytest-cov`)
 - Isolated PostgreSQL test database — never touches development data
 - External dependencies are faked, not invoked: Docker SDK, `subprocess`
   (`pg_dump` / `pg_restore` / `pg_basebackup`) and live `psycopg` connections
@@ -559,7 +568,7 @@ docker build -t dbaas-backend backend/
 - Automated maintenance workflows
 - Alerting & notifications system
 - Administration panel & audit log
-- Automated testing (151 tests, 83% coverage)
+- Automated testing (174 tests, 83% coverage)
 - Continuous integration & multi-stage Docker image
 
 ## Frontend — Mostly Complete
@@ -574,13 +583,13 @@ docker build -t dbaas-backend backend/
 | Backups management (list, create, restore, schedule) | ✅ Complete |
 | Maintenance & alerts interface | ✅ Complete |
 | Consolidated dashboard + audit log | ✅ Complete |
-| Time-series metric charts (cache hit ratio, connections) | 🔶 Pending backend time-series endpoint |
+| Time-series metric charts (cache hit ratio, connections) | ✅ Complete |
 | SQL console | ⏸️ Deferred (full-stack milestone) |
 
 ## Planned Future Phases
 
 - Replication & high availability
-- Multi-tenant resource scoping (companies & employees)
+- Multi-tenancy — employee management, RBAC, audit scoping (company-level roles and audit trail; Stages A & B of multi-tenancy are already complete)
 - Cloud deployment
 
 ---

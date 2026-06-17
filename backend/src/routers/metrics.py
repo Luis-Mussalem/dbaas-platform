@@ -39,14 +39,16 @@ router = APIRouter(
 def _require_connected(
     instance_id: uuid.UUID,
     db: Session,
+    current_user: User,
 ) -> DatabaseInstance:
     """
     Garante que a instância está RUNNING e tem connection_uri.
 
     Todos os endpoints de monitoramento live precisam de conexão ativa ao banco.
     Endpoints históricos (metrics snapshot) usam get_instance_or_404 diretamente.
+    O current_user propaga o scoping multi-tenant para todos os endpoints live.
     """
-    instance = get_instance_if_running(instance_id, db)
+    instance = get_instance_if_running(instance_id, db, current_user)
     if not instance.connection_uri:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -63,7 +65,7 @@ def _require_connected(
 def get_metrics(
     instance_id: uuid.UUID,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> MetricsSnapshot:
     """
     Retorna os valores mais recentes de cada métrica coletada pelo poller.
@@ -71,19 +73,9 @@ def get_metrics(
     Dados históricos — lidos do banco da plataforma, não do banco monitorado.
     Disponível mesmo se a instância estiver STOPPED (exibe última leitura).
     """
-    instance = (
-        db.query(DatabaseInstance)
-        .filter(
-            DatabaseInstance.id == instance_id,
-            DatabaseInstance.deleted_at.is_(None),
-        )
-        .first()
-    )
-    if not instance:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Instance not found",
-        )
+    # Escopado por empresa (404 para instância de outra empresa). Reusa o gargalo
+    # em vez de repetir a query inline.
+    get_instance_or_404(instance_id, db, current_user)
 
     current_metrics = metrics_service.get_latest_metrics(db, instance_id)
     return MetricsSnapshot(
@@ -106,7 +98,7 @@ def get_metrics_history(
     metric: str = Query(..., min_length=1, max_length=100, description="metric_name coletado pelo poller"),
     window: Literal["15m", "1h", "6h", "24h"] = "1h",
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> MetricHistoryResponse:
     """
     Série histórica de uma única métrica na janela escolhida.
@@ -115,7 +107,7 @@ def get_metrics_history(
     STOPPED, exibindo o histórico já coletado. Retorna lista vazia se a métrica
     não foi coletada ainda.
     """
-    get_instance_or_404(instance_id, db)
+    get_instance_or_404(instance_id, db, current_user)
     points = metrics_service.get_metric_history(
         db, instance_id, metric, _WINDOW_MINUTES[window]
     )
@@ -135,14 +127,14 @@ def get_metrics_history(
 async def get_health(
     instance_id: uuid.UUID,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> HealthCheck:
     """
     Executa SELECT 1 no banco monitorado e mede response time end-to-end.
 
     Endpoint live — conecta ao banco da instância no momento da chamada.
     """
-    instance = _require_connected(instance_id, db)
+    instance = _require_connected(instance_id, db, current_user)
     result = await asyncio.to_thread(metrics_service.check_health, instance)
     return HealthCheck(
         instance_id=instance_id,
@@ -161,7 +153,7 @@ async def get_slow_queries(
     instance_id: uuid.UUID,
     limit: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> SlowQueriesResponse:
     """
     Consulta pg_stat_statements ordenado por total_exec_time DESC.
@@ -169,7 +161,7 @@ async def get_slow_queries(
     Requer pg_stat_statements instalado. Instâncias provisionadas após
     o Passo 4A já têm a extensão. Instâncias antigas retornam lista vazia.
     """
-    instance = _require_connected(instance_id, db)
+    instance = _require_connected(instance_id, db, current_user)
     rows = await asyncio.to_thread(
         metrics_service.get_slow_queries, instance, limit
     )
@@ -187,12 +179,12 @@ async def get_slow_queries(
 async def get_indexes(
     instance_id: uuid.UUID,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> IndexStatsResponse:
     """
     Consulta pg_stat_user_indexes. Índices com idx_scan=0 são candidatos a DROP.
     """
-    instance = _require_connected(instance_id, db)
+    instance = _require_connected(instance_id, db, current_user)
     rows = await asyncio.to_thread(metrics_service.get_index_stats, instance)
     return IndexStatsResponse(
         instance_id=instance_id,
@@ -208,13 +200,13 @@ async def get_indexes(
 async def get_locks(
     instance_id: uuid.UUID,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> LocksResponse:
     """
     Consulta pg_locks filtrado por locktype='relation'.
     has_blocked_queries=True indica que há queries aguardando lock.
     """
-    instance = _require_connected(instance_id, db)
+    instance = _require_connected(instance_id, db, current_user)
     rows = await asyncio.to_thread(metrics_service.get_locks, instance)
     has_blocked = any(not row.get("granted", True) for row in rows)
     return LocksResponse(
@@ -232,13 +224,13 @@ async def get_locks(
 async def get_bloat(
     instance_id: uuid.UUID,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> BloatResponse:
     """
     Estima percentual de tuplas mortas por tabela via pg_stat_user_tables.
     dead_ratio > 20% indica necessidade de VACUUM (FASE 6).
     """
-    instance = _require_connected(instance_id, db)
+    instance = _require_connected(instance_id, db, current_user)
     rows = await asyncio.to_thread(metrics_service.get_bloat, instance)
     return BloatResponse(
         instance_id=instance_id,
@@ -255,13 +247,13 @@ async def get_connections(
     instance_id: uuid.UUID,
     limit: int = Query(default=100, ge=1, le=500),
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> ActiveConnectionsResponse:
     """
     Lista os backends conectados ao banco da instância (PID, usuário, estado,
     espera, duração e query). Endpoint live — exige a instância RUNNING.
     """
-    instance = _require_connected(instance_id, db)
+    instance = _require_connected(instance_id, db, current_user)
     rows = await asyncio.to_thread(
         metrics_service.get_active_connections, instance, limit
     )
@@ -276,13 +268,13 @@ async def get_connections(
 async def get_schema(
     instance_id: uuid.UUID,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> SchemaResponse:
     """
     Retorna as tabelas de usuário agrupadas por schema, com estimativa de linhas
     (pg_class.reltuples). Endpoint live — exige a instância RUNNING.
     """
-    instance = _require_connected(instance_id, db)
+    instance = _require_connected(instance_id, db, current_user)
     groups = await asyncio.to_thread(metrics_service.get_schema, instance)
     return SchemaResponse(instance_id=instance_id, schemas=groups)
 
@@ -296,7 +288,7 @@ async def explain_query(
     instance_id: uuid.UUID,
     body: ExplainRequest,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> ExplainResponse:
     """
     Executa EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) na query fornecida.
@@ -304,7 +296,7 @@ async def explain_query(
     Restrito a SELECT: EXPLAIN ANALYZE executa a query de verdade,
     portanto DML causaria efeitos reais nos dados do cliente.
     """
-    instance = _require_connected(instance_id, db)
+    instance = _require_connected(instance_id, db, current_user)
     try:
         plan = await asyncio.to_thread(
             metrics_service.get_explain, instance, body.query

@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -28,6 +29,8 @@ from src.services.backup import (
     update_schedule,
 )
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(tags=["Backups"])
 
 
@@ -45,7 +48,7 @@ async def create_backup(
     instance_id: uuid.UUID,
     data: BackupRequest,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Dispara um backup manual para a instância especificada.
@@ -57,7 +60,7 @@ async def create_backup(
     Operação bloqueante — aguarda a conclusão do backup antes de retornar.
     Para bancos grandes, pode levar vários minutos.
     """
-    instance = get_instance_if_running(instance_id, db)
+    instance = get_instance_if_running(instance_id, db, current_user)
 
     if not instance.connection_uri:
         raise HTTPException(
@@ -75,9 +78,12 @@ async def create_backup(
                 create_physical_backup, db, instance
             )
     except RuntimeError as exc:
+        # str(exc) carrega stderr do pg_dump/pg_basebackup (host, porta, mensagens
+        # internas) — fica só no log do servidor; o cliente recebe mensagem genérica.
+        logger.error("Backup failed for instance %s: %s", instance_id, exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(exc),
+            detail="Backup operation failed. Check server logs for details.",
         ) from exc
 
     return backup
@@ -90,12 +96,12 @@ async def create_backup(
 def list_instance_backups(
     instance_id: uuid.UUID,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Lista todos os backups não-deletados de uma instância, mais recentes primeiro.
     """
-    get_instance_or_404(instance_id, db)
+    get_instance_or_404(instance_id, db, current_user)
     return list_backups(db, instance_id)
 
 
@@ -106,7 +112,7 @@ def list_instance_backups(
 def get_backup(
     backup_id: uuid.UUID,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """Retorna os detalhes de um backup específico."""
     backup = get_backup_by_id(db, backup_id)
@@ -115,6 +121,8 @@ def get_backup(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Backup not found",
         )
+    # Scoping por empresa: se a instância dona não é visível ao usuário, 404.
+    get_instance_or_404(backup.instance_id, db, current_user)
     return backup
 
 
@@ -125,7 +133,7 @@ def get_backup(
 def delete_backup(
     backup_id: uuid.UUID,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Remove um backup: apaga o arquivo físico e marca o registro como DELETED.
@@ -137,6 +145,8 @@ def delete_backup(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Backup not found",
         )
+    # Scoping por empresa: instância dona não visível ao usuário → 404.
+    get_instance_or_404(backup.instance_id, db, current_user)
     if backup.status == BackupStatus.DELETED:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -152,7 +162,7 @@ def delete_backup(
 async def restore_backup(
     backup_id: uuid.UUID,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Restaura um backup lógico (pg_restore) na instância de origem.
@@ -182,14 +192,18 @@ async def restore_backup(
             detail="Only logical backups can be restored via this endpoint",
         )
 
-    instance = get_instance_if_running(backup.instance_id, db)
+    # get_instance_if_running já escopa por empresa: backup de outra empresa → 404.
+    instance = get_instance_if_running(backup.instance_id, db, current_user)
 
     try:
         await asyncio.to_thread(restore_logical_backup, db, backup, instance)
     except (FileNotFoundError, RuntimeError, ValueError) as exc:
+        # Mesmo motivo do create_backup: o erro real (caminho de arquivo, stderr do
+        # pg_restore) vai para o log; o cliente recebe apenas uma mensagem genérica.
+        logger.error("Restore failed for backup %s: %s", backup_id, exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(exc),
+            detail="Restore operation failed. Check server logs for details.",
         ) from exc
 
 
@@ -207,14 +221,14 @@ def create_backup_schedule(
     instance_id: uuid.UUID,
     data: BackupScheduleCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Cria um schedule de backup automático para a instância.
     A cron expression é validada antes de salvar.
     next_run_at é calculado automaticamente.
     """
-    get_instance_or_404(instance_id, db)
+    get_instance_or_404(instance_id, db, current_user)
     return create_schedule(db, instance_id, data)
 
 
@@ -225,10 +239,10 @@ def create_backup_schedule(
 def list_backup_schedules(
     instance_id: uuid.UUID,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """Lista todos os schedules de backup de uma instância."""
-    get_instance_or_404(instance_id, db)
+    get_instance_or_404(instance_id, db, current_user)
     return list_schedules(db, instance_id)
 
 
@@ -241,14 +255,14 @@ def update_backup_schedule(
     schedule_id: uuid.UUID,
     data: BackupScheduleUpdate,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Atualiza um schedule existente.
     Se a cron expression mudar, next_run_at é recalculado automaticamente.
     Se is_active for desativado, next_run_at é anulado (pausa o schedule).
     """
-    get_instance_or_404(instance_id, db)
+    get_instance_or_404(instance_id, db, current_user)
     schedule = get_schedule_by_id(db, schedule_id)
     if not schedule or schedule.instance_id != instance_id:
         raise HTTPException(
@@ -266,10 +280,10 @@ def delete_backup_schedule(
     instance_id: uuid.UUID,
     schedule_id: uuid.UUID,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """Remove um schedule de backup. Os backups já criados não são afetados."""
-    get_instance_or_404(instance_id, db)
+    get_instance_or_404(instance_id, db, current_user)
     schedule = get_schedule_by_id(db, schedule_id)
     if not schedule or schedule.instance_id != instance_id:
         raise HTTPException(

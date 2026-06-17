@@ -121,7 +121,8 @@ def test_audit_log_requires_auth(client):
 
 
 def test_audit_log_lists_recent_first(client, auth_headers, db):
-    headers, _ = auth_headers()
+    # Superuser sem header vê todas as entradas (incl. NULL-company).
+    headers, _ = auth_headers(is_superuser=True)
     admin_service.write_audit_log(db, action="login", resource_type="auth")
     admin_service.write_audit_log(db, action="instance_created", resource_type="instance")
 
@@ -134,7 +135,7 @@ def test_audit_log_lists_recent_first(client, auth_headers, db):
 
 
 def test_audit_log_filters_by_action_and_resource_type(client, auth_headers, db):
-    headers, _ = auth_headers()
+    headers, _ = auth_headers(is_superuser=True)
     admin_service.write_audit_log(db, action="login", resource_type="auth")
     admin_service.write_audit_log(db, action="backup_created", resource_type="backup")
     admin_service.write_audit_log(db, action="instance_created", resource_type="instance")
@@ -147,7 +148,7 @@ def test_audit_log_filters_by_action_and_resource_type(client, auth_headers, db)
 
 
 def test_audit_log_pagination(client, auth_headers, db):
-    headers, _ = auth_headers()
+    headers, _ = auth_headers(is_superuser=True)
     for i in range(5):
         admin_service.write_audit_log(db, action=f"act_{i}", resource_type="test")
 
@@ -159,7 +160,7 @@ def test_audit_log_pagination(client, auth_headers, db):
 
 
 def test_audit_log_rejects_invalid_limit(client, auth_headers):
-    headers, _ = auth_headers()
+    headers, _ = auth_headers(is_superuser=True)
     # limit tem ge=1, le=500 — 0 e 999 violam os bounds.
     assert client.get(f"{AUDIT}?limit=0", headers=headers).status_code == 422
     assert client.get(f"{AUDIT}?limit=999", headers=headers).status_code == 422

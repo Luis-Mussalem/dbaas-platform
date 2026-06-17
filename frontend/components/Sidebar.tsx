@@ -10,6 +10,7 @@ import {
   Settings,
   HelpCircle,
   LogOut,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -27,9 +28,13 @@ const WORKSPACE_NAV: NavItem[] = [
 ];
 
 const ACCOUNT_NAV: NavItem[] = [
-  { href: "/audit", label: "Logs & Auditoria", icon: ScrollText },
   { href: "/settings", label: "Configurações", icon: Settings },
   { href: "/help", label: "Ajuda", icon: HelpCircle },
+];
+
+const ADMIN_NAV: NavItem[] = [
+  { href: "/admin/users", label: "Funcionários", icon: Users },
+  { href: "/audit", label: "Logs & Auditoria", icon: ScrollText },
 ];
 
 // "/" só fica ativo na raiz exata; as demais ficam ativas também nas subrotas
@@ -85,6 +90,14 @@ export function Sidebar() {
             <NavLink key={item.href} item={withBadge} active={isActive(pathname, item.href)} />
           );
         })}
+        {(user?.is_superuser || user?.role === "admin") && (
+          <>
+            <NavSection label="Administração" />
+            {ADMIN_NAV.map((item) => (
+              <NavLink key={item.href} item={item} active={isActive(pathname, item.href)} />
+            ))}
+          </>
+        )}
         <NavSection label="Conta" />
         {ACCOUNT_NAV.map((item) => (
           <NavLink key={item.href} item={item} active={isActive(pathname, item.href)} />

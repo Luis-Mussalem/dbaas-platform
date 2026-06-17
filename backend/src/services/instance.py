@@ -9,7 +9,9 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from src.core.encryption import decrypt_value, encrypt_value
+from src.core.scoping import scope_instance_query
 from src.models.database_instance import DatabaseInstance, InstanceStatus
+from src.models.user import User
 from src.schemas.instance import InstanceCreate, InstanceUpdate
 from src.services.provisioning import get_provisioner
 
@@ -47,27 +49,28 @@ def _sync_connection_port(instance: DatabaseInstance, new_port: int) -> None:
         instance.connection_uri = encrypt_value(new_uri)
 
 
-def get_instance_by_id(db: Session, instance_id: uuid.UUID) -> Optional[DatabaseInstance]:
-    return (
-        db.query(DatabaseInstance)
-        .filter(
-            DatabaseInstance.id == instance_id,
-            DatabaseInstance.deleted_at.is_(None),
-        )
-        .first()
+def get_instance_by_id(
+    db: Session, instance_id: uuid.UUID, current_user: User
+) -> Optional[DatabaseInstance]:
+    query = db.query(DatabaseInstance).filter(
+        DatabaseInstance.id == instance_id,
+        DatabaseInstance.deleted_at.is_(None),
     )
+    return scope_instance_query(query, current_user).first()
 
 
-def list_instances(db: Session) -> list[DatabaseInstance]:
+def list_instances(db: Session, current_user: User) -> list[DatabaseInstance]:
+    query = db.query(DatabaseInstance).filter(DatabaseInstance.deleted_at.is_(None))
     return (
-        db.query(DatabaseInstance)
-        .filter(DatabaseInstance.deleted_at.is_(None))
+        scope_instance_query(query, current_user)
         .order_by(DatabaseInstance.created_at.desc())
         .all()
     )
 
 
-async def create_instance(db: Session, data: InstanceCreate) -> DatabaseInstance:
+async def create_instance(
+    db: Session, data: InstanceCreate, current_user: User
+) -> DatabaseInstance:
     """
     Criar um registro DatabaseInstance e provisionar um container PostgreSQL real.
 
@@ -97,6 +100,9 @@ async def create_instance(db: Session, data: InstanceCreate) -> DatabaseInstance
         environment=data.environment,
         notes=data.notes,
         status=InstanceStatus.PENDING,
+        # A instância nasce na empresa de quem a criou. Superuser sem empresa
+        # cria com company_id NULL (até a Stage B permitir escolher a empresa-ativa).
+        company_id=current_user.company_id,
     )
     db.add(instance)
     db.commit()

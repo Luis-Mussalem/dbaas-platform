@@ -51,6 +51,8 @@ export interface TokenResponse {
 
 // ─── User ─────────────────────────────────────────────────────────────────────
 
+export type UserRole = "admin" | "member";
+
 // Empresa (tenant). Multi-tenant: um usuário comum pertence a uma empresa;
 // o superuser não tem empresa única (company = null) e enxerga todas.
 export interface Company {
@@ -64,9 +66,27 @@ export interface User {
   email: string;
   is_active: boolean;
   is_superuser: boolean;
+  role: UserRole;
+  company_id: string | null;
   company: Company | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface UserAdminCreate {
+  email: string;
+  password: string;
+  company_id?: string;
+  is_superuser?: boolean;
+  role?: UserRole;
+}
+
+export interface UserAdminUpdate {
+  email?: string;
+  is_active?: boolean;
+  is_superuser?: boolean;
+  company_id?: string | null;
+  role?: UserRole;
 }
 
 // ─── Database Instance ────────────────────────────────────────────────────────

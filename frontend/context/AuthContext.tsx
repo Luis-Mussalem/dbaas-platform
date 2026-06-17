@@ -58,7 +58,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const response = await apiLogin(username, password);
     localStorage.setItem("access_token", response.access_token);
     localStorage.setItem("refresh_token", response.refresh_token);
-    document.cookie = `auth_token=${response.access_token}; path=/; SameSite=Lax`;
+    // Secure só em HTTPS: em http://localhost o flag impediria a gravação do
+    // cookie e o middleware derrubaria o usuário para /login em dev.
+    const secure = window.location.protocol === "https:" ? "; Secure" : "";
+    document.cookie = `auth_token=${response.access_token}; path=/; SameSite=Lax${secure}`;
     setIsLoading(true);
     setToken(response.access_token);
   }

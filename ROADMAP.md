@@ -369,15 +369,48 @@ Replication lag monitored. Replica can be promoted to primary via API.
 | `UserRead.company` | `/auth/me` now returns the user's company |
 | Workspace UI | `WorkspaceSwitcher` — dropdown for superuser, fixed label for regular user |
 
+**Stage A — Resource scoping — DONE `[x]`**:
+
+| Deliverable | Description |
+|-------------|-------------|
+| `company_id` on instances | FK on `DatabaseInstance` (nullable, indexed) + Alembic migration with backfill |
+| Central scoping helper | `backend/src/core/scoping.py` — `scope_instance_query` / `visible_company_id`; superuser bypasses the filter |
+| Scoped access | `get_instance_or_404` / `get_instance_if_running` + `list_instances` / `get_instance_by_id` filter by company; derived resources (backups, alerts, maintenance, metrics) inherit via the instance choke-point; `create` sets the creator's `company_id` |
+| Admin dashboard | aggregates scoped by company; `InstanceRead.company_id` exposed |
+| Tests | `backend/tests/test_company_scoping.py` — cross-company isolation (list, 404, superuser bypass, derived backups, global alert events) |
+
+**Stage B — Active-company context — DONE `[x]`**:
+
+| Deliverable | Description |
+|-------------|-------------|
+| `X-Company-Id` header | `visible_company_id()` in `backend/src/core/scoping.py` reads the header; `get_instance_or_404` and list endpoints honour it; superuser with no header sees all |
+| WorkspaceSwitcher wired | `frontend/lib/api.ts` injects `X-Company-Id` on every request from `localStorage`; `frontend/components/WorkspaceSwitcher.tsx` writes the value on selection |
+| Tests extended | `backend/tests/test_company_scoping.py` — cross-company isolation with and without header, superuser bypass, derived-resource scoping |
+
+**Stage C — Employee Management — DONE `[x]`**:
+
+| Deliverable | Description |
+|-------------|-------------|
+| Employee management (backend) | `UserCreate`/`UserRead`/`UserUpdate` admin schemas; `EmployeeService` with CRUD; superuser-only endpoints (`POST /users`, `GET /users`, `PATCH /users/{id}`, `DELETE /users/{id}`) scoped by `company_id` |
+| Employee management (frontend) | Admin screen at `/admin/employees` — list, create, edit and deactivate users within a company; superuser-only access guard |
+| Tests | 16 tests covering employee CRUD, company scoping isolation, and superuser bypass |
+
+**Stage D — RBAC (Company-Admin Delegation) — DONE `[x]`**:
+
+| Deliverable | Description |
+|-------------|-------------|
+| `UserRole` enum | `admin`/`member` — intra-company axis, orthogonal to platform `is_superuser` (`backend/src/models/user.py`) + Alembic migration (`a7d3e2f5c1b9`, lowercase enum, `server_default='member'` backfill) |
+| Authorization helpers | `is_company_admin` / `assert_can_manage_target` in `backend/src/core/scoping.py` (invisible target → 404, no existence leak); `get_current_company_admin` dependency (missing role → 403) |
+| Service guards | `EmployeeService` threads `acting_user`: scoped list, forced own-company create, escalation rejected with 403 (`is_superuser`/foreign `company_id`), `_guard_last_company_admin` (demote/deactivate last active admin → 400) |
+| Delegated endpoints | `GET /users`, `POST /users`, `PATCH /users/{id}/admin` swapped to `get_current_company_admin` — company admins manage their own company; superuser keeps cross-company power |
+| Frontend | Sidebar + employees page guard accept `role === "admin"`; non-superuser admin sees no company filter / superuser controls, gets a member/admin role selector (`frontend/`) |
+| Tests | `backend/tests/test_rbac.py` — 24 cases: scoping, role gate, escalation guards, invisible-target 404s, last-company-admin guard, cross-company isolation, member self-service |
+
 **Remaining — TODO `[ ]`**:
 
 | Deliverable | Description |
 |-------------|-------------|
-| Resource scoping | `company_id` (owner) on `DatabaseInstance` and derived resources; query filtering so each user sees only their company's databases. **Currently resources are NOT scoped by company.** |
-| Active-company context | The superuser's selected company (today only persisted in `localStorage`) actually filters the data shown |
-| Employee management | Create/list users within a company; assign `user.company_id`; superuser-only company management screens |
-| RBAC | Roles beyond `is_superuser` (e.g., company admin vs. member) if needed |
-| Audit scoping | Audit log filtered/segmented per company |
+| Audit scoping | Audit log filtered/segmented per company (deferred — system events have `NULL user_id`; see TODO in `services/admin.py`) |
 
 **Completion criterion:** A regular user only sees and manages their own company's
 databases; the superuser can switch companies and the data follows the selection.
@@ -431,7 +464,7 @@ databases; the superuser can switch companies and the data follows the selection
 
 ---
 
-## FRONTEND F3 — Metrics & Observability `[~]`
+## FRONTEND F3 — Metrics & Observability `[x]`
 
 > Real-time visibility into each managed database.
 
@@ -444,10 +477,13 @@ databases; the superuser can switch companies and the data follows the selection
 
 **Completion criterion:** Metrics rendered with automatic updates.
 
-> **Status (parcial `[~]`):** slow queries e locks já renderizados na UI. Os
-> **gráficos (cache hit ratio, conexões) seguem stub** — dependem de um endpoint
-> de métricas-como-série no backend (mesmo bloqueio citado em F7 para as tabs
-> Metrics/Logs). `recharts` já está instalado; falta só a fonte de dados.
+> **Status:** slow queries e locks renderizados; gráficos de série temporal (cache
+> hit ratio, conexões) implementados com `recharts` via `MetricsTab` +
+> `useMetricHistory` — consomem `GET /instances/{id}/metrics/history` (`3f3aa54`).
+> Seletor de janela (15m/1h/6h/24h) funcionando. Gráfico de latência é demo
+> sintético claramente rotulado como "demonstração" (backend não coleta latência
+> por query). Tab Logs ainda é placeholder — depende de endpoint de log por
+> instância não construído.
 
 ---
 
@@ -509,8 +545,9 @@ Complete navigation between platform sections functional.
 > The frontend sequence continues without it: after the instance-detail tabs
 > (Overview / Backups / Maintenance / Alerts — all done), the next built screen
 > is **Audit Log** (`/audit`, reuses existing `getAuditLogs()`, no backend work).
-> Note: `Metrics` and `Logs` instance tabs also remain placeholders — they depend
-> on backend not yet built (time-series metrics endpoint / per-instance log stream).
+> Note: the `Metrics` instance tab is now complete — `GET /instances/{id}/metrics/history`
+> exists (`3f3aa54`) and the tab is wired (F3 `[x]`). The `Logs` tab remains a
+> placeholder pending a per-instance log stream endpoint.
 
 | Deliverable | Description |
 |-------------|-------------|
