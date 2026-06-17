@@ -395,11 +395,21 @@ Replication lag monitored. Replica can be promoted to primary via API.
 | Employee management (frontend) | Admin screen at `/admin/employees` — list, create, edit and deactivate users within a company; superuser-only access guard |
 | Tests | 16 tests covering employee CRUD, company scoping isolation, and superuser bypass |
 
+**Stage D — RBAC (Company-Admin Delegation) — DONE `[x]`**:
+
+| Deliverable | Description |
+|-------------|-------------|
+| `UserRole` enum | `admin`/`member` — intra-company axis, orthogonal to platform `is_superuser` (`backend/src/models/user.py`) + Alembic migration (`a7d3e2f5c1b9`, lowercase enum, `server_default='member'` backfill) |
+| Authorization helpers | `is_company_admin` / `assert_can_manage_target` in `backend/src/core/scoping.py` (invisible target → 404, no existence leak); `get_current_company_admin` dependency (missing role → 403) |
+| Service guards | `EmployeeService` threads `acting_user`: scoped list, forced own-company create, escalation rejected with 403 (`is_superuser`/foreign `company_id`), `_guard_last_company_admin` (demote/deactivate last active admin → 400) |
+| Delegated endpoints | `GET /users`, `POST /users`, `PATCH /users/{id}/admin` swapped to `get_current_company_admin` — company admins manage their own company; superuser keeps cross-company power |
+| Frontend | Sidebar + employees page guard accept `role === "admin"`; non-superuser admin sees no company filter / superuser controls, gets a member/admin role selector (`frontend/`) |
+| Tests | `backend/tests/test_rbac.py` — 24 cases: scoping, role gate, escalation guards, invisible-target 404s, last-company-admin guard, cross-company isolation, member self-service |
+
 **Remaining — TODO `[ ]`**:
 
 | Deliverable | Description |
 |-------------|-------------|
-| RBAC | Roles beyond `is_superuser` (e.g., company admin vs. member) |
 | Audit scoping | Audit log filtered/segmented per company (deferred — system events have `NULL user_id`; see TODO in `services/admin.py`) |
 
 **Completion criterion:** A regular user only sees and manages their own company's
