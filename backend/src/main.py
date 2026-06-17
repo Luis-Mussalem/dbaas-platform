@@ -11,7 +11,7 @@ from slowapi.errors import RateLimitExceeded
 from src.core.audit_middleware import AuditMiddleware
 from src.core.config import settings
 from src.core.rate_limit import limiter
-from src.routers import admin, alerts, auth, backups, companies, health, instances, maintenance, metrics, users
+from src.routers import admin, alerts, auth, backups, companies, health, instances, maintenance, metrics, query, users
 from src.services.alert_evaluator import alert_evaluation_loop
 from src.services.backup_scheduler import backup_scheduling_loop
 from src.services.maintenance_scheduler import maintenance_scheduling_loop
@@ -187,6 +187,7 @@ api_v1.include_router(users.router)
 api_v1.include_router(companies.router)
 api_v1.include_router(instances.router)
 api_v1.include_router(metrics.router)
+api_v1.include_router(query.router)
 api_v1.include_router(backups.router)
 api_v1.include_router(maintenance.router)
 api_v1.include_router(alerts.router)
