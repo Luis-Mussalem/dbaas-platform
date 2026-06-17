@@ -311,17 +311,23 @@ function OverviewTab({
 // ── Tabela de queries lentas (pg_stat_statements) ──
 function SlowQueries({ instance }: { instance: Instance }) {
   const [rows, setRows] = useState<SlowQuery[] | null>(null);
-  const [unavailable, setUnavailable] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const running = instance.status === "running";
 
   useEffect(() => {
-    if (instance.status !== "running") {
-      setRows([]);
-      return;
-    }
+    if (!running) return;
+    let active = true;
     getSlowQueries(instance.id)
-      .then((r) => setRows(r.queries))
-      .catch(() => setUnavailable(true));
-  }, [instance.id, instance.status]);
+      .then((r) => active && setRows(r.queries))
+      .catch(() => active && setFailed(true));
+    return () => {
+      active = false;
+    };
+  }, [instance.id, running]);
+
+  // Parada → tratamos como lista vazia (sem dados), não como indisponível.
+  const unavailable = failed;
+  const display = running ? rows : [];
 
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-surface">
@@ -334,9 +340,9 @@ function SlowQueries({ instance }: { instance: Instance }) {
         <p className="px-4 py-8 text-center text-sm text-fg-3">
           Indisponível (instância parada ou sem dados).
         </p>
-      ) : rows === null ? (
+      ) : display === null ? (
         <p className="px-4 py-8 text-center text-sm text-fg-3">Carregando…</p>
-      ) : rows.length === 0 ? (
+      ) : display.length === 0 ? (
         <p className="px-4 py-8 text-center text-sm text-fg-3">
           Sem queries lentas registradas.
         </p>
@@ -350,7 +356,7 @@ function SlowQueries({ instance }: { instance: Instance }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((q, i) => (
+            {display.map((q, i) => (
               <tr key={i} className="border-t border-border">
                 <td className="max-w-0 truncate px-4 py-2 font-mono text-xs text-fg-2">
                   {q.query}

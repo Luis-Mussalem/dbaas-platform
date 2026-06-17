@@ -20,23 +20,22 @@ function dur(seconds: number | null): string {
 
 export function ConnectionsTable({ instance }: { instance: Instance }) {
   const [rows, setRows] = useState<ActiveConnection[] | null>(null);
-  const [unavailable, setUnavailable] = useState(false);
+  const [failed, setFailed] = useState(false);
 
+  // Endpoint live: só faz sentido com a instância RUNNING. O estado "parada" é
+  // derivado no render (não em effect); o effect só dispara o fetch.
   useEffect(() => {
-    // Endpoint live: só faz sentido com a instância RUNNING.
-    if (instance.status !== "running") {
-      setRows([]);
-      setUnavailable(true);
-      return;
-    }
+    if (instance.status !== "running") return;
     let active = true;
     getConnections(instance.id)
       .then((r) => active && setRows(r.connections))
-      .catch(() => active && setUnavailable(true));
+      .catch(() => active && setFailed(true));
     return () => {
       active = false;
     };
   }, [instance.id, instance.status]);
+
+  const unavailable = instance.status !== "running" || failed;
 
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-surface">

@@ -17,25 +17,24 @@ export function SchemaBrowser({
   onPickTable: (table: string) => void;
 }) {
   const [groups, setGroups] = useState<SchemaGroup[] | null>(null);
-  const [unavailable, setUnavailable] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [open, setOpen] = useState<Set<string>>(new Set(["public"]));
 
+  // A página remonta este componente via `key={instance.id}` ao trocar de
+  // instância, então o estado já zera sozinho — o effect só dispara o fetch e o
+  // "parada" é derivado no render.
   useEffect(() => {
-    if (instance.status !== "running") {
-      setGroups([]);
-      setUnavailable(true);
-      return;
-    }
+    if (instance.status !== "running") return;
     let active = true;
-    setGroups(null);
-    setUnavailable(false);
     getSchema(instance.id)
       .then((r) => active && setGroups(r.schemas))
-      .catch(() => active && setUnavailable(true));
+      .catch(() => active && setFailed(true));
     return () => {
       active = false;
     };
   }, [instance.id, instance.status]);
+
+  const unavailable = instance.status !== "running" || failed;
 
   function toggle(name: string) {
     setOpen((cur) => {

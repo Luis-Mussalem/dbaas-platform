@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 
 const PUBLIC_ROUTES = ["/login"];
 
-export function middleware(request: NextRequest) {
+// Next.js 16 renomeou a convenção `middleware` para `proxy` (mesmo runtime/edge,
+// mesmo `config.matcher`); a função exportada passa a se chamar `proxy`.
+export function proxy(request: NextRequest) {
   const token = request.cookies.get("auth_token")?.value;
   const { pathname } = request.nextUrl;
   const isPublic = PUBLIC_ROUTES.includes(pathname);

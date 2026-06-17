@@ -1,6 +1,6 @@
 "use client";
 
-import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent, useMemo, useRef, useState } from "react";
 import { Loader2, Play, Workflow } from "lucide-react";
 import { useInstances } from "@/hooks/use-instances";
 import { runQuery, explainQuery } from "@/lib/api";
@@ -41,6 +41,9 @@ export default function SqlPage() {
     [instances]
   );
 
+  // `selectedId` guarda a escolha EXPLÍCITA do usuário no seletor; pode ficar
+  // inválida (instância parou/saiu da lista). A seleção efetiva é derivada no
+  // render — sem effect — caindo para a primeira RUNNING quando a escolha não vale.
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [result, setResult] = useState<QueryResult | null>(null);
@@ -51,47 +54,41 @@ export default function SqlPage() {
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  const effectiveId =
+    selectedId && runningInstances.some((i) => i.id === selectedId)
+      ? selectedId
+      : runningInstances[0]?.id ?? null;
+
   const selectedInstance = useMemo(
-    () => instances.find((i) => i.id === selectedId) ?? null,
-    [instances, selectedId]
+    () => instances.find((i) => i.id === effectiveId) ?? null,
+    [instances, effectiveId]
   );
 
-  // Mantém uma seleção válida: escolhe a primeira RUNNING quando a atual sai da lista.
-  useEffect(() => {
-    if (runningInstances.length === 0) {
-      setSelectedId(null);
-      return;
-    }
-    setSelectedId((cur) =>
-      cur && runningInstances.some((i) => i.id === cur) ? cur : runningInstances[0].id
-    );
-  }, [runningInstances]);
-
-  // Ao trocar de instância: carrega o histórico dela e zera a saída.
-  useEffect(() => {
-    if (!selectedId) {
-      setHistory([]);
-      return;
-    }
-    setHistory(loadHistory(selectedId));
+  // Reset ao trocar de instância efetiva: carrega o histórico dela e zera a saída.
+  // Padrão "ajustar estado durante o render" (react.dev) em vez de um effect —
+  // evita flash e o set-state-in-effect. `undefined` força o load no 1º render.
+  const [prevId, setPrevId] = useState<string | null | undefined>(undefined);
+  if (prevId !== effectiveId) {
+    setPrevId(effectiveId);
+    setHistory(effectiveId ? loadHistory(effectiveId) : []);
     setResult(null);
     setPlan(null);
     setError(null);
-  }, [selectedId]);
+  }
 
   function rememberQuery(raw: string) {
-    if (!selectedId) return;
+    if (!effectiveId) return;
     const trimmed = raw.trim();
     setHistory((prev) => {
       const next = [trimmed, ...prev.filter((q) => q !== trimmed)].slice(0, HISTORY_LIMIT);
-      saveHistory(selectedId, next);
+      saveHistory(effectiveId, next);
       return next;
     });
   }
 
   function clearHistory() {
-    if (!selectedId) return;
-    saveHistory(selectedId, []);
+    if (!effectiveId) return;
+    saveHistory(effectiveId, []);
     setHistory([]);
   }
 
@@ -101,12 +98,12 @@ export default function SqlPage() {
   }
 
   async function run() {
-    if (!selectedId || !query.trim() || running) return;
+    if (!effectiveId || !query.trim() || running) return;
     setRunning(true);
     setError(null);
     setPlan(null);
     try {
-      const r = await runQuery(selectedId, query.trim());
+      const r = await runQuery(effectiveId, query.trim());
       setResult(r);
       rememberQuery(query);
     } catch (e) {
@@ -118,12 +115,12 @@ export default function SqlPage() {
   }
 
   async function explain() {
-    if (!selectedId || !query.trim() || running) return;
+    if (!effectiveId || !query.trim() || running) return;
     setRunning(true);
     setError(null);
     setResult(null);
     try {
-      const r = await explainQuery(selectedId, query.trim());
+      const r = await explainQuery(effectiveId, query.trim());
       setPlan(r.plan);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Falha ao gerar o plano");
@@ -144,7 +141,7 @@ export default function SqlPage() {
   if (isLoading) return <p className="text-sm text-fg-3">Carregando…</p>;
   if (instancesError) return <p className="text-sm text-danger">{instancesError}</p>;
 
-  const canSubmit = !!selectedId && !!query.trim() && !running;
+  const canSubmit = !!effectiveId && !!query.trim() && !running;
 
   return (
     <div className="flex flex-col gap-4">
@@ -158,7 +155,7 @@ export default function SqlPage() {
         </div>
         {runningInstances.length > 0 && (
           <select
-            value={selectedId ?? ""}
+            value={effectiveId ?? ""}
             onChange={(e) => setSelectedId(e.target.value)}
             className="h-9 rounded-md border border-border bg-surface px-3 text-sm text-foreground outline-none"
           >
@@ -181,7 +178,11 @@ export default function SqlPage() {
           {/* Navegador de tabelas (clicável → insere no editor) */}
           <aside className="order-2 lg:order-1">
             {selectedInstance && (
-              <SchemaBrowser instance={selectedInstance} onPickTable={insertTable} />
+              <SchemaBrowser
+                key={selectedInstance.id}
+                instance={selectedInstance}
+                onPickTable={insertTable}
+              />
             )}
           </aside>
 

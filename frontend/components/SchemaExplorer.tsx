@@ -8,24 +8,23 @@ import { formatNumber } from "@/lib/format";
 
 export function SchemaExplorer({ instance }: { instance: Instance }) {
   const [groups, setGroups] = useState<SchemaGroup[] | null>(null);
-  const [unavailable, setUnavailable] = useState(false);
+  const [failed, setFailed] = useState(false);
   // Quais schemas estão expandidos (Set de nomes). public começa aberto.
   const [open, setOpen] = useState<Set<string>>(new Set(["public"]));
 
+  // O estado "parada" é derivado no render; o effect só dispara o fetch.
   useEffect(() => {
-    if (instance.status !== "running") {
-      setGroups([]);
-      setUnavailable(true);
-      return;
-    }
+    if (instance.status !== "running") return;
     let active = true;
     getSchema(instance.id)
       .then((r) => active && setGroups(r.schemas))
-      .catch(() => active && setUnavailable(true));
+      .catch(() => active && setFailed(true));
     return () => {
       active = false;
     };
   }, [instance.id, instance.status]);
+
+  const unavailable = instance.status !== "running" || failed;
 
   function toggle(name: string) {
     setOpen((cur) => {

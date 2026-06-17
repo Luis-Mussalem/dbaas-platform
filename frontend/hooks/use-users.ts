@@ -29,6 +29,10 @@ export function useUsers(companyId?: string): UseUsersResult {
 
   useEffect(() => {
     activeRef.current = true;
+    // Reset síncrono para "carregando" antes do refetch (troca de companyId /
+    // reload). É intencional e abort-guarded; set-state-in-effect é conservadora
+    // demais para este caso legítimo de data-fetching.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsLoading(true);
     setError(null);
 

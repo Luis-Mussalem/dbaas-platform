@@ -35,6 +35,9 @@ export function useAudit(filters: AuditFilters): UseAuditResult {
   // — um objeto novo é criado pelo componente toda vez.
   useEffect(() => {
     let active = true;
+    // Reset síncrono para "carregando" antes do refetch (mudança de filtro).
+    // Intencional e abort-guarded; set-state-in-effect é conservadora demais aqui.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsLoading(true);
     getAuditLogs({
       limit: PAGE_SIZE,
