@@ -379,11 +379,18 @@ Replication lag monitored. Replica can be promoted to primary via API.
 | Admin dashboard | aggregates scoped by company; `InstanceRead.company_id` exposed |
 | Tests | `backend/tests/test_company_scoping.py` — cross-company isolation (list, 404, superuser bypass, derived backups, global alert events) |
 
+**Stage B — Active-company context — DONE `[x]`**:
+
+| Deliverable | Description |
+|-------------|-------------|
+| `X-Company-Id` header | `visible_company_id()` in `backend/src/core/scoping.py` reads the header; `get_instance_or_404` and list endpoints honour it; superuser with no header sees all |
+| WorkspaceSwitcher wired | `frontend/lib/api.ts` injects `X-Company-Id` on every request from `localStorage`; `frontend/components/WorkspaceSwitcher.tsx` writes the value on selection |
+| Tests extended | `backend/tests/test_company_scoping.py` — cross-company isolation with and without header, superuser bypass, derived-resource scoping |
+
 **Remaining — TODO `[ ]`**:
 
 | Deliverable | Description |
 |-------------|-------------|
-| Active-company context (Stage B) | The superuser's selected company (today only in `localStorage`) actually filters the data shown — e.g. an `X-Company-Id` header wired to the `WorkspaceSwitcher` |
 | Employee management | Create/list users within a company; assign `user.company_id`; superuser-only company management screens |
 | RBAC | Roles beyond `is_superuser` (e.g., company admin vs. member) |
 | Audit scoping | Audit log filtered/segmented per company (deferred — system events have `NULL user_id`; see TODO in `services/admin.py`) |
@@ -440,7 +447,7 @@ databases; the superuser can switch companies and the data follows the selection
 
 ---
 
-## FRONTEND F3 — Metrics & Observability `[~]`
+## FRONTEND F3 — Metrics & Observability `[x]`
 
 > Real-time visibility into each managed database.
 
@@ -453,10 +460,13 @@ databases; the superuser can switch companies and the data follows the selection
 
 **Completion criterion:** Metrics rendered with automatic updates.
 
-> **Status (parcial `[~]`):** slow queries e locks já renderizados na UI. Os
-> **gráficos (cache hit ratio, conexões) seguem stub** — dependem de um endpoint
-> de métricas-como-série no backend (mesmo bloqueio citado em F7 para as tabs
-> Metrics/Logs). `recharts` já está instalado; falta só a fonte de dados.
+> **Status:** slow queries e locks renderizados; gráficos de série temporal (cache
+> hit ratio, conexões) implementados com `recharts` via `MetricsTab` +
+> `useMetricHistory` — consomem `GET /instances/{id}/metrics/history` (`3f3aa54`).
+> Seletor de janela (15m/1h/6h/24h) funcionando. Gráfico de latência é demo
+> sintético claramente rotulado como "demonstração" (backend não coleta latência
+> por query). Tab Logs ainda é placeholder — depende de endpoint de log por
+> instância não construído.
 
 ---
 
@@ -518,8 +528,9 @@ Complete navigation between platform sections functional.
 > The frontend sequence continues without it: after the instance-detail tabs
 > (Overview / Backups / Maintenance / Alerts — all done), the next built screen
 > is **Audit Log** (`/audit`, reuses existing `getAuditLogs()`, no backend work).
-> Note: `Metrics` and `Logs` instance tabs also remain placeholders — they depend
-> on backend not yet built (time-series metrics endpoint / per-instance log stream).
+> Note: the `Metrics` instance tab is now complete — `GET /instances/{id}/metrics/history`
+> exists (`3f3aa54`) and the tab is wired (F3 `[x]`). The `Logs` tab remains a
+> placeholder pending a per-instance log stream endpoint.
 
 | Deliverable | Description |
 |-------------|-------------|

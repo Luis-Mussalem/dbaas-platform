@@ -13,11 +13,11 @@ The platform manages multiple client PostgreSQL databases and is evolving toward
 **multi-tenancy**: many companies, each with its own employees. A regular user sees
 only their own company; the admin superuser sees and switches between all.
 
-- **Multi-tenant status** — PHASE 11 Stage A (per-company resource scoping) is complete:
-  instances and their derived resources (via the `get_instance_or_404` choke-point) and
-  the admin dashboard are filtered by `company_id`; the superuser bypasses the filter.
-  Remaining: superuser active-company (Stage B), employee management, RBAC, audit scoping.
-- **Progress** — backend phases 0–8 complete; frontend F0–F6 (F3 partial, F7 deferred).
+- **Multi-tenant status** — PHASE 11 Stages A and B complete: instances and their
+  derived resources are filtered by `company_id`; the superuser's active company is
+  selected via the `WorkspaceSwitcher` and propagated as an `X-Company-Id` header.
+  Remaining: employee management, RBAC, audit scoping.
+- **Progress** — backend phases 0–8 complete; frontend F0–F6 complete (F7 deferred).
   Full phase detail and dependency map in [ROADMAP.md](ROADMAP.md).
 
 ## Architecture
