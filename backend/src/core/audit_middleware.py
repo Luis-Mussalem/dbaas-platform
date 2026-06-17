@@ -60,6 +60,36 @@ def _extract_user_id(request: Request) -> Optional[uuid.UUID]:
         return None
 
 
+def _resolve_company_id(
+    db,
+    user_id: Optional[uuid.UUID],
+    active_company_header: Optional[str],
+) -> Optional[uuid.UUID]:
+    """
+    Resolve o company_id a ser gravado no audit log.
+
+    Espelha a semântica de visible_company_id (core/scoping.py):
+    - usuário comum → sua company_id;
+    - superuser → UUID do header X-Company-Id (None se ausente/inválido);
+    - usuário desconhecido (login/register, user_id=None) → None.
+    NULL-company fica visível só ao superuser-sem-header, sem vazar entre tenants.
+    """
+    if user_id is None:
+        return None
+    from src.models.user import User
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None:
+        return None
+    if user.is_superuser:
+        if not active_company_header:
+            return None
+        try:
+            return uuid.UUID(active_company_header)
+        except ValueError:
+            return None
+    return user.company_id
+
+
 def _write_log(
     action: str,
     resource_type: str,
@@ -67,6 +97,7 @@ def _write_log(
     user_id: Optional[uuid.UUID],
     ip_address: Optional[str],
     details: dict,
+    active_company_header: Optional[str] = None,
 ) -> None:
     """
     Grava uma entrada no audit log com sessão própria.
@@ -83,8 +114,10 @@ def _write_log(
 
     db = SessionLocal()
     try:
+        company_id = _resolve_company_id(db, user_id, active_company_header)
         db.add(AuditLog(
             user_id=user_id,
+            company_id=company_id,
             action=action,
             resource_type=resource_type,
             resource_id=resource_id,
@@ -132,10 +165,14 @@ class AuditMiddleware(BaseHTTPMiddleware):
 
             resource_id = match.group(id_group) if id_group else None
             user_id = _extract_user_id(request)
+            active_company_header = request.headers.get("X-Company-Id")
             ip_address = request.client.host if request.client else None
             details = {"method": method, "path": path, "status": response.status_code}
 
-            _write_log(action, resource_type, resource_id, user_id, ip_address, details)
+            _write_log(
+                action, resource_type, resource_id,
+                user_id, ip_address, details, active_company_header,
+            )
             break
 
         return response

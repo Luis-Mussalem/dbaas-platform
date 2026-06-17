@@ -19,11 +19,13 @@ def write_audit_log(
     resource_type: str,
     resource_id: str | None = None,
     user_id: uuid.UUID | None = None,
+    company_id: uuid.UUID | None = None,
     details: dict | None = None,
     ip_address: str | None = None,
 ) -> None:
     entry = AuditLog(
         user_id=user_id,
+        company_id=company_id,
         action=action,
         resource_type=resource_type,
         resource_id=resource_id,
@@ -109,12 +111,11 @@ def list_audit_logs(
     action: str | None = None,
     resource_type: str | None = None,
     user_id: uuid.UUID | None = None,
+    company_id: uuid.UUID | None = None,
 ) -> list[AuditLog]:
-    # TODO(PHASE 11 — Audit scoping): ainda NÃO escopado por empresa. Escopar aqui
-    # é não-trivial: eventos de sistema (login/register) têm user_id NULL e o
-    # resource_id aponta para tipos variados (instance/backup/auth). Fica como item
-    # próprio do RBAC/Audit scoping, separado do scoping de instâncias da Stage A.
     query = db.query(AuditLog)
+    if company_id is not None:
+        query = query.filter(AuditLog.company_id == company_id)
     if action:
         query = query.filter(AuditLog.action == action)
     if resource_type:

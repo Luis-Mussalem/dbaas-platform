@@ -8,6 +8,7 @@ from pydantic import BaseModel
 class AuditLogRead(BaseModel):
     id: uuid.UUID
     user_id: uuid.UUID | None
+    company_id: uuid.UUID | None
     action: str
     resource_type: str
     resource_id: str | None

@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Index, String, func
+from sqlalchemy import DateTime, ForeignKey, Index, String, func
 from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -42,6 +42,12 @@ class AuditLog(Base):
     resource_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     details: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     ip_address: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    company_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("companies.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -51,4 +57,5 @@ class AuditLog(Base):
 
     __table_args__ = (
         Index("ix_audit_logs_user_timestamp", "user_id", "timestamp"),
+        Index("ix_audit_logs_company_timestamp", "company_id", "timestamp"),
     )
