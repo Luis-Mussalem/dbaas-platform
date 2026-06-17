@@ -16,8 +16,8 @@ The project simulates real-world DBaaS concepts commonly found in modern platfor
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)
 
 [![CI](https://github.com/Luis-Mussalem/dbaas-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/Luis-Mussalem/dbaas-platform/actions/workflows/ci.yml)
-![Tests](https://img.shields.io/badge/tests-227%20passing-brightgreen?style=flat-square)
-![Coverage](https://img.shields.io/badge/coverage-83%25-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-237%20passing-brightgreen?style=flat-square)
+![Coverage](https://img.shields.io/badge/coverage-84%25-brightgreen?style=flat-square)
 ![Ruff](https://img.shields.io/badge/lint-ruff-blue?style=flat-square)
 
 ![JWT Authentication](https://img.shields.io/badge/Auth-JWT-black?style=flat-square)
@@ -384,7 +384,7 @@ This mirrors backup strategies used in real PostgreSQL production environments.
 Quality is enforced automatically on every push and pull request.
 
 ## Automated Test Suite
-- **227 tests** with **83% backend coverage** (`pytest` + `pytest-cov`)
+- **237 tests** with **84% backend coverage** (`pytest` + `pytest-cov`)
 - Isolated PostgreSQL test database — never touches development data
 - External dependencies are faked, not invoked: Docker SDK, `subprocess`
   (`pg_dump` / `pg_restore` / `pg_basebackup`) and live `psycopg` connections
@@ -572,10 +572,10 @@ docker build -t dbaas-backend backend/
 - Alerting & notifications system
 - Administration panel & audit log
 - Multi-tenancy (companies, per-company scoping, employee management, company-admin RBAC, audit scoping)
-- Automated testing (227 tests, 83% coverage)
+- Automated testing (237 tests, 84% coverage)
 - Continuous integration & multi-stage Docker image
 
-## Frontend — Mostly Complete
+## Frontend — Complete
 
 | Feature | Status |
 |---|---|
@@ -588,7 +588,7 @@ docker build -t dbaas-backend backend/
 | Maintenance & alerts interface | ✅ Complete |
 | Consolidated dashboard + audit log | ✅ Complete |
 | Time-series metric charts (cache hit ratio, connections) | ✅ Complete |
-| SQL console | ⏸️ Deferred (full-stack milestone) |
+| SQL console (read-only SELECT, schema browser, EXPLAIN, history) | ✅ Complete |
 
 ## Planned Future Phases
 

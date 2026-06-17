@@ -535,35 +535,39 @@ Complete navigation between platform sections functional.
 
 ---
 
-## FRONTEND F7 — SQL Console `[ ]` ⏸️ DEFERRED
+## FRONTEND F7 — SQL Console `[x]`
 
-> **Status: postponed (decided 2026-06-03).** This is the only remaining frontend
-> step that requires **new backend code**, so it was pulled out of the current
-> frontend-only sequence to keep momentum. It returns later as a dedicated
-> end-to-end block (backend endpoint + UI together) — a strong portfolio piece
-> precisely because it is full-stack in a single feature.
->
-> The frontend sequence continues without it: after the instance-detail tabs
-> (Overview / Backups / Maintenance / Alerts — all done), the next built screen
-> is **Audit Log** (`/audit`, reuses existing `getAuditLogs()`, no backend work).
-> Note: the `Metrics` instance tab is now complete — `GET /instances/{id}/metrics/history`
-> exists (`3f3aa54`) and the tab is wired (F3 `[x]`). The `Logs` tab remains a
-> placeholder pending a per-instance log stream endpoint.
+> Delivered as a self-contained full-stack milestone (deferred 2026-06-03,
+> shipped 2026-06-17). It was the only frontend screen needing new backend code,
+> so it was pulled out of the frontend-only streak and built end-to-end in one block.
 
 | Deliverable | Description |
 |-------------|-------------|
-| Backend `POST /instances/{id}/query` | Read-only SQL execution against the instance database. **Reuse the existing SELECT-only guard** from `collect_explain` ([backend/src/collectors/pg_stats.py](backend/src/collectors/pg_stats.py)): block `;`, require `startswith select`, blacklist DML/DDL, size cap — extract it into a shared helper and force a `LIMIT`. Layer: router → service → `get_connection()` ([backend/src/services/metrics.py](backend/src/services/metrics.py)) |
-| SQL Console screen | `/sql` — instance picker, query editor, results table, error panel |
-| Safety | Server rejects non-SELECT / `;` / DML / DDL with `422`; client surfaces the error |
+| Backend `POST /instances/{id}/query` | Read-only SQL execution against the instance database. The SELECT-only guard was extracted from `collect_explain` into a shared helper ([backend/src/core/sql_guard.py](backend/src/core/sql_guard.py) — `assert_read_only_select`) and reused; the query runs through a dedicated module (router → `services/query.py` → `get_connection()`), which inherits Fernet decryption + `statement_timeout=30s`. Row volume is capped via `fetchmany(1000)` (not by rewriting the SQL); cells are stringified for safe JSON. |
+| SQL Console screen | `/sql` — running-instance picker, query editor (Ctrl/Cmd+Enter), results table, error panel |
+| Schema browser | Clickable table tree (reuses `GET /instances/{id}/schema`); clicking a table inserts its name into the editor |
+| EXPLAIN | "Plano" button reuses `POST /instances/{id}/explain` to show the query plan |
+| Query history | Last 15 queries per instance, persisted in `localStorage` |
+| Safety | Guard rejects non-SELECT / `;` / DML / DDL with `422`; Postgres execution errors return `400`; both surfaced in the UI. Multi-tenant scoping (`404`) and the RUNNING check (`409`) are inherited from `get_instance_if_running`. |
 
 **Completion criterion:** A valid `SELECT` returns rows in the UI; `;`, DML, DDL and
-non-SELECT queries are rejected with `422`. The `/sql` placeholder route is wired to
-the real feature.
+non-SELECT queries are rejected with `422`; Postgres errors return `400`. The `/sql`
+placeholder route is wired to the real feature. ✅ Met.
 
-**Why deferred (record):** every other frontend screen reuses an existing typed API
-in `lib/api.ts`; the SQL Console alone needs a brand-new endpoint. Building it now
-would interleave backend work into a frontend streak, so it is scheduled as a
-self-contained full-stack milestone instead.
+**Implemented deliverables:**
+- `core/sql_guard.py` (`assert_read_only_select`) extracted from `collect_explain`;
+  `pg_stats.py` re-exports `_EXPLAIN_MAX_LEN` so the existing guard tests stay green
+- Dedicated `services/query.py` + `routers/query.py` → `POST /api/v1/instances/{id}/query`
+- `schemas/query.py` — `QueryRequest` / `QueryResult` (columns + rows as lists, `truncated` flag)
+- Frontend: `runQuery` / `explainQuery` in `lib/api.ts`; `QueryResult` / `ExplainResponse`
+  types; components `sql/SchemaBrowser`, `sql/ResultsTable`, `sql/QueryHistory`; the `/sql`
+  page; sidebar "Em breve" badge removed
+- 10 tests in `backend/tests/test_query.py` (422 / 200 / truncation / 400 / 404 / 409)
+
+**Why it was deferred (record):** every other frontend screen reuses an existing typed
+API in `lib/api.ts`; the SQL Console alone needed a brand-new endpoint. Building it
+mid-streak would interleave backend work into a frontend sequence, so it was scheduled
+as a self-contained full-stack milestone — and delivered as one.
 
 ---
 
@@ -591,7 +595,7 @@ PHASE 0 (Foundation)
                                                                             └─→ F4 (Backups UI)
                                                                                   └─→ F5 (Maintenance & Alerts UI)
                                                                                         └─→ F6 (Consolidated Dashboard)
-                                                                                              └─→ F7 (SQL Console) ⏸️ DEFERRED — needs new backend endpoint
+                                                                                              └─→ F7 (SQL Console) — full-stack milestone (own backend endpoint)
 ```
 
 ## Public / Private Split

@@ -18,7 +18,7 @@ only their own company; the admin superuser sees and switches between all.
   the `WorkspaceSwitcher` and propagated as an `X-Company-Id` header; employee management,
   company-admin RBAC (`is_superuser` × `admin`/`member`), and per-company audit scoping
   are all in place.
-- **Progress** — backend phases 0–8 complete; frontend F0–F6 complete (F7 deferred).
+- **Progress** — backend phases 0–8 complete; frontend F0–F7 complete (SQL Console shipped).
   Full phase detail and dependency map in [ROADMAP.md](ROADMAP.md).
 
 ## Architecture
