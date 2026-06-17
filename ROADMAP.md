@@ -387,11 +387,18 @@ Replication lag monitored. Replica can be promoted to primary via API.
 | WorkspaceSwitcher wired | `frontend/lib/api.ts` injects `X-Company-Id` on every request from `localStorage`; `frontend/components/WorkspaceSwitcher.tsx` writes the value on selection |
 | Tests extended | `backend/tests/test_company_scoping.py` — cross-company isolation with and without header, superuser bypass, derived-resource scoping |
 
+**Stage C — Employee Management — DONE `[x]`**:
+
+| Deliverable | Description |
+|-------------|-------------|
+| Employee management (backend) | `UserCreate`/`UserRead`/`UserUpdate` admin schemas; `EmployeeService` with CRUD; superuser-only endpoints (`POST /users`, `GET /users`, `PATCH /users/{id}`, `DELETE /users/{id}`) scoped by `company_id` |
+| Employee management (frontend) | Admin screen at `/admin/employees` — list, create, edit and deactivate users within a company; superuser-only access guard |
+| Tests | 16 tests covering employee CRUD, company scoping isolation, and superuser bypass |
+
 **Remaining — TODO `[ ]`**:
 
 | Deliverable | Description |
 |-------------|-------------|
-| Employee management | Create/list users within a company; assign `user.company_id`; superuser-only company management screens |
 | RBAC | Roles beyond `is_superuser` (e.g., company admin vs. member) |
 | Audit scoping | Audit log filtered/segmented per company (deferred — system events have `NULL user_id`; see TODO in `services/admin.py`) |
 
