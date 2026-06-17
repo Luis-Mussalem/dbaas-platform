@@ -13,6 +13,8 @@ import type {
   SlowQueriesResponse,
   ActiveConnectionsResponse,
   SchemaResponse,
+  QueryResult,
+  ExplainResponse,
   LocksResponse,
   MaintenanceTask,
   MaintenanceSchedule,
@@ -358,6 +360,32 @@ export async function getSchema(instanceId: string): Promise<SchemaResponse> {
 
 export async function getLocks(instanceId: string): Promise<LocksResponse> {
   return request<LocksResponse>(`/instances/${instanceId}/locks`);
+}
+
+// ─── SQL Console ────────────────────────────────────────────────────────────
+
+// Executa um SELECT read-only. O backend rejeita `;`, DML e DDL com 422 e
+// erros do Postgres (tabela inexistente, sintaxe) com 400 — ambos chegam aqui
+// como Error com a mensagem já extraída por extractErrorMessage.
+export async function runQuery(
+  instanceId: string,
+  query: string
+): Promise<QueryResult> {
+  return request<QueryResult>(`/instances/${instanceId}/query`, {
+    method: "POST",
+    body: JSON.stringify({ query }), // campo "query" espelha o schema QueryRequest
+  });
+}
+
+// Plano de execução do mesmo SELECT (reusa o endpoint /explain já existente).
+export async function explainQuery(
+  instanceId: string,
+  query: string
+): Promise<ExplainResponse> {
+  return request<ExplainResponse>(`/instances/${instanceId}/explain`, {
+    method: "POST",
+    body: JSON.stringify({ query }),
+  });
 }
 
 // ─── Maintenance ─────────────────────────────────────────────────────────────

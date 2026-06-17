@@ -24,7 +24,7 @@ type NavItem = { href: string; label: string; icon: LucideIcon; badge?: string }
 const WORKSPACE_NAV: NavItem[] = [
   { href: "/", label: "Painel", icon: LayoutDashboard },
   { href: "/instances", label: "Instâncias", icon: Database },
-  { href: "/sql", label: "Console SQL", icon: Terminal, badge: "Em breve" },
+  { href: "/sql", label: "Console SQL", icon: Terminal },
 ];
 
 const ACCOUNT_NAV: NavItem[] = [

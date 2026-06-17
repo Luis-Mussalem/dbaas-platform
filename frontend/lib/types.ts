@@ -242,6 +242,26 @@ export interface LocksResponse {
   has_blocked_queries: boolean;
 }
 
+// ─── SQL Console ───────────────────────────────────────────────────────────────
+
+// Resultado de um SELECT read-only (POST /instances/{id}/query).
+// As células chegam como string | null: o backend converte todo valor para texto
+// (None preservado) para evitar arapucas de serialização — um console exibe texto.
+export interface QueryResult {
+  instance_id: string;
+  columns: string[];
+  rows: (string | null)[][];
+  row_count: number;
+  truncated: boolean;
+}
+
+// Plano de execução (POST /instances/{id}/explain). `plan` é o JSON cru do
+// EXPLAIN (FORMAT JSON); exibimos formatado, sem tipá-lo nó a nó.
+export interface ExplainResponse {
+  instance_id: string;
+  plan: unknown[];
+}
+
 // ─── Maintenance ─────────────────────────────────────────────────────────────
 
 export interface MaintenanceTask {
