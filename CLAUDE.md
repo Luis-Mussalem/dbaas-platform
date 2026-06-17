@@ -87,6 +87,3 @@ npm run build
 - Before `git add`, review the staged diff: `git diff --staged`.
 
 ---
-
-<!-- Local working notes (workflow, learning context, working agreements) — gitignored. -->
-@CLAUDE_dev.md
