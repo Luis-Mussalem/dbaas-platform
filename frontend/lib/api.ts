@@ -25,6 +25,8 @@ import type {
   AlertCondition,
   AlertSeverity,
   AlertMetricType,
+  UserAdminCreate,
+  UserAdminUpdate,
 } from "@/lib/types";
 
 const API_BASE =
@@ -475,6 +477,33 @@ export async function resolveAlertEvent(eventId: string): Promise<AlertEvent> {
   return request<AlertEvent>(`/alerts/events/${eventId}/resolve`, {
     method: "POST",
   });
+}
+
+// ─── Users (admin) ────────────────────────────────────────────────────────────
+
+// Usa o query param company_id explícito — independente do WorkspaceSwitcher,
+// pois o admin quer controlar o filtro da tabela manualmente.
+export async function listUsers(companyId?: string): Promise<User[]> {
+  const qs = companyId ? `?company_id=${companyId}` : "";
+  return request<User[]>(`/users${qs}`);
+}
+
+export async function createUserAdmin(data: UserAdminCreate): Promise<User> {
+  return request<User>("/users", { method: "POST", body: JSON.stringify(data) });
+}
+
+export async function updateUserAdmin(
+  userId: string,
+  data: UserAdminUpdate
+): Promise<User> {
+  return request<User>(`/users/${userId}/admin`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deactivateUser(userId: string): Promise<User> {
+  return updateUserAdmin(userId, { is_active: false });
 }
 
 // ─── Admin ────────────────────────────────────────────────────────────────────

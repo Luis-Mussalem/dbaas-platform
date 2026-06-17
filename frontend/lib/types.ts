@@ -64,9 +64,24 @@ export interface User {
   email: string;
   is_active: boolean;
   is_superuser: boolean;
+  company_id: string | null;
   company: Company | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface UserAdminCreate {
+  email: string;
+  password: string;
+  company_id?: string;
+  is_superuser?: boolean;
+}
+
+export interface UserAdminUpdate {
+  email?: string;
+  is_active?: boolean;
+  is_superuser?: boolean;
+  company_id?: string | null;
 }
 
 // ─── Database Instance ────────────────────────────────────────────────────────

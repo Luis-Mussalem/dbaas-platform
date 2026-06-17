@@ -16,11 +16,13 @@ const TITLES: Record<string, string> = {
   "/audit": "Logs & Auditoria",
   "/settings": "Configurações",
   "/help": "Ajuda",
+  "/admin/users": "Funcionários",
 };
 
 // Deriva o breadcrumb da URL (no protótipo isso vinha do estado `route`).
 function useCrumbs(pathname: string): string[] {
   if (pathname.startsWith("/instances/")) return ["Instâncias", "Detalhe"];
+  if (pathname.startsWith("/admin/")) return ["Administração", TITLES[pathname] ?? pathname];
   return [TITLES[pathname] ?? "Painel"];
 }
 
