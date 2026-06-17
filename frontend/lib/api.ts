@@ -40,6 +40,14 @@ function getRefreshToken(): string | null {
   return localStorage.getItem("refresh_token");
 }
 
+// Empresa-ativa do superuser (Stage B). Gravada pelo WorkspaceSwitcher em
+// "active_company_id"; enviada no header X-Company-Id para o backend filtrar.
+// Ausente = superuser vê todas; para usuário comum o backend ignora o header.
+function getActiveCompany(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("active_company_id");
+}
+
 // Grava o par de tokens em localStorage E no cookie auth_token.
 // O cookie é o que o middleware.ts (server-side) lê para proteger as rotas;
 // o localStorage é o que este cliente lê para montar o header Authorization.
@@ -134,11 +142,14 @@ async function request<T>(
   const isAuthEndpoint =
     path.startsWith("/auth/login") || path.startsWith("/auth/refresh");
 
+  const activeCompany = getActiveCompany();
+
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(activeCompany ? { "X-Company-Id": activeCompany } : {}),
       ...options.headers,
     },
   });

@@ -6,9 +6,9 @@ import { useAuth } from "@/context/AuthContext";
 import { listCompanies } from "@/lib/api";
 import type { Company } from "@/lib/types";
 
-// Chave usada para lembrar qual empresa o superuser deixou selecionada.
-// (Por enquanto a seleção é só de exibição — quando os recursos passarem a ser
-// escopados por empresa, é este id que vai filtrar instâncias, backups, etc.)
+// Chave que lembra qual empresa o superuser deixou ativa. O api.ts envia este id
+// no header X-Company-Id e o backend filtra os dados por ela (Stage B). Ausente
+// (chave removida) = "Todas as empresas" → o superuser vê tudo.
 const ACTIVE_KEY = "active_company_id";
 
 // O Workspace muda conforme o PAPEL do usuário (espelha o get_current_superuser
@@ -54,10 +54,10 @@ function SuperuserSwitcher() {
       .then((data) => {
         if (!active) return;
         setCompanies(data);
-        // Restaura a seleção salva; se inválida/ausente, cai na primeira empresa.
+        // Restaura a seleção salva; se inválida/ausente, default = "Todas" (null).
         const saved = localStorage.getItem(ACTIVE_KEY);
         const valid = data.find((c) => c.id === saved);
-        setActiveId(valid?.id ?? data[0]?.id ?? null);
+        setActiveId(valid?.id ?? null);
       })
       .catch(() => {
         if (active) setCompanies([]);
@@ -67,15 +67,18 @@ function SuperuserSwitcher() {
     };
   }, []);
 
-  function select(id: string) {
-    setActiveId(id);
-    localStorage.setItem(ACTIVE_KEY, id);
+  function select(id: string | null) {
+    // null = "Todas as empresas" → remove a chave (sem header → backend mostra tudo).
+    if (id === null) localStorage.removeItem(ACTIVE_KEY);
+    else localStorage.setItem(ACTIVE_KEY, id);
     setOpen(false);
+    // Recarrega para que todas as telas/hooks re-busquem com o novo X-Company-Id.
+    window.location.reload();
   }
 
-  const activeName =
-    companies.find((c) => c.id === activeId)?.name ??
-    (companies.length === 0 ? "Sem empresas" : "Selecionar empresa");
+  const activeName = activeId
+    ? companies.find((c) => c.id === activeId)?.name ?? "Selecionar empresa"
+    : "Todas as empresas";
 
   return (
     <div className="relative mb-3.5">
@@ -96,6 +99,16 @@ function SuperuserSwitcher() {
           {/* Camada invisível: um clique fora fecha o dropdown. */}
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
           <ul className="absolute left-0 right-0 z-20 mt-1 max-h-64 overflow-auto rounded-md border border-border bg-surface py-1 shadow-lg">
+            {/* Visão global: sem filtro de empresa (vê todas). */}
+            <li>
+              <button
+                onClick={() => select(null)}
+                className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[13px] text-fg-2 transition-colors hover:bg-surface-2 hover:text-foreground"
+              >
+                <span className="flex-1 truncate">Todas as empresas</span>
+                {activeId === null && <Check size={13} className="shrink-0 text-brand" />}
+              </button>
+            </li>
             {companies.map((c) => (
               <li key={c.id}>
                 <button
