@@ -90,7 +90,7 @@ export function Sidebar() {
             <NavLink key={item.href} item={withBadge} active={isActive(pathname, item.href)} />
           );
         })}
-        {user?.is_superuser && (
+        {(user?.is_superuser || user?.role === "admin") && (
           <>
             <NavSection label="Administração" />
             {ADMIN_NAV.map((item) => (

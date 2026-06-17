@@ -25,9 +25,9 @@ export default function AdminUsersPage() {
   const [filterCompanyId, setFilterCompanyId] = useState("");
   const [filterStatus, setFilterStatus] = useState<"all" | "active" | "inactive">("all");
 
-  // Superuser guard — redireciona usuário comum antes de qualquer render visível.
+  // Admin guard — redireciona usuário comum (não admin) antes de qualquer render visível.
   useEffect(() => {
-    if (me && !me.is_superuser) router.replace("/");
+    if (me && !me.is_superuser && me.role !== "admin") router.replace("/");
   }, [me, router]);
 
   useEffect(() => {
@@ -38,7 +38,10 @@ export default function AdminUsersPage() {
     filterCompanyId || undefined
   );
 
-  if (!me || !me.is_superuser) return null;
+  // Retorna null (sem renderização) se não autenticado ou não admin
+  if (!me || (me.is_superuser !== true && me.role !== "admin")) return null;
+
+  const isSuperuser = me.is_superuser === true;
 
   const visible = users.filter((u) => {
     if (filterStatus === "active") return u.is_active;
@@ -64,6 +67,16 @@ export default function AdminUsersPage() {
     }
   }
 
+  async function handleToggleRole(userId: string, currentRole: string) {
+    try {
+      const newRole = currentRole === "admin" ? "member" : "admin";
+      await update(userId, { role: newRole });
+      toast.success("Role updated");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Action failed");
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
       {/* header */}
@@ -77,25 +90,27 @@ export default function AdminUsersPage() {
             </p>
           </div>
         </div>
-        <CreateUserDialog companies={companies} onCreate={create} />
+        <CreateUserDialog companies={companies} onCreate={create} isSuperuser={isSuperuser} />
       </div>
 
       <div className="overflow-hidden rounded-xl border border-border bg-surface">
         {/* filter bar */}
         <div className="flex flex-wrap items-end gap-3 border-b border-border px-4 py-3">
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] uppercase tracking-wide text-fg-3">Company</span>
-            <select
-              value={filterCompanyId}
-              onChange={(e) => setFilterCompanyId(e.target.value)}
-              className={INPUT}
-            >
-              <option value="">All companies</option>
-              {companies.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          </label>
+          {isSuperuser && (
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] uppercase tracking-wide text-fg-3">Company</span>
+              <select
+                value={filterCompanyId}
+                onChange={(e) => setFilterCompanyId(e.target.value)}
+                className={INPUT}
+              >
+                <option value="">All companies</option>
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </label>
+          )}
           <label className="flex flex-col gap-1">
             <span className="text-[11px] uppercase tracking-wide text-fg-3">Status</span>
             <select
@@ -136,16 +151,27 @@ export default function AdminUsersPage() {
                     {u.company?.name ?? <span className="text-fg-3 italic">—</span>}
                   </td>
                   <td className="px-4 py-2">
-                    <span
-                      className={cn(
-                        "inline-flex items-center rounded-full border px-2 py-0.5 text-[11.5px] font-medium",
-                        u.is_superuser
-                          ? "border-info/25 bg-info/10 text-info"
-                          : "border-border bg-surface-2 text-fg-2"
-                      )}
-                    >
-                      {u.is_superuser ? "Superuser" : "Employee"}
-                    </span>
+                    {u.is_superuser ? (
+                      <span
+                        className={cn(
+                          "inline-flex items-center rounded-full border px-2 py-0.5 text-[11.5px] font-medium",
+                          "border-info/25 bg-info/10 text-info"
+                        )}
+                      >
+                        Superuser
+                      </span>
+                    ) : (
+                      <span
+                        className={cn(
+                          "inline-flex items-center rounded-full border px-2 py-0.5 text-[11.5px] font-medium",
+                          u.role === "admin"
+                            ? "border-warning/25 bg-warning/10 text-warning"
+                            : "border-border bg-surface-2 text-fg-2"
+                        )}
+                      >
+                        {u.role === "admin" ? "Admin" : "Member"}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-2">
                     <span
@@ -169,14 +195,26 @@ export default function AdminUsersPage() {
                       >
                         {u.is_active ? "Deactivate" : "Reactivate"}
                       </button>
-                      <button
-                        className={BTN_SM}
-                        disabled={u.id === me.id}
-                        title={u.id === me.id ? "Cannot modify your own account here" : undefined}
-                        onClick={() => handleToggleSuperuser(u.id, u.is_superuser)}
-                      >
-                        {u.is_superuser ? "Demote" : "Make admin"}
-                      </button>
+                      {isSuperuser && (
+                        <button
+                          className={BTN_SM}
+                          disabled={u.id === me.id}
+                          title={u.id === me.id ? "Cannot modify your own account here" : undefined}
+                          onClick={() => handleToggleSuperuser(u.id, u.is_superuser)}
+                        >
+                          {u.is_superuser ? "Demote" : "Make superuser"}
+                        </button>
+                      )}
+                      {!u.is_superuser && (
+                        <button
+                          className={BTN_SM}
+                          disabled={u.id === me.id}
+                          title={u.id === me.id ? "Cannot modify your own account here" : undefined}
+                          onClick={() => handleToggleRole(u.id, u.role)}
+                        >
+                          {u.role === "admin" ? "Make member" : "Make admin"}
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
