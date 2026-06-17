@@ -33,6 +33,8 @@ backend/alembic/versions/__pycache__/
 
 # Agent instructions (private — replaced by public CLAUDE.md)
 AGENTS.md
+CLAUDE_dev.md
+dev_doc/
 
 # Study guide
 guide.md

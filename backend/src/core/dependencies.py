@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
@@ -15,7 +15,27 @@ from src.services.auth import is_token_blacklisted
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
+def _read_active_company(request: Request, user: User) -> uuid.UUID | None:
+    """
+    Empresa-ativa do superuser, lida do header X-Company-Id (Stage B).
+
+    Só o superuser pode "vestir" uma empresa; para o usuário comum o header é
+    ignorado (ele fica preso à própria empresa). Header ausente/ inválido = None
+    (superuser vê todas).
+    """
+    if not user.is_superuser:
+        return None
+    raw = request.headers.get("X-Company-Id")
+    if not raw:
+        return None
+    try:
+        return uuid.UUID(raw)
+    except ValueError:
+        return None
+
+
 def get_current_user(
+    request: Request,
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db),
 ) -> User:
@@ -52,6 +72,9 @@ def get_current_user(
     if user is None or not user.is_active:
         raise credentials_exception
 
+    # Stage B: anexa a empresa-ativa (atributo transiente, não é coluna do User).
+    # O scoping (core/scoping.py) lê isto para filtrar os dados do superuser.
+    user.active_company_id = _read_active_company(request, user)
     return user
 
 

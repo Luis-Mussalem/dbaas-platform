@@ -19,13 +19,14 @@ from src.models.user import User
 
 def visible_company_id(user: User) -> Optional[uuid.UUID]:
     """
-    company_id que o usuário pode enxergar, ou None para "sem restrição".
+    company_id que o usuário pode enxergar, ou None para "sem restrição" (todas).
 
-    Útil para escopar consultas que partem de recursos derivados (ex.: eventos
-    de alerta), onde aplicamos o filtro via JOIN à instância dona.
+    - usuário comum → a própria empresa;
+    - superuser → a empresa-ativa escolhida (Stage B, via header X-Company-Id);
+      None = nenhuma escolhida = vê todas.
     """
     if user.is_superuser:
-        return None
+        return getattr(user, "active_company_id", None)
     return user.company_id
 
 
@@ -33,10 +34,11 @@ def scope_instance_query(query, user: User):
     """
     Aplica o filtro de empresa a uma query cujo FROM é DatabaseInstance.
 
-    superuser: query inalterada. Usuário comum: filtra por company_id.
-    SQLAlchemy traduz `== None` em `IS NULL`, então um usuário comum sem empresa
-    (caso de borda) só enxerga instâncias órfãs; após o seed todo comum tem empresa.
+    Superuser sem empresa-ativa: query inalterada (vê todas). Caso contrário,
+    filtra por company_id. SQLAlchemy traduz `== None` em `IS NULL`, então um
+    usuário comum sem empresa (borda) só enxerga instâncias órfãs.
     """
-    if user.is_superuser:
+    company_id = visible_company_id(user)
+    if user.is_superuser and company_id is None:
         return query
-    return query.filter(DatabaseInstance.company_id == user.company_id)
+    return query.filter(DatabaseInstance.company_id == company_id)

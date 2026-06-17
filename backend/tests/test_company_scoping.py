@@ -169,3 +169,34 @@ def test_global_alert_events_scoped_by_company(
     headers_su, _ = auth_headers(email="root@example.com", is_superuser=True)
     resp_su = client.get("/api/v1/alerts/events", headers=headers_su)
     assert {"event-a1", "event-b1"} <= {e["message"] for e in resp_su.json()}
+
+
+# --------------------------------------------------------------------------- #
+# Stage B — empresa-ativa do superuser (header X-Company-Id)
+# --------------------------------------------------------------------------- #
+
+
+def test_superuser_active_company_header_filters(client, auth_headers, make_company, db):
+    company_a = make_company(name="Company A")
+    company_b = make_company(name="Company B")
+    _seed_instance(db, company_a.id, name="a1")
+    _seed_instance(db, company_b.id, name="b1")
+    headers, _ = auth_headers(email="root@example.com", is_superuser=True)
+
+    # Com a empresa B ativa, o superuser enxerga só as instâncias de B.
+    resp = client.get(API, headers={**headers, "X-Company-Id": str(company_b.id)})
+    assert resp.status_code == 200
+    assert {i["name"] for i in resp.json()} == {"b1"}
+
+
+def test_regular_user_ignores_company_header(client, auth_headers, make_company, db):
+    company_a = make_company(name="Company A")
+    company_b = make_company(name="Company B")
+    _seed_instance(db, company_a.id, name="a1")
+    _seed_instance(db, company_b.id, name="b1")
+    headers, _ = auth_headers(email="a@example.com", company_id=company_a.id)
+
+    # Usuário comum tenta forjar a empresa B no header — deve ser ignorado.
+    resp = client.get(API, headers={**headers, "X-Company-Id": str(company_b.id)})
+    assert resp.status_code == 200
+    assert {i["name"] for i in resp.json()} == {"a1"}
