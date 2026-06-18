@@ -32,9 +32,14 @@ class FakeContainer:
         self.started = False
         self.stopped = False
         self.removed = False
+        self.restart_policy = None
 
     def reload(self):
         pass
+
+    def update(self, **kwargs):
+        if "restart_policy" in kwargs:
+            self.restart_policy = kwargs["restart_policy"]
 
     def start(self):
         self.started = True
@@ -148,6 +153,8 @@ def test_create_returns_provision_result(monkeypatch):
     # Limites de recurso propagados ao docker run.
     assert containers.run_kwargs["mem_limit"] == "512m"
     assert containers.run_kwargs["nano_cpus"] == 2_000_000_000
+    # Política de restart aplicada para sobreviver a restart do Docker/host.
+    assert containers.run_kwargs["restart_policy"] == {"Name": "unless-stopped"}
 
 
 def test_create_without_port_cleans_up_and_raises(monkeypatch):
@@ -178,6 +185,14 @@ def test_start_returns_published_port(monkeypatch):
     port = prov.start(uuid.uuid4())
     assert port == 60000
     assert container.started is True
+
+
+def test_start_upgrades_restart_policy_on_existing_container(monkeypatch):
+    # Containers criados antes da política recebem o upgrade ao religar.
+    container = FakeContainer(ports={"5432/tcp": [{"HostPort": "60000"}]})
+    prov = _provisioner(_Containers(get_result=container), monkeypatch)
+    prov.start(uuid.uuid4())
+    assert container.restart_policy == {"Name": "unless-stopped"}
 
 
 def test_start_missing_container_raises(monkeypatch):
@@ -243,3 +258,27 @@ def test_get_status_unexpected_error(monkeypatch):
         _Containers(get_exc=RuntimeError("docker daemon down")), monkeypatch
     )
     assert prov.get_status(uuid.uuid4()) == ProvisionerStatus.ERROR
+
+
+# --------------------------------------------------------------------------- #
+# get_port
+# --------------------------------------------------------------------------- #
+
+
+def test_get_port_returns_published_port_when_running(monkeypatch):
+    container = FakeContainer(status="running", ports={"5432/tcp": [{"HostPort": "60001"}]})
+    prov = _provisioner(_Containers(get_result=container), monkeypatch)
+    assert prov.get_port(uuid.uuid4()) == 60001
+
+
+def test_get_port_returns_none_when_stopped(monkeypatch):
+    container = FakeContainer(status="exited")
+    prov = _provisioner(_Containers(get_result=container), monkeypatch)
+    assert prov.get_port(uuid.uuid4()) is None
+
+
+def test_get_port_returns_none_when_not_found(monkeypatch):
+    prov = _provisioner(
+        _Containers(get_exc=docker.errors.NotFound("missing")), monkeypatch
+    )
+    assert prov.get_port(uuid.uuid4()) is None

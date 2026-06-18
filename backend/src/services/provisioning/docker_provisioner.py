@@ -26,6 +26,13 @@ _READY_TIMEOUT_SECONDS = 90
 # Intervalo entre tentativas de conexão no polling de readiness
 _READY_POLL_INTERVAL = 2.0
 
+# Política de restart dos containers de instância. "unless-stopped" faz o Docker
+# religar o container automaticamente quando o daemon/host reinicia (ex: reboot,
+# wsl --shutdown, update do Docker) — sem isto, as instâncias ficam paradas após
+# qualquer restart do Docker e o operador precisa religar manualmente.
+# "unless-stopped" (e não "always") respeita um stop intencional do operador.
+_RESTART_POLICY = {"Name": "unless-stopped"}
+
 
 # ---------------------------------------------------------------------------
 # Helpers de SQL seguro
@@ -313,6 +320,7 @@ class DockerProvisioner(ProvisionerBase):
             "network": _NETWORK_NAME,
             "detach": True,
             "remove": False,  # Manter container após stop (necessário para restart)
+            "restart_policy": _RESTART_POLICY,  # Sobreviver a restart do Docker/host
             "command": [
                 "-c", "shared_preload_libraries=pg_stat_statements",
                 "-c", "wal_level=replica",
@@ -394,6 +402,10 @@ class DockerProvisioner(ProvisionerBase):
         container_name = self._container_name(instance_id)
         try:
             container = self._client.containers.get(container_name)
+            # Garantir a política de restart também em containers já existentes
+            # (criados antes desta política). Idempotente — no-op se já estiver
+            # definida. Aplicar aqui faz o upgrade acontecer no primeiro start.
+            container.update(restart_policy=_RESTART_POLICY)
             container.start()
         except docker.errors.NotFound as exc:
             raise RuntimeError(f"Container {container_name} não encontrado") from exc
@@ -460,3 +472,27 @@ class DockerProvisioner(ProvisionerBase):
             return ProvisionerStatus.NOT_FOUND
         except Exception:
             return ProvisionerStatus.ERROR
+
+    def get_port(self, instance_id: uuid.UUID) -> Optional[int]:
+        """
+        Retornar a porta atualmente publicada por um container em execução.
+
+        Usado pelo status_poller para detectar quando o Docker republicou uma
+        porta diferente (acontece ao religar o container após restart do host) e
+        ressincronizar a connection_uri. Retorna None se o container não existe,
+        não está rodando, ou ainda não tem porta publicada — sem lançar exceção.
+        """
+        container_name = self._container_name(instance_id)
+        try:
+            container = self._client.containers.get(container_name)
+            container.reload()
+            if container.status != "running":
+                return None
+            port_bindings = container.ports.get("5432/tcp")
+            if not port_bindings:
+                return None
+            return int(port_bindings[0]["HostPort"])
+        except docker.errors.NotFound:
+            return None
+        except Exception:
+            return None

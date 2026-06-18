@@ -66,3 +66,13 @@ class ProvisionerBase(ABC):
     def get_status(self, instance_id: uuid.UUID) -> ProvisionerStatus:
         """Retornar o status atual de infra do container sem lançar exceção."""
         ...
+
+    @abstractmethod
+    def get_port(self, instance_id: uuid.UUID) -> int | None:
+        """
+        Retornar a porta publicada de um container em execução, ou None.
+
+        O serviço usa isto para ressincronizar a connection_uri quando o Docker
+        republica uma porta diferente após religar o container. Não lança exceção.
+        """
+        ...

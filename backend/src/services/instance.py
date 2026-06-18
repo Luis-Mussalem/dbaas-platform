@@ -28,9 +28,12 @@ VALID_TRANSITIONS: dict[InstanceStatus, list[InstanceStatus]] = {
 }
 
 
-def _sync_connection_port(instance: DatabaseInstance, new_port: int) -> None:
+def sync_connection_port(instance: DatabaseInstance, new_port: int) -> None:
     """
     Ressincronizar a porta e a connection_uri cifrada após um restart.
+
+    Usada tanto pelo transition_status (start manual) quanto pelo status_poller
+    (reconciliação automática após restart do Docker).
 
     Portas publicadas dinamicamente pelo Docker NÃO são preservadas entre
     stop/start — cada start pode receber uma porta nova. Sem isto, a
@@ -225,7 +228,7 @@ async def transition_status(
             ) from exc
         # O Docker pode publicar uma porta diferente a cada start — ressincroniza
         # a porta e a connection_uri para métricas/backups continuarem válidos.
-        _sync_connection_port(instance, new_port)
+        sync_connection_port(instance, new_port)
 
     instance.status = new_status
     db.commit()

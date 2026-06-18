@@ -18,7 +18,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from src.core.encryption import encrypt_value
+from src.core.encryption import decrypt_value, encrypt_value
 from src.models.backup import BackupSchedule, BackupStrategy
 from src.models.database_instance import DatabaseInstance, InstanceStatus
 from src.models.maintenance import MaintenanceSchedule, TaskType
@@ -42,11 +42,30 @@ def running_instance(db):
 
 
 class _FakeProvisioner:
-    def __init__(self, status: ProvisionerStatus):
+    def __init__(
+        self,
+        status: ProvisionerStatus,
+        port: int | None = None,
+        start_port: int | None = None,
+        start_error: bool = False,
+    ):
         self._status = status
+        self._port = port
+        self._start_port = start_port
+        self._start_error = start_error
+        self.started = False
 
     def get_status(self, instance_id):
         return self._status
+
+    def get_port(self, instance_id):
+        return self._port
+
+    def start(self, instance_id):
+        self.started = True
+        if self._start_error:
+            raise RuntimeError("falha simulada no start")
+        return self._start_port
 
 
 # --------------------------------------------------------------------------- #
@@ -76,6 +95,81 @@ def test_poll_once_keeps_running_when_container_running(db, running_instance, mo
     db.expire_all()
     refreshed = db.get(DatabaseInstance, running_instance.id)
     assert refreshed.status == InstanceStatus.RUNNING
+
+
+def test_poll_once_resyncs_port_when_container_republished(db, running_instance, monkeypatch):
+    # Container vivo numa porta nova (Docker religou após restart do host) →
+    # o poller ressincroniza a porta e a connection_uri.
+    monkeypatch.setattr(
+        status_poller, "get_provisioner",
+        lambda: _FakeProvisioner(ProvisionerStatus.RUNNING, port=62000),
+    )
+    status_poller.poll_once()
+
+    db.expire_all()
+    refreshed = db.get(DatabaseInstance, running_instance.id)
+    assert refreshed.status == InstanceStatus.RUNNING
+    assert refreshed.port == 62000
+    assert "62000" in decrypt_value(refreshed.connection_uri)
+
+
+def test_poll_once_recovers_failed_when_container_restartable(db, monkeypatch):
+    # Instância FAILED cujo container parado pode ser religado → auto-recuperação.
+    # (Este é o caso de um restart do Docker que derrubou as instâncias.)
+    inst = DatabaseInstance(
+        name="failed-db",
+        status=InstanceStatus.FAILED,
+        port=5433,
+        connection_uri=encrypt_value("postgresql://u:p@127.0.0.1:5433/appdb"),
+    )
+    db.add(inst)
+    db.commit()
+    db.refresh(inst)
+
+    fake = _FakeProvisioner(ProvisionerStatus.STOPPED, start_port=63000)
+    monkeypatch.setattr(status_poller, "get_provisioner", lambda: fake)
+    status_poller.poll_once()
+
+    db.expire_all()
+    refreshed = db.get(DatabaseInstance, inst.id)
+    assert fake.started is True
+    assert refreshed.status == InstanceStatus.RUNNING
+    assert refreshed.port == 63000
+    assert "63000" in decrypt_value(refreshed.connection_uri)
+
+
+def test_poll_once_keeps_failed_when_container_gone(db, monkeypatch):
+    # Instância FAILED sem container (NOT_FOUND) → nada a recuperar, permanece FAILED.
+    inst = DatabaseInstance(
+        name="gone-db",
+        status=InstanceStatus.FAILED,
+        connection_uri=encrypt_value("postgresql://u:p@127.0.0.1:5433/appdb"),
+    )
+    db.add(inst)
+    db.commit()
+    db.refresh(inst)
+
+    monkeypatch.setattr(
+        status_poller, "get_provisioner",
+        lambda: _FakeProvisioner(ProvisionerStatus.NOT_FOUND),
+    )
+    status_poller.poll_once()
+
+    db.expire_all()
+    refreshed = db.get(DatabaseInstance, inst.id)
+    assert refreshed.status == InstanceStatus.FAILED
+
+
+def test_poll_once_marks_failed_when_restart_fails(db, running_instance, monkeypatch):
+    # Container parado mas o religamento falha → instância marcada FAILED.
+    fake = _FakeProvisioner(ProvisionerStatus.STOPPED, start_error=True)
+    monkeypatch.setattr(status_poller, "get_provisioner", lambda: fake)
+    status_poller.poll_once()
+
+    db.expire_all()
+    refreshed = db.get(DatabaseInstance, running_instance.id)
+    assert fake.started is True
+    assert refreshed.status == InstanceStatus.FAILED
 
 
 # --------------------------------------------------------------------------- #
