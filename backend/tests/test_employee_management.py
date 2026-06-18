@@ -5,8 +5,6 @@ Cobre os endpoints superuser-gated de criação, listagem, atualização e
 desativação de usuários. Usuários comuns devem receber 403 em todas as rotas
 administrativas.
 """
-import pytest
-
 API = "/api/v1/users"
 STRONG_PASSWORD = "ValidPass123!"
 WEAK_PASSWORD = "weak"
@@ -326,7 +324,7 @@ def test_superuser_cannot_demote_self(client, auth_headers):
 
 
 def test_cannot_deactivate_last_superuser(client, auth_headers, make_company):
-    company = make_company()
+    make_company()
     # O fixture auth_headers já cria um superuser (su@example.com)
     su_headers, su = auth_headers(email="su@example.com", is_superuser=True)
 

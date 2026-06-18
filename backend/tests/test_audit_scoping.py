@@ -8,8 +8,6 @@ Garantem que o audit log é multi-tenant seguro:
 - superuser com X-Company-Id vê apenas aquela empresa;
 - write_audit_log stampa corretamente o company_id.
 """
-import uuid
-
 from src.models.audit_log import AuditLog
 from src.models.user import UserRole
 from src.services import admin as admin_service
