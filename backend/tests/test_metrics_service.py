@@ -89,6 +89,25 @@ def test_collect_and_store_no_data_returns_zero(db, instance, monkeypatch):
     assert db.query(Metric).count() == 0
 
 
+def test_collect_and_store_persists_p95_when_available(db, instance, monkeypatch):
+    @contextmanager
+    def fake_conn(inst):
+        yield object()
+
+    monkeypatch.setattr(metrics_service, "get_connection", fake_conn)
+    monkeypatch.setattr(
+        metrics_service, "collect_base_metrics",
+        lambda conn: {"connections_active": 1.0},
+    )
+    # Instância com pg_stat_statements → p95 disponível vira uma métrica extra.
+    monkeypatch.setattr(metrics_service, "collect_p95_latency", lambda conn: 12.5)
+
+    count = metrics_service.collect_and_store(db, instance)
+    assert count == 2
+    stored = {m.metric_name: m.value for m in db.query(Metric).all()}
+    assert stored == {"connections_active": 1.0, "p95_query_latency_ms": 12.5}
+
+
 # --------------------------------------------------------------------------- #
 # check_health
 # --------------------------------------------------------------------------- #

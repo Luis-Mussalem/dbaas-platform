@@ -2,10 +2,12 @@ import uuid
 from typing import Optional
 
 from fastapi import HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from src.core.scoping import assert_can_manage_target
 from src.core.security import hash_password
+from src.models.audit_log import AuditLog
 from src.models.user import User, UserRole
 from src.schemas.user import UserAdminCreate, UserAdminUpdate
 from src.services.auth import get_user_by_email, get_user_by_id
@@ -62,7 +64,22 @@ def list_users(
         q = q.filter(User.company_id == acting_user.company_id)
     elif company_id is not None:
         q = q.filter(User.company_id == company_id)
-    return q.order_by(User.email).all()
+    users = q.order_by(User.email).all()
+
+    # "Última atividade" = MAX(timestamp) por usuário em audit_logs. Uma query
+    # agregada só para os user_ids já escopados (sem N+1, sem tocar audit_logs de
+    # outra empresa). Setado como atributo transiente lido por UserListItem.
+    user_ids = [u.id for u in users]
+    if user_ids:
+        last_seen = dict(
+            db.query(AuditLog.user_id, func.max(AuditLog.timestamp))
+            .filter(AuditLog.user_id.in_(user_ids))
+            .group_by(AuditLog.user_id)
+            .all()
+        )
+        for u in users:
+            u.last_activity = last_seen.get(u.id)
+    return users
 
 
 def create_user_admin(db: Session, data: UserAdminCreate, acting_user: User) -> User:

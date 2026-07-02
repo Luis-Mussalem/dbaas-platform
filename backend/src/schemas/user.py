@@ -56,6 +56,14 @@ class UserRead(UserBase):
     updated_at: datetime
 
 
+class UserListItem(UserRead):
+    # Só o endpoint de listagem (admin) popula last_activity — daí ser um schema
+    # dedicado, para não vazar um campo sempre-nulo em /auth/me, register, etc.
+    # Valor derivado do MAX(timestamp) em audit_logs (atributo transiente na
+    # instância ORM), não uma coluna da tabela users.
+    last_activity: Optional[datetime] = None
+
+
 class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
     password: Optional[str] = None

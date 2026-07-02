@@ -71,6 +71,8 @@ export interface User {
   company: Company | null;
   created_at: string;
   updated_at: string;
+  // Populado só pela listagem admin (GET /users) — MAX(timestamp) em audit_logs.
+  last_activity?: string | null;
 }
 
 export interface UserAdminCreate {
@@ -331,4 +333,9 @@ export interface DashboardSummary {
   backups_last_24h: number;
   failed_backups_last_24h: number;
   pending_maintenance_tasks: number;
+  // KPIs de performance da frota (derivados de dados reais; p95/uptime podem ser
+  // null enquanto ainda não há amostras — a UI exibe "—").
+  queries_per_second: number;
+  p95_latency_ms: number | null;
+  fleet_uptime_pct: number | null;
 }

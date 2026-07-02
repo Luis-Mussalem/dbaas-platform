@@ -5,6 +5,9 @@ Travam o fix de segurança: um usuário só pode ler/alterar o PRÓPRIO registro
 o superuser pode ler qualquer um. Sem isso, qualquer usuário autenticado
 acessaria os dados de outro pelo UUID (IDOR).
 """
+from datetime import datetime, timedelta, timezone
+
+from src.models.audit_log import AuditLog
 from tests.conftest import TEST_PASSWORD
 
 API = "/api/v1/users"
@@ -42,6 +45,37 @@ def test_get_user_requires_auth(client, make_user):
     user = make_user(email="noauth@example.com")
     resp = client.get(f"{API}/{user.id}")
     assert resp.status_code == 401
+
+
+# --------------------------------------------------------------------------- #
+# GET /users — last_activity (agregado de audit_logs)
+# --------------------------------------------------------------------------- #
+
+
+def test_list_users_includes_last_activity(client, auth_headers, make_user, db):
+    headers, _ = auth_headers(email="su@example.com", is_superuser=True)
+    active = make_user(email="active@example.com")
+    make_user(email="quiet@example.com")  # sem entradas de auditoria
+
+    ts = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
+    db.add_all([
+        AuditLog(
+            user_id=active.id, action="login", resource_type="auth",
+            timestamp=ts - timedelta(days=1),
+        ),
+        AuditLog(
+            user_id=active.id, action="instance_created", resource_type="instance",
+            timestamp=ts,  # atividade mais recente
+        ),
+    ])
+    db.commit()
+
+    resp = client.get(API, headers=headers)
+    assert resp.status_code == 200
+    by_email = {u["email"]: u for u in resp.json()}
+    # MAX(timestamp) por usuário; usuário sem auditoria → None.
+    assert by_email["active@example.com"]["last_activity"].startswith("2026-06-01T12:00")
+    assert by_email["quiet@example.com"]["last_activity"] is None
 
 
 # --------------------------------------------------------------------------- #

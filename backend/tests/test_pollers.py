@@ -21,6 +21,7 @@ import pytest
 from src.core.encryption import decrypt_value, encrypt_value
 from src.models.backup import BackupSchedule, BackupStrategy
 from src.models.database_instance import DatabaseInstance, InstanceStatus
+from src.models.instance_status_history import InstanceStatusHistory
 from src.models.maintenance import MaintenanceSchedule, TaskType
 from src.models.metric import Metric
 from src.services import alert_evaluator, backup_scheduler, maintenance_scheduler, metrics_poller
@@ -83,6 +84,13 @@ def test_poll_once_marks_running_as_failed_when_container_gone(db, running_insta
     db.expire_all()
     refreshed = db.get(DatabaseInstance, running_instance.id)
     assert refreshed.status == InstanceStatus.FAILED
+    # A transição RUNNING→FAILED foi registrada no histórico.
+    hist = (
+        db.query(InstanceStatusHistory)
+        .filter_by(instance_id=running_instance.id)
+        .all()
+    )
+    assert [h.status for h in hist] == [InstanceStatus.FAILED]
 
 
 def test_poll_once_keeps_running_when_container_running(db, running_instance, monkeypatch):
@@ -95,6 +103,12 @@ def test_poll_once_keeps_running_when_container_running(db, running_instance, mo
     db.expire_all()
     refreshed = db.get(DatabaseInstance, running_instance.id)
     assert refreshed.status == InstanceStatus.RUNNING
+    # Poll sem mudança de status NÃO deve gravar histórico (evita flood).
+    assert (
+        db.query(InstanceStatusHistory)
+        .filter_by(instance_id=running_instance.id)
+        .count()
+    ) == 0
 
 
 def test_poll_once_resyncs_port_when_container_republished(db, running_instance, monkeypatch):

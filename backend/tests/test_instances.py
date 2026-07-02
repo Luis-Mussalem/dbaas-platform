@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 import pytest
 
 from src.models.database_instance import DatabaseInstance, InstanceStatus
+from src.models.instance_status_history import InstanceStatusHistory
 from src.services.provisioning.types import ProvisionResult
 
 API = "/api/v1/instances"
@@ -112,6 +113,27 @@ def test_create_instance_succeeds(client, auth_headers, fake_provisioner):
     assert "connection_uri" not in body
     assert "fake-plaintext-password" not in resp.text
     assert fake_provisioner.created  # o provisioner foi de fato chamado
+
+
+def test_create_instance_records_status_history(client, auth_headers, fake_provisioner, db):
+    headers, _ = auth_headers()
+    resp = client.post(API, headers=headers, json={"name": "hist-db", "engine_version": "16"})
+    assert resp.status_code == 201
+
+    inst = db.query(DatabaseInstance).filter_by(name="hist-db").first()
+    statuses = [
+        h.status
+        for h in db.query(InstanceStatusHistory)
+        .filter_by(instance_id=inst.id)
+        .order_by(InstanceStatusHistory.changed_at.asc())
+        .all()
+    ]
+    # Criação bem-sucedida percorre PENDING (semente) → PROVISIONING → RUNNING.
+    assert statuses == [
+        InstanceStatus.PENDING,
+        InstanceStatus.PROVISIONING,
+        InstanceStatus.RUNNING,
+    ]
 
 
 def test_create_instance_requires_auth(client):

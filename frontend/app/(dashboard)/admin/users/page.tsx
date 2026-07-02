@@ -7,8 +7,11 @@ import { useAuth } from "@/context/AuthContext";
 import { useUsers } from "@/hooks/use-users";
 import { listCompanies } from "@/lib/api";
 import { CreateUserDialog } from "@/components/CreateUserDialog";
+import { StatCard } from "@/components/StatCard";
+import { CapabilityLegend } from "@/components/CapabilityLegend";
 import { useToast } from "@/context/ToastProvider";
 import { cn } from "@/lib/utils";
+import { timeAgo } from "@/lib/format";
 import type { Company } from "@/lib/types";
 
 const INPUT =
@@ -49,6 +52,14 @@ export default function AdminUsersPage() {
     return true;
   });
 
+  // Métricas-resumo (client-side, sobre a lista já carregada).
+  const adminCount = users.filter((u) => u.is_superuser || u.role === "admin").length;
+  const lastActivityIso = users
+    .map((u) => u.last_activity)
+    .filter((d): d is string => !!d)
+    .sort()
+    .at(-1);
+
   async function handleToggleActive(userId: string, currentlyActive: boolean) {
     try {
       await update(userId, { is_active: !currentlyActive });
@@ -84,14 +95,32 @@ export default function AdminUsersPage() {
         <div className="flex items-center gap-2">
           <Users size={20} className="text-fg-2" />
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Employees</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">Funcionários</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Manage platform users and their company assignments.
+              Gerencie os usuários da plataforma e suas empresas.
             </p>
           </div>
         </div>
         <CreateUserDialog companies={companies} onCreate={create} isSuperuser={isSuperuser} />
       </div>
+
+      {/* métricas-resumo: total, donos/admins, atividade mais recente */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <StatCard label="Total de usuários" value={users.length} sub="na visão atual" />
+        <StatCard
+          label="Donos / Admins"
+          value={adminCount}
+          sub="superuser ou admin de empresa"
+          accent="ok"
+        />
+        <StatCard
+          label="Última atividade"
+          value={lastActivityIso ? timeAgo(lastActivityIso) : "—"}
+          sub="atividade mais recente na lista"
+        />
+      </div>
+
+      <CapabilityLegend />
 
       <div className="overflow-hidden rounded-xl border border-border bg-surface">
         {/* filter bar */}

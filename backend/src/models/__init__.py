@@ -1,6 +1,7 @@
 from src.models.company import Company
 from src.models.user import User
 from src.models.database_instance import DatabaseInstance
+from src.models.instance_status_history import InstanceStatusHistory
 from src.models.token_blacklist import TokenBlacklist
 from src.models.metric import Metric
 from src.models.backup import Backup, BackupSchedule
@@ -12,6 +13,7 @@ __all__ = [
     "Company",
     "User",
     "DatabaseInstance",
+    "InstanceStatusHistory",
     "TokenBlacklist",
     "Metric",
     "Backup",

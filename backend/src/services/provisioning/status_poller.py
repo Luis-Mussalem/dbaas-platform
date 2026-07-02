@@ -8,6 +8,7 @@ from src.models.database_instance import DatabaseInstance, InstanceStatus
 from src.services.auth import cleanup_expired_tokens
 from src.services.instance import sync_connection_port
 from src.services.provisioning.base import ProvisionerBase
+from src.services.status_history import record_status_change
 from src.services.provisioning.factory import get_provisioner
 from src.services.provisioning.types import ProvisionerStatus
 
@@ -51,7 +52,7 @@ def _reconcile_instance(
             logger.info(
                 "Instância %s recuperada: container voltou a rodar", instance.id
             )
-            instance.status = InstanceStatus.RUNNING
+            record_status_change(db, instance, InstanceStatus.RUNNING)
             changed = True
         if changed:
             db.commit()
@@ -65,11 +66,14 @@ def _reconcile_instance(
         except Exception as exc:
             logger.error("Falha ao religar instância %s: %s", instance.id, exc)
             if instance.status != InstanceStatus.FAILED:
-                instance.status = InstanceStatus.FAILED
+                record_status_change(db, instance, InstanceStatus.FAILED)
                 db.commit()
             return
         sync_connection_port(instance, new_port)
-        instance.status = InstanceStatus.RUNNING
+        # DB pode já estar RUNNING (container caíra sem o banco saber); só
+        # registra a transição se o status realmente mudou (evita linha redundante).
+        if instance.status != InstanceStatus.RUNNING:
+            record_status_change(db, instance, InstanceStatus.RUNNING)
         db.commit()
         logger.info("Instância %s religada com sucesso (porta %d)", instance.id, new_port)
 
@@ -81,7 +85,7 @@ def _reconcile_instance(
                 instance.id,
                 infra_status.value,
             )
-            instance.status = InstanceStatus.FAILED
+            record_status_change(db, instance, InstanceStatus.FAILED)
             db.commit()
 
 

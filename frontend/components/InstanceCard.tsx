@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { Database } from "lucide-react";
 import type { Instance } from "@/lib/types";
 import { useMetrics } from "@/hooks/use-metrics";
 import { useMetricHistory } from "@/hooks/use-metric-history";
 import { formatBytes } from "@/lib/format";
+import { instanceGradient, instanceInitials } from "@/lib/identity-color";
 import { HealthBadge } from "@/components/StatusBadge";
 import { EnvBadge } from "@/components/EnvBadge";
 import { RegionTag } from "@/components/RegionTag";
@@ -47,8 +47,12 @@ export function InstanceCard({ instance }: { instance: Instance }) {
       {/* topo: ícone + nome + região  ·  saúde */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-linear-to-br from-primary to-info text-primary-foreground">
-            <Database size={16} />
+          {/* avatar com cor de identidade por instância (hash do id) + iniciais */}
+          <div
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] text-[11px] font-bold text-white"
+            style={{ backgroundImage: instanceGradient(instance.id) }}
+          >
+            {instanceInitials(instance.name)}
           </div>
           <div className="min-w-0">
             <div className="truncate text-[14.5px] font-semibold text-foreground">

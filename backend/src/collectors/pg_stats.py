@@ -58,6 +58,31 @@ def collect_base_metrics(conn: psycopg.Connection) -> dict[str, float]:
         return {k: float(v) if v is not None else 0.0 for k, v in row.items()}
 
 
+def collect_p95_latency(conn: psycopg.Connection) -> float | None:
+    """
+    P95 do tempo médio de execução (ms) entre as queries monitoradas.
+
+    Aproximação honesta: percentil sobre o mean_exec_time por *fingerprint* de
+    query — o pg_stat_statements agrega por query normalizada e não guarda
+    amostras por execução individual. Requer a extensão instalada; instâncias
+    sem ela retornam None (mesmo degrade gracioso de collect_slow_queries),
+    caso em que a métrica simplesmente não é persistida naquele ciclo.
+    """
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT percentile_cont(0.95) WITHIN GROUP (ORDER BY mean_exec_time) "
+                "FROM pg_stat_statements"
+            )
+            row = cur.fetchone()
+            if row and row[0] is not None:
+                return round(float(row[0]), 2)
+            return None
+    except Exception as exc:
+        logger.warning("p95 latency não disponível nesta instância: %s", exc)
+        return None
+
+
 def collect_slow_queries(
     conn: psycopg.Connection,
     limit: int = 20,

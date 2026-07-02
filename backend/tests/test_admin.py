@@ -14,7 +14,9 @@ from datetime import datetime, timedelta, timezone
 from src.models.alert import AlertEvent, AlertRule, AlertCondition, AlertSeverity
 from src.models.backup import Backup, BackupStatus
 from src.models.database_instance import DatabaseInstance, InstanceStatus
+from src.models.instance_status_history import InstanceStatusHistory
 from src.models.maintenance import MaintenanceTask, TaskStatus, TaskType
+from src.models.metric import Metric
 from src.services import admin as admin_service
 
 DASHBOARD = "/api/v1/admin/dashboard"
@@ -109,6 +111,118 @@ def test_dashboard_counts_alerts_backups_and_maintenance(client, auth_headers, d
     assert body["backups_last_24h"] == 2
     assert body["failed_backups_last_24h"] == 1
     assert body["pending_maintenance_tasks"] == 2
+
+
+# --------------------------------------------------------------------------- #
+# Dashboard — KPIs de performance (queries/s, p95, uptime)
+# --------------------------------------------------------------------------- #
+
+
+def test_dashboard_performance_kpis_empty_when_no_data(client, auth_headers):
+    headers, _ = auth_headers()
+    body = client.get(DASHBOARD, headers=headers).json()
+    # Sem amostras: throughput 0, latência/uptime "—" (None), nunca zero falso.
+    assert body["queries_per_second"] == 0.0
+    assert body["p95_latency_ms"] is None
+    assert body["fleet_uptime_pct"] is None
+
+
+def test_dashboard_queries_per_second_from_commit_rate(client, auth_headers, db):
+    headers, _ = auth_headers()
+    inst = DatabaseInstance(name="qps", status=InstanceStatus.RUNNING)
+    db.add(inst)
+    db.commit()
+    db.refresh(inst)
+
+    t0 = datetime.now(timezone.utc) - timedelta(seconds=60)
+    db.add_all([
+        Metric(instance_id=inst.id, metric_name="xact_commit", value=1000.0, collected_at=t0),
+        Metric(
+            instance_id=inst.id, metric_name="xact_commit", value=1120.0,
+            collected_at=t0 + timedelta(seconds=60),
+        ),
+    ])
+    db.commit()
+
+    body = client.get(DASHBOARD, headers=headers).json()
+    # 120 commits em 60s → 2.0/s.
+    assert body["queries_per_second"] == 2.0
+
+
+def test_dashboard_queries_per_second_ignores_counter_reset(client, auth_headers, db):
+    headers, _ = auth_headers()
+    inst = DatabaseInstance(name="reset", status=InstanceStatus.RUNNING)
+    db.add(inst)
+    db.commit()
+    db.refresh(inst)
+
+    t0 = datetime.now(timezone.utc) - timedelta(seconds=60)
+    # Contador caiu (restart do Postgres): delta negativo é descartado, não vira
+    # taxa negativa.
+    db.add_all([
+        Metric(instance_id=inst.id, metric_name="xact_commit", value=5000.0, collected_at=t0),
+        Metric(
+            instance_id=inst.id, metric_name="xact_commit", value=12.0,
+            collected_at=t0 + timedelta(seconds=60),
+        ),
+    ])
+    db.commit()
+
+    body = client.get(DASHBOARD, headers=headers).json()
+    assert body["queries_per_second"] == 0.0
+
+
+def test_dashboard_p95_latency_uses_latest_per_instance(client, auth_headers, db):
+    headers, _ = auth_headers()
+    inst = DatabaseInstance(name="p95", status=InstanceStatus.RUNNING)
+    db.add(inst)
+    db.commit()
+    db.refresh(inst)
+
+    base = datetime.now(timezone.utc)
+    db.add_all([
+        Metric(
+            instance_id=inst.id, metric_name="p95_query_latency_ms", value=10.0,
+            collected_at=base - timedelta(minutes=1),
+        ),
+        Metric(
+            instance_id=inst.id, metric_name="p95_query_latency_ms", value=42.0,
+            collected_at=base,  # mais recente
+        ),
+    ])
+    db.commit()
+
+    body = client.get(DASHBOARD, headers=headers).json()
+    assert body["p95_latency_ms"] == 42.0
+
+
+def test_dashboard_fleet_uptime_from_history(client, auth_headers, db):
+    headers, _ = auth_headers()
+    now = datetime.now(timezone.utc)
+    inst = DatabaseInstance(
+        name="up",
+        status=InstanceStatus.STOPPED,
+        created_at=now - timedelta(days=10),
+    )
+    db.add(inst)
+    db.commit()
+    db.refresh(inst)
+
+    db.add_all([
+        InstanceStatusHistory(
+            instance_id=inst.id, status=InstanceStatus.RUNNING,
+            changed_at=now - timedelta(days=10),
+        ),
+        InstanceStatusHistory(
+            instance_id=inst.id, status=InstanceStatus.STOPPED,
+            changed_at=now - timedelta(days=5),
+        ),
+    ])
+    db.commit()
+
+    body = client.get(DASHBOARD, headers=headers).json()
+    # RUNNING por 5 de 10 dias → ~50%.
+    assert abs(body["fleet_uptime_pct"] - 50.0) < 0.5
 
 
 # --------------------------------------------------------------------------- #

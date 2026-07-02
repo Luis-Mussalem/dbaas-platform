@@ -14,6 +14,7 @@ from src.models.database_instance import DatabaseInstance, InstanceStatus
 from src.models.user import User
 from src.schemas.instance import InstanceCreate, InstanceUpdate
 from src.services.provisioning import get_provisioner
+from src.services.status_history import record_status_change
 
 logger = logging.getLogger(__name__)
 
@@ -111,8 +112,12 @@ async def create_instance(
     db.commit()
     db.refresh(instance)
 
+    # Semear o histórico com o status inicial (instance.id já existe após o
+    # refresh) para o cálculo de uptime ter um ponto de partida desde a criação.
+    record_status_change(db, instance, InstanceStatus.PENDING)
+
     # Marcar como PROVISIONING antes de chamar o provisioner
-    instance.status = InstanceStatus.PROVISIONING
+    record_status_change(db, instance, InstanceStatus.PROVISIONING)
     db.commit()
 
     provisioner = get_provisioner()
@@ -125,7 +130,7 @@ async def create_instance(
             instance.cpu,
         )
     except Exception as exc:
-        instance.status = InstanceStatus.FAILED
+        record_status_change(db, instance, InstanceStatus.FAILED)
         db.commit()
         # Loga o detalhe internamente; ao cliente vai só mensagem genérica —
         # str(exc) pode expor hostnames/portas/erros do Docker.
@@ -148,7 +153,7 @@ async def create_instance(
     instance.db_name = result.db_name
     instance.db_user = result.db_user
     instance.connection_uri = encrypt_value(connection_uri)
-    instance.status = InstanceStatus.RUNNING
+    record_status_change(db, instance, InstanceStatus.RUNNING)
     db.commit()
     db.refresh(instance)
     return instance
@@ -207,7 +212,7 @@ async def transition_status(
         try:
             await asyncio.to_thread(provisioner.stop, instance.id)
         except Exception as exc:
-            instance.status = InstanceStatus.FAILED
+            record_status_change(db, instance, InstanceStatus.FAILED)
             db.commit()
             logger.error("Failed to stop instance %s: %s", instance.id, exc)
             raise HTTPException(
@@ -219,7 +224,7 @@ async def transition_status(
         try:
             new_port = await asyncio.to_thread(provisioner.start, instance.id)
         except Exception as exc:
-            instance.status = InstanceStatus.FAILED
+            record_status_change(db, instance, InstanceStatus.FAILED)
             db.commit()
             logger.error("Failed to start instance %s: %s", instance.id, exc)
             raise HTTPException(
@@ -230,7 +235,7 @@ async def transition_status(
         # a porta e a connection_uri para métricas/backups continuarem válidos.
         sync_connection_port(instance, new_port)
 
-    instance.status = new_status
+    record_status_change(db, instance, new_status)
     db.commit()
     db.refresh(instance)
     return instance
@@ -260,14 +265,14 @@ async def soft_delete_instance(db: Session, instance: DatabaseInstance) -> Datab
             detail="Cannot delete a running instance. Stop it first.",
         )
 
-    instance.status = InstanceStatus.DELETING
+    record_status_change(db, instance, InstanceStatus.DELETING)
     db.commit()
 
     provisioner = get_provisioner()
     try:
         await asyncio.to_thread(provisioner.delete, instance.id)
     except Exception as exc:
-        instance.status = InstanceStatus.FAILED
+        record_status_change(db, instance, InstanceStatus.FAILED)
         db.commit()
         logger.error("Failed to remove container for instance %s: %s", instance.id, exc)
         raise HTTPException(
@@ -276,7 +281,7 @@ async def soft_delete_instance(db: Session, instance: DatabaseInstance) -> Datab
         ) from exc
 
     instance.deleted_at = datetime.now(timezone.utc)
-    instance.status = InstanceStatus.DELETED
+    record_status_change(db, instance, InstanceStatus.DELETED)
     db.commit()
     db.refresh(instance)
     return instance

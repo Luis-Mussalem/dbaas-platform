@@ -8,7 +8,13 @@ from src.core.database import get_db
 from src.core.dependencies import get_current_company_admin, get_current_user
 from src.core.security import hash_password
 from src.models.user import User
-from src.schemas.user import UserAdminCreate, UserAdminUpdate, UserRead, UserUpdate
+from src.schemas.user import (
+    UserAdminCreate,
+    UserAdminUpdate,
+    UserListItem,
+    UserRead,
+    UserUpdate,
+)
 from src.services.auth import get_user_by_id
 from src.services.user import (
     create_user_admin,
@@ -19,7 +25,7 @@ from src.services.user import (
 router = APIRouter(prefix="/users", tags=["Users"])
 
 
-@router.get("", response_model=list[UserRead])
+@router.get("", response_model=list[UserListItem])
 def list_users_admin(
     company_id: Optional[uuid.UUID] = Query(default=None),
     db: Session = Depends(get_db),
