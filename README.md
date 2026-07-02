@@ -16,7 +16,7 @@ The project simulates real-world DBaaS concepts commonly found in modern platfor
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)
 
 [![CI](https://github.com/Luis-Mussalem/dbaas-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/Luis-Mussalem/dbaas-platform/actions/workflows/ci.yml)
-![Tests](https://img.shields.io/badge/tests-237%20passing-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-245%20passing-brightgreen?style=flat-square)
 ![Coverage](https://img.shields.io/badge/coverage-84%25-brightgreen?style=flat-square)
 ![Ruff](https://img.shields.io/badge/lint-ruff-blue?style=flat-square)
 
@@ -145,6 +145,7 @@ This project focuses heavily on backend engineering and operational concepts, in
 - Dedicated database roles per instance
 - Secure connection string generation
 - Health polling and status verification
+- Self-healing across Docker restarts (`unless-stopped` containers + automatic reconciliation of instance status on startup)
 
 ---
 

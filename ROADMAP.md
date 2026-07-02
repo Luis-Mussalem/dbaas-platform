@@ -135,6 +135,7 @@ encrypted. Security headers on every response. Docker with restricted ports.
 | Database roles | Dedicated role per instance with minimum permissions (CONNECT, CRUD on own tables) |
 | Integration | Router calls Service → Service calls Provisioner → updates status |
 | Status polling | Task that checks if the provisioned instance is healthy |
+| Self-healing | Containers run `unless-stopped`; on startup the status poller reconciles each instance's DB status (RUNNING/FAILED) against Docker, so instances survive a Docker/host restart |
 
 **Completion criterion:** `POST /instances` creates a real accessible PostgreSQL container.
 The provisioned database accepts connections with a dedicated role. Connection URI encrypted
