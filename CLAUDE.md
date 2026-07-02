@@ -19,7 +19,10 @@ only their own company; the admin superuser sees and switches between all.
   company-admin RBAC (`is_superuser` × `admin`/`member`), and per-company audit scoping
   are all in place.
 - **Progress** — backend phases 0–8 complete; frontend F0–F7 complete (SQL Console shipped).
-  Full phase detail and dependency map in [ROADMAP.md](ROADMAP.md).
+  A visual-polish pass (2026-07-02) added real fleet KPIs (queries/s, P95 latency, 30-day
+  uptime via a new `instance_status_history` table), per-user last-activity, and a
+  dashboard/instances/employees redesign. Full phase detail and dependency map in
+  [ROADMAP.md](ROADMAP.md).
 
 ## Architecture
 

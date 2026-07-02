@@ -167,6 +167,16 @@ in the platform database.
 ratio, top queries by time/executions, active locks, unused indexes, bloat estimate.
 Per-instance health check functional. Ability to capture EXPLAIN for queries.
 
+> **Fleet KPIs & uptime (added 2026-07-02):** `GET /admin/dashboard` now also returns
+> real fleet-wide performance KPIs, all derived from data actually collected (no mocks):
+> **queries/s** (commit-rate from the two latest `xact_commit` samples per instance),
+> **P95 latency** (`percentile_cont` over `pg_stat_statements`, collected each poll cycle
+> and stored as `p95_query_latency_ms`), and **30-day uptime** (% of time in RUNNING,
+> computed from a new `instance_status_history` table written at every status transition —
+> migration `c3d5e7f9a1b2`). P95/uptime return `null` (UI shows "—") until enough data
+> accumulates. See `services/status_history.py` and `services/admin.py`
+> (`_compute_fleet_queries_per_second`, `_compute_fleet_p95_latency`).
+
 ---
 
 ## PHASE 5 — Backup, Restore & PITR `[x]`
@@ -482,10 +492,19 @@ databases; the superuser can switch companies and the data follows the selection
 > **Status:** slow queries e locks renderizados; gráficos de série temporal (cache
 > hit ratio, conexões) implementados com `recharts` via `MetricsTab` +
 > `useMetricHistory` — consomem `GET /instances/{id}/metrics/history` (`3f3aa54`).
-> Seletor de janela (15m/1h/6h/24h) funcionando. Gráfico de latência é demo
-> sintético claramente rotulado como "demonstração" (backend não coleta latência
-> por query). Tab Logs ainda é placeholder — depende de endpoint de log por
-> instância não construído.
+> Seletor de janela (15m/1h/6h/24h) funcionando. O gráfico de latência **por query**
+> na aba Metrics segue ilustrativo (o backend não coleta latência por execução
+> individual), mas o **P95 da frota** exibido no dashboard já é real
+> (`pg_stat_statements`, ver PHASE 4). Tab Logs ainda é placeholder — depende de
+> endpoint de log por instância não construído.
+>
+> **Polimento visual (2026-07-02):** dashboard e página de Instâncias ganharam a
+> linha de KPIs reais (queries/s, P95, gasto estimado, uptime 30d — via `FleetKpiRow`),
+> filtro de ambiente (`EnvFilterBar`) e cores de identidade por instância
+> (`lib/identity-color.ts`); a tela de Funcionários ganhou métricas-resumo (total,
+> donos/admins, última atividade — de `audit_logs`) e uma **matriz de permissões**
+> estática (`CapabilityLegend`) derivada das regras reais de RBAC. Labels de ambiente
+> unificadas em `lib/environment.ts`.
 
 ---
 

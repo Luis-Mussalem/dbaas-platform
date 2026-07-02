@@ -16,7 +16,7 @@ The project simulates real-world DBaaS concepts commonly found in modern platfor
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)
 
 [![CI](https://github.com/Luis-Mussalem/dbaas-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/Luis-Mussalem/dbaas-platform/actions/workflows/ci.yml)
-![Tests](https://img.shields.io/badge/tests-245%20passing-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-253%20passing-brightgreen?style=flat-square)
 ![Coverage](https://img.shields.io/badge/coverage-84%25-brightgreen?style=flat-square)
 ![Ruff](https://img.shields.io/badge/lint-ruff-blue?style=flat-square)
 
@@ -159,6 +159,8 @@ This project focuses heavily on backend engineering and operational concepts, in
 - Table bloat estimation
 - `EXPLAIN ANALYZE` capture workflows
 - Metrics retention policies
+- Fleet KPIs on the dashboard — throughput (transactions/s), P95 query latency
+  (`pg_stat_statements`), and 30-day uptime derived from a status-history table
 
 ---
 
