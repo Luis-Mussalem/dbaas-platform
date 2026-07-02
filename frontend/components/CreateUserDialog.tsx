@@ -68,7 +68,7 @@ export function CreateUserDialog({ companies, onCreate, isSuperuser: isCurrentUs
   return (
     <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
       <DialogTrigger render={<Button />}>
-        <Button>New Employee</Button>
+        New Employee
       </DialogTrigger>
       <DialogContent className="bg-zinc-900 border-zinc-800">
         <DialogHeader>

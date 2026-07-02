@@ -40,7 +40,7 @@ export function CreateInstanceDialog({ onCreate }: CreateInstanceDialogProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={<Button />}>
-        <Button>New Instance</Button>
+        New Instance
       </DialogTrigger>
       <DialogContent className="bg-zinc-900 border-zinc-800">
         <DialogHeader>
