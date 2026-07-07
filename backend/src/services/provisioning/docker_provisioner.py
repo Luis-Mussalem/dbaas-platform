@@ -326,6 +326,13 @@ class DockerProvisioner(ProvisionerBase):
                 "-c", "wal_level=replica",
                 "-c", "archive_mode=on",
                 "-c", "archive_command=cp %p /archive/%f",
+                # Prontidão para replicação (FASE 9). max_wal_senders/slots já têm
+                # default 10 no PG10+, mas explicitá-los documenta a intenção e
+                # protege contra imagens com defaults menores. hot_standby não afeta
+                # um primário, mas é herdado fisicamente pelo standby via basebackup.
+                "-c", "max_wal_senders=10",
+                "-c", "max_replication_slots=10",
+                "-c", "hot_standby=on",
             ],
             "volumes": {
                 str(wal_dir): {"bind": "/archive", "mode": "rw"},
@@ -454,6 +461,9 @@ class DockerProvisioner(ProvisionerBase):
             container.remove(force=True)
         except docker.errors.NotFound:
             pass  # Já removido — comportamento idempotente correto
+        # Se esta instância for um standby, remove também seu volume de PGDATA.
+        # No-op para instâncias normais (usam bind mount, não volume nomeado).
+        self._remove_volume_quietly(self._replica_volume_name(instance_id))
 
     def get_status(self, instance_id: uuid.UUID) -> ProvisionerStatus:
         """
@@ -496,3 +506,205 @@ class DockerProvisioner(ProvisionerBase):
             return None
         except Exception:
             return None
+
+    # ---------------------------------------------------------------------------
+    # Replicação (FASE 9)
+    # ---------------------------------------------------------------------------
+
+    def _replica_volume_name(self, replica_instance_id: uuid.UUID) -> str:
+        """Nome determinístico do volume Docker que guarda o PGDATA do standby."""
+        return f"dbaas-replica-{str(replica_instance_id).replace('-', '')[:12]}"
+
+    def _allow_replication_on_primary(self, primary_container) -> None:
+        """
+        Liberar conexões de replicação no primário.
+
+        O pg_hba.conf padrão da imagem só permite `replication` de 127.0.0.1; o
+        standby conecta pela rede bridge (172.x), então anexamos uma linha
+        `host replication` cobrindo a rede interna e recarregamos o pg_hba via
+        SIGHUP ao postmaster (PID 1 do container). Sem o reload, a regra nova só
+        valeria após um restart e o pg_basebackup falharia com "no pg_hba.conf
+        entry for replication". Idempotente (grep antes de anexar). Seguro: os
+        containers publicam porta só em 127.0.0.1 no host.
+        """
+        line = "host replication all 0.0.0.0/0 scram-sha-256"
+        # sh (alpine não tem bash). $PGDATA aponta para o data dir dentro da imagem.
+        script = (
+            f'grep -qF "{line}" "$PGDATA/pg_hba.conf" '
+            f'|| echo "{line}" >> "$PGDATA/pg_hba.conf"'
+        )
+        exit_code, output = primary_container.exec_run(["sh", "-c", script])
+        if exit_code != 0:
+            raise RuntimeError(
+                f"Falha ao ajustar pg_hba.conf do primário: {output!r}"
+            )
+        # SIGHUP ao postmaster recarrega pg_hba.conf/postgresql.conf sem restart.
+        primary_container.kill(signal="SIGHUP")
+        # Pequena espera para o reload assentar antes do pg_basebackup conectar.
+        time.sleep(1.5)
+
+    def create_replica(
+        self,
+        replica_instance_id: uuid.UUID,
+        primary_instance_id: uuid.UUID,
+        engine_version: str,
+        db_name: str,
+        db_user: str,
+        db_password: str,
+        memory_mb: Optional[int] = None,
+        cpu: Optional[int] = None,
+    ) -> ProvisionResult:
+        """
+        Criar um standby em streaming a partir de um primário existente.
+
+        Fluxo:
+        1. Localizar o container do primário e liberar replicação no pg_hba.conf
+        2. `pg_basebackup` num container one-shot → volume novo (cópia física + `-R`,
+           que grava standby.signal e primary_conninfo já com a senha embutida)
+        3. Subir o container standby sobre esse volume (boota em recovery/hot standby)
+        4. Aguardar aceitar conexões read-only e retornar as infos de conexão
+        """
+        primary_name = self._container_name(primary_instance_id)
+        try:
+            primary_container = self._client.containers.get(primary_name)
+        except docker.errors.NotFound as exc:
+            raise RuntimeError(
+                f"Primário {primary_name} não encontrado — não é possível replicar"
+            ) from exc
+
+        self._allow_replication_on_primary(primary_container)
+
+        image = f"postgres:{engine_version}-alpine"
+        volume_name = self._replica_volume_name(replica_instance_id)
+        replica_name = self._container_name(replica_instance_id)
+        superuser_password = settings.PROVISIONER_SUPERUSER_PASSWORD
+
+        # Passo 2 — pg_basebackup one-shot. -R grava a config de standby; passar a
+        # conninfo completa em -d faz o primary_conninfo já incluir a senha (sem
+        # isso o walreceiver do standby não autentica). -Xs = stream do WAL em
+        # paralelo; -Fp = formato plain (data dir pronto para uso).
+        conninfo = (
+            f"host={primary_name} port=5432 user=postgres "
+            f"password={superuser_password} dbname=postgres"
+        )
+        try:
+            self._client.containers.run(
+                image=image,
+                remove=True,
+                network=_NETWORK_NAME,
+                environment={"PGPASSWORD": superuser_password},
+                volumes={volume_name: {"bind": "/target", "mode": "rw"}},
+                entrypoint=["pg_basebackup"],
+                command=[
+                    "-D", "/target",
+                    "-Fp", "-Xs", "-R", "-P",
+                    "-d", conninfo,
+                ],
+            )
+        except docker.errors.ContainerError as exc:
+            # Volume parcial/sujo — remove para permitir uma nova tentativa limpa.
+            self._remove_volume_quietly(volume_name)
+            raise RuntimeError(f"pg_basebackup falhou: {exc}") from exc
+
+        # Passo 3 — subir o standby sobre o data dir replicado. Como o PGDATA já
+        # existe, o entrypoint pula o initdb e o PostgreSQL entra em recovery,
+        # conectando ao primário via primary_conninfo.
+        run_kwargs: dict = {
+            "image": image,
+            "name": replica_name,
+            "ports": {"5432/tcp": ("127.0.0.1", None)},
+            "network": _NETWORK_NAME,
+            "detach": True,
+            "remove": False,
+            "restart_policy": _RESTART_POLICY,
+            "volumes": {
+                volume_name: {"bind": "/var/lib/postgresql/data", "mode": "rw"},
+            },
+            "command": ["-c", "hot_standby=on"],
+        }
+        if memory_mb is not None:
+            run_kwargs["mem_limit"] = f"{memory_mb}m"
+        if cpu is not None:
+            run_kwargs["nano_cpus"] = int(cpu * 1_000_000_000)
+
+        container = self._client.containers.run(**run_kwargs)
+        container.reload()
+        port_bindings = container.ports.get("5432/tcp")
+        if not port_bindings:
+            container.remove(force=True)
+            self._remove_volume_quietly(volume_name)
+            raise RuntimeError("Docker não atribuiu uma porta ao standby")
+        host_port = int(port_bindings[0]["HostPort"])
+
+        # Passo 4 — aguardar o standby aceitar conexões (recovery consistente).
+        # Usa o superuser, cuja senha foi copiada fisicamente do primário.
+        try:
+            self._wait_until_database_ready(
+                host="127.0.0.1",
+                port=host_port,
+                user="postgres",
+                password=superuser_password,
+                dbname="postgres",
+            )
+        except RuntimeError:
+            container.remove(force=True)
+            self._remove_volume_quietly(volume_name)
+            raise
+
+        return ProvisionResult(
+            container_id=container.id,
+            host="127.0.0.1",
+            port=host_port,
+            db_name=db_name,
+            db_user=db_user,
+            db_password=db_password,
+            container_name=replica_name,
+        )
+
+    def promote_replica(self, replica_instance_id: uuid.UUID) -> None:
+        """
+        Promover o standby a primário via pg_promote().
+
+        Conecta como superuser e chama pg_promote(); o PostgreSQL sai do modo de
+        recovery, remove standby.signal e passa a aceitar escritas.
+        """
+        host_port = self.get_port(replica_instance_id)
+        if host_port is None:
+            raise RuntimeError("Standby não está em execução — não é possível promover")
+        try:
+            with psycopg.connect(
+                host="127.0.0.1",
+                port=host_port,
+                user="postgres",
+                password=settings.PROVISIONER_SUPERUSER_PASSWORD,
+                dbname="postgres",
+                connect_timeout=5,
+                autocommit=True,
+            ) as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT pg_promote(wait => true)")
+        except Exception as exc:
+            raise RuntimeError(f"Falha ao promover o standby: {exc}") from exc
+
+    def _remove_volume_quietly(self, volume_name: str) -> None:
+        """Remover um volume Docker ignorando ausência/erros (cleanup best-effort)."""
+        try:
+            self._client.volumes.get(volume_name).remove(force=True)
+        except Exception:
+            pass
+
+    def logs(self, instance_id: uuid.UUID, tail: int = 200) -> str:
+        """
+        Retornar as últimas `tail` linhas de log do container da instância.
+
+        timestamps=True prefixa cada linha com o horário — útil para depurar
+        ordem de eventos. Decodifica com errors="replace" para nunca quebrar em
+        bytes inválidos no stream de log.
+        """
+        container_name = self._container_name(instance_id)
+        try:
+            container = self._client.containers.get(container_name)
+            raw = container.logs(tail=tail, timestamps=True)
+            return raw.decode("utf-8", errors="replace")
+        except docker.errors.NotFound as exc:
+            raise RuntimeError(f"Container {container_name} não encontrado") from exc

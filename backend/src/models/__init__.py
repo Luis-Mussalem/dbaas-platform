@@ -8,6 +8,7 @@ from src.models.backup import Backup, BackupSchedule
 from src.models.maintenance import MaintenanceTask, MaintenanceSchedule, TaskType, TaskStatus
 from src.models.alert import AlertRule, AlertEvent, AlertCondition, AlertSeverity
 from src.models.audit_log import AuditLog
+from src.models.replica import Replica, ReplicationState
 
 __all__ = [
     "Company",
@@ -27,4 +28,6 @@ __all__ = [
     "AlertCondition",
     "AlertSeverity",
     "AuditLog",
+    "Replica",
+    "ReplicationState",
 ]

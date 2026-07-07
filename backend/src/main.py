@@ -11,7 +11,7 @@ from slowapi.errors import RateLimitExceeded
 from src.core.audit_middleware import AuditMiddleware
 from src.core.config import settings
 from src.core.rate_limit import limiter
-from src.routers import admin, alerts, auth, backups, companies, health, instances, maintenance, metrics, query, users
+from src.routers import admin, alerts, auth, backups, companies, health, instances, maintenance, metrics, query, replicas, users
 from src.services.alert_evaluator import alert_evaluation_loop
 from src.services.backup_scheduler import backup_scheduling_loop
 from src.services.maintenance_scheduler import maintenance_scheduling_loop
@@ -46,6 +46,7 @@ async def lifespan(app: FastAPI):
     from src.services.provisioning import get_provisioner
     from src.services.provisioning.status_poller import status_polling_loop
     from src.services.metrics_poller import metrics_polling_loop
+    from src.services.replication_poller import replication_polling_loop
 
     logger.info("Conectando ao daemon Docker...")
     try:
@@ -85,6 +86,12 @@ async def lifespan(app: FastAPI):
     )
     logger.info("Alert evaluator iniciado.")
 
+    replication_stop_event = asyncio.Event()
+    replication_poller_task = asyncio.create_task(
+        replication_polling_loop(replication_stop_event)
+    )
+    logger.info("Replication poller iniciado.")
+
     yield  # Aplicação em execução — processando requests
 
     # --- SHUTDOWN ---
@@ -94,11 +101,13 @@ async def lifespan(app: FastAPI):
     backup_stop_event.set()
     maintenance_stop_event.set()
     alert_stop_event.set()
+    replication_stop_event.set()
     await poller_task
     await metrics_poller_task
     await backup_scheduler_task
     await maintenance_scheduler_task
     await alert_evaluator_task
+    await replication_poller_task
     logger.info("Encerramento concluído.")
 
 
@@ -124,9 +133,11 @@ openapi_tags = [
     {"name": "Companies", "description": "Empresas (multi-tenant). Restrito ao superusuário da plataforma."},
     {"name": "Instances", "description": "Ciclo de vida das instâncias de banco: criar, iniciar, parar e remover."},
     {"name": "Monitoring", "description": "Métricas, health, slow queries, locks, índices e bloat por instância."},
+    {"name": "SQL Console", "description": "Execução de SELECT read-only e planos de execução (EXPLAIN) por instância."},
     {"name": "Backups", "description": "Backups lógicos (pg_dump) e físicos (pg_basebackup), restore e agendamento."},
     {"name": "Maintenance", "description": "VACUUM, ANALYZE, REINDEX, gestão de conexões e recomendações de tuning."},
     {"name": "Alerts", "description": "Regras de alerta, avaliação automática e histórico de eventos."},
+    {"name": "Replication", "description": "Standbys em streaming, monitoramento de lag e promoção (failover manual)."},
     {"name": "Administration", "description": "Visão consolidada da plataforma e trilha de auditoria."},
 ]
 
@@ -194,5 +205,6 @@ api_v1.include_router(query.router)
 api_v1.include_router(backups.router)
 api_v1.include_router(maintenance.router)
 api_v1.include_router(alerts.router)
+api_v1.include_router(replicas.router)
 api_v1.include_router(admin.router)
 app.include_router(api_v1)
