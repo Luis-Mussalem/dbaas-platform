@@ -308,3 +308,41 @@ def test_delete_stopped_instance(
 
     # Depois do soft delete, a instância some das consultas (404).
     assert client.get(f"{API}/{inst.id}", headers=headers).status_code == 404
+
+
+# --------------------------------------------------------------------------- #
+# Logs (FASE 10)
+# --------------------------------------------------------------------------- #
+
+
+def test_get_instance_logs(client, auth_headers, make_instance, monkeypatch):
+    class _LogProvisioner:
+        def logs(self, instance_id, tail=200):
+            return f"line1\nline2 (tail={tail})\n"
+
+    # O router usa get_provisioner importado no seu módulo.
+    monkeypatch.setattr(
+        "src.routers.instances.get_provisioner", lambda: _LogProvisioner()
+    )
+    headers, _ = auth_headers()
+    inst = make_instance(status=InstanceStatus.RUNNING)
+
+    resp = client.get(f"{API}/{inst.id}/logs?tail=50", headers=headers)
+    assert resp.status_code == 200
+    assert "line1" in resp.json()["logs"]
+    assert "tail=50" in resp.json()["logs"]
+
+
+def test_get_instance_logs_container_missing(client, auth_headers, make_instance, monkeypatch):
+    class _MissingProvisioner:
+        def logs(self, instance_id, tail=200):
+            raise RuntimeError("Container não encontrado")
+
+    monkeypatch.setattr(
+        "src.routers.instances.get_provisioner", lambda: _MissingProvisioner()
+    )
+    headers, _ = auth_headers()
+    inst = make_instance(status=InstanceStatus.RUNNING)
+
+    resp = client.get(f"{API}/{inst.id}/logs", headers=headers)
+    assert resp.status_code == 409
