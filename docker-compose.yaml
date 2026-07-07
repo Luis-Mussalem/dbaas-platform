@@ -32,6 +32,47 @@ services:
       postgres:
         condition: service_healthy
 
+  # API FastAPI. Roda em network_mode: host de propósito — o provisionador cria
+  # containers-irmãos (via o socket Docker montado) e publica cada banco em
+  # 127.0.0.1 do HOST; com host networking o backend enxerga tanto o Postgres da
+  # plataforma (localhost:5432) quanto as instâncias gerenciadas nesse loopback,
+  # como quando rodado via uvicorn no host.
+  #
+  # ${PWD} monta o data/ do repo no MESMO caminho absoluto dentro do container:
+  # os bind mounts de WAL/backup que o provisionador passa ao daemon precisam
+  # existir de forma idêntica no host e no container. Rode o compose da raiz do repo.
+  backend:
+    build:
+      context: ./backend
+    container_name: dbaas-backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_HOST: localhost
+      BACKUP_DIR: ${PWD}/data/backups
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${PWD}/data:${PWD}/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: sh -c "alembic upgrade head && uvicorn src.main:app --host 0.0.0.0 --port 8001"
+
+  # Dashboard Next.js (build standalone). NEXT_PUBLIC_API_URL é baked no build —
+  # o navegador (no host) fala com o backend em localhost:8001.
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8001/api/v1
+    container_name: dbaas-frontend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - backend
+
 volumes:
   postgres_data:
   pgadmin_data:

@@ -72,10 +72,10 @@ jobs:
         run: pytest --cov=src --cov-report=term-missing
 
   # ---------------------------------------------------------------------------
-  # Frontend: build de produção do Next.js (pega quebras de compilação/TS).
+  # Frontend: lint (eslint) + typecheck (tsc) + build de produção do Next.js.
   # ---------------------------------------------------------------------------
   frontend:
-    name: Frontend (next build)
+    name: Frontend (lint + typecheck + build)
     runs-on: ubuntu-latest
 
     defaults:
@@ -94,6 +94,12 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Lint (eslint)
+        run: npm run lint
+
+      - name: Typecheck (tsc)
+        run: npm run typecheck
 
       - name: Build
         run: npm run build
