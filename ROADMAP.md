@@ -582,7 +582,7 @@ placeholder route is wired to the real feature. ✅ Met.
 - Frontend: `runQuery` / `explainQuery` in `lib/api.ts`; `QueryResult` / `ExplainResponse`
   types; components `sql/SchemaBrowser`, `sql/ResultsTable`, `sql/QueryHistory`; the `/sql`
   page; sidebar "Em breve" badge removed
-- 10 tests in `backend/tests/test_query.py` (422 / 200 / truncation / 400 / 404 / 409)
+- 6 tests in `backend/tests/test_query.py` (422 / 200 / truncation / 400 / 404 / 409)
 
 **Why it was deferred (record):** every other frontend screen reuses an existing typed
 API in `lib/api.ts`; the SQL Console alone needed a brand-new endpoint. Building it

@@ -16,7 +16,7 @@ The project simulates real-world DBaaS concepts commonly found in modern platfor
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)
 
 [![CI](https://github.com/Luis-Mussalem/dbaas-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/Luis-Mussalem/dbaas-platform/actions/workflows/ci.yml)
-![Tests](https://img.shields.io/badge/tests-253%20passing-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-262%20passing-brightgreen?style=flat-square)
 ![Coverage](https://img.shields.io/badge/coverage-84%25-brightgreen?style=flat-square)
 ![Ruff](https://img.shields.io/badge/lint-ruff-blue?style=flat-square)
 
@@ -387,11 +387,13 @@ This mirrors backup strategies used in real PostgreSQL production environments.
 Quality is enforced automatically on every push and pull request.
 
 ## Automated Test Suite
-- **237 tests** with **84% backend coverage** (`pytest` + `pytest-cov`)
-- Isolated PostgreSQL test database — never touches development data
+- **262 tests** with **84% backend coverage** (`pytest` + `pytest-cov`)
+- Isolated PostgreSQL test database (`dbaas_test`, created by the test suite) —
+  never touches development data
 - External dependencies are faked, not invoked: Docker SDK, `subprocess`
   (`pg_dump` / `pg_restore` / `pg_basebackup`) and live `psycopg` connections
-  are mocked, so the full suite runs **without Docker or a target database**
+  are mocked, so the suite runs **without Docker and without any managed
+  (client) database** — only a local PostgreSQL for the metadata test DB
 - Coverage spans the business-critical layers: instance state machine, alert
   evaluation engine, backup orchestration, maintenance executors, the
   provisioner, and all background pollers/schedulers
@@ -575,7 +577,7 @@ docker build -t dbaas-backend backend/
 - Alerting & notifications system
 - Administration panel & audit log
 - Multi-tenancy (companies, per-company scoping, employee management, company-admin RBAC, audit scoping)
-- Automated testing (237 tests, 84% coverage)
+- Automated testing (262 tests, 84% coverage)
 - Continuous integration & multi-stage Docker image
 
 ## Frontend — Complete
