@@ -47,6 +47,7 @@ def test_rejects_non_select_start(query):
         ("update", "select * from foo where x in (update bar set y=1 returning id)"),
         ("drop", "select 1 where false union select drop"),
         ("truncate", "select truncate"),
+        ("merge", "select * from (merge into users using t on true returning *) m"),
     ],
 )
 def test_rejects_blocked_keyword_inside_select(keyword, query):

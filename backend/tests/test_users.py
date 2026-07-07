@@ -94,6 +94,19 @@ def test_patch_own_email_ok(client, auth_headers):
     assert resp.json()["email"] == "patched@example.com"
 
 
+def test_patch_own_email_to_taken_email_rejected(client, auth_headers, make_user):
+    # Regressão: email em uso estourava IntegrityError no commit → 500.
+    make_user(email="taken@example.com")
+    headers, user = auth_headers(email="dupe@example.com")
+    resp = client.patch(
+        f"{API}/{user.id}",
+        headers=headers,
+        json={"email": "taken@example.com"},
+    )
+    assert resp.status_code == 400
+    assert "already registered" in resp.json()["detail"]
+
+
 def test_patch_other_user_forbidden(client, auth_headers, make_user):
     headers, _ = auth_headers(email="patcher@example.com")
     victim = make_user(email="patchvictim@example.com")

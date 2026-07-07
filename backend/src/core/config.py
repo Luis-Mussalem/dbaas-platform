@@ -75,6 +75,11 @@ class Settings(BaseSettings):
                 "FERNET_KEY must be changed from the default placeholder. "
                 'Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
             )
+        if "change-me" in self.POSTGRES_PASSWORD:
+            raise ValueError(
+                "POSTGRES_PASSWORD must be changed from the default placeholder. "
+                'Generate with: python -c "import secrets; print(secrets.token_urlsafe(32))"'
+            )
         return self
 
     @property

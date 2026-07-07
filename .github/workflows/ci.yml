@@ -26,7 +26,9 @@ jobs:
         image: postgres:16-alpine
         env:
           POSTGRES_USER: dbaas
-          POSTGRES_PASSWORD: change-me
+          # Senha efêmera do service container de CI (não é um segredo real).
+          # config.py rejeita placeholders "change-me" no startup.
+          POSTGRES_PASSWORD: ci-only-test-password
           POSTGRES_DB: dbaas
         ports:
           - 5432:5432
@@ -42,7 +44,7 @@ jobs:
       POSTGRES_HOST: localhost
       POSTGRES_PORT: 5432
       POSTGRES_USER: dbaas
-      POSTGRES_PASSWORD: change-me
+      POSTGRES_PASSWORD: ci-only-test-password
       # As demais variáveis sensíveis (JWT_SECRET_KEY, FERNET_KEY,
       # PROVISIONER_SUPERUSER_PASSWORD, POSTGRES_DB) são definidas pelo
       # próprio conftest.py antes de importar a aplicação.

@@ -216,6 +216,44 @@ def test_poll_metrics_once_isolates_instance_failure(db, running_instance, monke
     assert db.query(Metric).count() == 0
 
 
+def test_poll_metrics_once_rolls_back_failed_instance(db, monkeypatch):
+    # Regressão: uma coleta que deixa a sessão suja e explode não pode
+    # contaminar o commit das instâncias seguintes do ciclo (db.rollback()).
+    for name in ("m-db-1", "m-db-2"):
+        db.add(
+            DatabaseInstance(
+                name=name,
+                status=InstanceStatus.RUNNING,
+                connection_uri=encrypt_value(f"postgresql://u:p@127.0.0.1:5433/{name}"),
+            )
+        )
+    db.commit()
+
+    failed_once = []
+
+    def flaky_collect(session, instance):
+        if not failed_once:
+            failed_once.append(instance.id)
+            # Deixa lixo pendente na sessão antes de explodir — sem rollback,
+            # este Metric órfão seria commitado junto com a próxima instância.
+            session.add(
+                Metric(instance_id=instance.id, metric_name="orphan", value=1.0)
+            )
+            raise RuntimeError("connection refused")
+        session.add(
+            Metric(instance_id=instance.id, metric_name="cache_hit_ratio", value=99.0)
+        )
+        session.commit()
+        return 1
+
+    monkeypatch.setattr(metrics_poller, "collect_and_store", flaky_collect)
+    metrics_poller.poll_metrics_once()
+
+    db.expire_all()
+    assert db.query(Metric).filter_by(metric_name="orphan").count() == 0
+    assert db.query(Metric).filter_by(metric_name="cache_hit_ratio").count() == 1
+
+
 # --------------------------------------------------------------------------- #
 # backup_scheduler.poll_schedules_once
 # --------------------------------------------------------------------------- #

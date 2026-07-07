@@ -13,7 +13,7 @@ import re
 MAX_QUERY_LEN = 8000
 
 BLOCKED_KEYWORDS = {
-    "insert", "update", "delete", "drop", "truncate",
+    "insert", "update", "delete", "merge", "drop", "truncate",
     "create", "alter", "grant", "revoke", "copy",
     "vacuum", "reindex", "cluster",
 }

@@ -175,5 +175,5 @@ def get_config_recommendations(
     As fórmulas seguem as recomendações do [wiki.postgresql.org](https://wiki.postgresql.org/wiki/Tuning_Your_PostgreSQL_Server)
     e do pgTune para cargas OLTP.
     """
-    instance = get_instance_or_404(instance_id, db)
+    instance = get_instance_or_404(instance_id, db, current_user)
     return svc.get_config_recommendations(instance)

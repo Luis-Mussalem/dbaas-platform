@@ -6,7 +6,6 @@ from sqlalchemy.orm import Session
 
 from src.core.database import get_db
 from src.core.dependencies import get_current_company_admin, get_current_user
-from src.core.security import hash_password
 from src.models.user import User
 from src.schemas.user import (
     UserAdminCreate,
@@ -20,6 +19,7 @@ from src.services.user import (
     create_user_admin,
     list_users,
     update_user_admin,
+    update_user_self,
 )
 
 router = APIRouter(prefix="/users", tags=["Users"])
@@ -87,11 +87,4 @@ def update_user(
             detail="Not allowed to update another user",
         )
 
-    if data.email is not None:
-        current_user.email = data.email
-    if data.password is not None:
-        current_user.hashed_password = hash_password(data.password)
-
-    db.commit()
-    db.refresh(current_user)
-    return current_user
+    return update_user_self(db, current_user, email=data.email, password=data.password)

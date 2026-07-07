@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import re
 import uuid
@@ -45,9 +46,13 @@ def _extract_user_id(request: Request) -> Optional[uuid.UUID]:
     request — só observa e registra o que passou.
     """
     auth = request.headers.get("Authorization", "")
-    if not auth.startswith("Bearer "):
+    if auth.startswith("Bearer "):
+        token = auth.split(" ", 1)[1]
+    else:
+        # Frontend autentica via cookie HttpOnly (sem header Authorization).
+        token = request.cookies.get("access_token")
+    if not token:
         return None
-    token = auth.split(" ", 1)[1]
     try:
         payload = jwt.decode(
             token,
@@ -169,7 +174,10 @@ class AuditMiddleware(BaseHTTPMiddleware):
             ip_address = request.client.host if request.client else None
             details = {"method": method, "path": path, "status": response.status_code}
 
-            _write_log(
+            # _write_log é I/O síncrono (SessionLocal); em thread para não
+            # bloquear o event loop durante a escrita do audit log.
+            await asyncio.to_thread(
+                _write_log,
                 action, resource_type, resource_id,
                 user_id, ip_address, details, active_company_header,
             )

@@ -118,6 +118,20 @@ def create_user_admin(db: Session, data: UserAdminCreate, acting_user: User) -> 
     return user
 
 
+def update_user_self(db: Session, user: User, email: Optional[str], password: Optional[str]) -> User:
+    """Atualização self-service de email/senha do próprio usuário."""
+    if email is not None and email != user.email:
+        if get_user_by_email(db, email):
+            raise HTTPException(status_code=400, detail="Email already registered")
+        user.email = email
+    if password is not None:
+        user.hashed_password = hash_password(password)
+
+    db.commit()
+    db.refresh(user)
+    return user
+
+
 def update_user_admin(
     db: Session,
     user_id: uuid.UUID,

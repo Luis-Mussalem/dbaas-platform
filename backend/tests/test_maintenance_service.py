@@ -262,3 +262,51 @@ def test_config_recommendations_without_resources_has_only_fixed(db):
     params = {r.parameter for r in resp.recommendations}
     # Sem memory_mb/cpu, só as duas recomendações fixas aparecem.
     assert params == {"wal_buffers", "checkpoint_completion_target"}
+
+
+# --------------------------------------------------------------------------- #
+# Endpoint HTTP GET /instances/{id}/config-recommendations
+# --------------------------------------------------------------------------- #
+
+
+def test_config_recommendations_endpoint_ok(client, auth_headers, make_company, db):
+    # Regressão: o router chamava get_instance_or_404 sem current_user,
+    # o que fazia todo request a este endpoint retornar 500.
+    company = make_company(name="Cfg Co")
+    headers, _ = auth_headers(email="cfg@example.com", company_id=company.id)
+    inst = DatabaseInstance(
+        name="cfg-db",
+        status=InstanceStatus.STOPPED,
+        company_id=company.id,
+        memory_mb=2048,
+        cpu=4,
+    )
+    db.add(inst)
+    db.commit()
+    db.refresh(inst)
+
+    resp = client.get(
+        f"/api/v1/instances/{inst.id}/config-recommendations", headers=headers
+    )
+    assert resp.status_code == 200
+    params = {r["parameter"] for r in resp.json()["recommendations"]}
+    assert "shared_buffers" in params
+
+
+def test_config_recommendations_endpoint_cross_tenant_404(
+    client, auth_headers, make_company, db
+):
+    company_a = make_company(name="Company A")
+    company_b = make_company(name="Company B")
+    headers, _ = auth_headers(email="a@example.com", company_id=company_a.id)
+    inst = DatabaseInstance(
+        name="b-db", status=InstanceStatus.STOPPED, company_id=company_b.id
+    )
+    db.add(inst)
+    db.commit()
+    db.refresh(inst)
+
+    resp = client.get(
+        f"/api/v1/instances/{inst.id}/config-recommendations", headers=headers
+    )
+    assert resp.status_code == 404

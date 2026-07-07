@@ -60,6 +60,9 @@ def poll_metrics_once() -> None:
                     count,
                 )
             except Exception as exc:
+                # Sem rollback, um commit falho deixa a sessão compartilhada em
+                # PendingRollbackError e derruba as instâncias seguintes do ciclo.
+                db.rollback()
                 logger.exception(
                     "Erro ao coletar métricas da instância %s: %s",
                     instance.id,
