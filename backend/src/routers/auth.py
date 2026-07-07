@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from pydantic import BaseModel
@@ -28,6 +28,39 @@ class LogoutRequest(BaseModel):
     refresh_token: str | None = None
 
 
+def _set_auth_cookies(response: Response, request: Request, access: str, refresh: str) -> None:
+    """
+    Grava os tokens em cookies HttpOnly — inacessíveis a JavaScript (anti-XSS).
+
+    O corpo JSON com os tokens é mantido nos endpoints (Swagger, API clients e
+    testes usam o header Authorization); o frontend usa só os cookies.
+    """
+    secure = request.url.scheme == "https"
+    response.set_cookie(
+        "access_token",
+        access,
+        max_age=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        httponly=True,
+        samesite="lax",
+        secure=secure,
+        path="/",
+    )
+    response.set_cookie(
+        "refresh_token",
+        refresh,
+        max_age=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS * 86400,
+        httponly=True,
+        samesite="lax",
+        secure=secure,
+        path="/",
+    )
+
+
+def _clear_auth_cookies(response: Response) -> None:
+    response.delete_cookie("access_token", path="/")
+    response.delete_cookie("refresh_token", path="/")
+
+
 @router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
 @limiter.limit("3/minute")
 def register(request: Request, data: UserCreate, db: Session = Depends(get_db)):
@@ -45,6 +78,7 @@ def register(request: Request, data: UserCreate, db: Session = Depends(get_db)):
 @limiter.limit("5/minute")
 def login(
     request: Request,
+    response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
 ):
@@ -57,6 +91,7 @@ def login(
         )
     access_token = create_access_token({"sub": str(user.id)})
     refresh_token = create_refresh_token({"sub": str(user.id)})
+    _set_auth_cookies(response, request, access_token, refresh_token)
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,
@@ -66,15 +101,19 @@ def login(
 
 @router.post("/refresh")
 @limiter.limit("10/minute")
-def refresh(request: Request, db: Session = Depends(get_db)):
+def refresh(request: Request, response: Response, db: Session = Depends(get_db)):
+    # Header Authorization (API clients) tem precedência; cookie HttpOnly
+    # é o caminho do frontend.
     auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.split(" ", 1)[1]
+    else:
+        token = request.cookies.get("refresh_token")
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing refresh token",
         )
-
-    token = auth_header.split(" ", 1)[1]
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid refresh token",
@@ -108,6 +147,7 @@ def refresh(request: Request, db: Session = Depends(get_db)):
 
     new_access_token = create_access_token({"sub": str(user.id)})
     new_refresh_token = create_refresh_token({"sub": str(user.id)})
+    _set_auth_cookies(response, request, new_access_token, new_refresh_token)
     return {
         "access_token": new_access_token,
         "refresh_token": new_refresh_token,
@@ -118,14 +158,18 @@ def refresh(request: Request, db: Session = Depends(get_db)):
 @router.post("/logout")
 def logout(
     request: Request,
+    response: Response,
     body: LogoutRequest = LogoutRequest(),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.split(" ", 1)[1]
+    else:
+        token = request.cookies.get("access_token")
+    if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing token")
-    token = auth_header.split(" ", 1)[1]
 
     try:
         payload = jwt.decode(
@@ -145,10 +189,12 @@ def logout(
 
     blacklist_token(db, jti, token_type, current_user.id, expires_at)
 
-    if body.refresh_token:
+    # Refresh token do corpo (API clients) ou do cookie (frontend).
+    refresh_token = body.refresh_token or request.cookies.get("refresh_token")
+    if refresh_token:
         try:
             ref_payload = jwt.decode(
-                body.refresh_token,
+                refresh_token,
                 settings.JWT_SECRET_KEY,
                 algorithms=[settings.JWT_ALGORITHM],
             )
@@ -161,6 +207,7 @@ def logout(
         except (JWTError, KeyError):
             pass
 
+    _clear_auth_cookies(response)
     return {"detail": "Successfully logged out"}
 
 

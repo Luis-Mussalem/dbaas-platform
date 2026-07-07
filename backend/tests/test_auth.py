@@ -89,6 +89,67 @@ def test_inactive_user_cannot_login(client, make_user):
 
 
 # --------------------------------------------------------------------------- #
+# Cookies HttpOnly (frontend usa cookies; header Authorization tem precedência)
+# --------------------------------------------------------------------------- #
+
+
+def test_login_sets_httponly_cookies(client, make_user):
+    make_user(email="cookie@example.com")
+    resp = _login(client, "cookie@example.com")
+    assert resp.status_code == 200
+
+    set_cookies = resp.headers.get_list("set-cookie")
+    access = next((c for c in set_cookies if c.startswith("access_token=")), None)
+    refresh = next((c for c in set_cookies if c.startswith("refresh_token=")), None)
+    assert access is not None and refresh is not None
+    for cookie in (access, refresh):
+        assert "HttpOnly" in cookie
+        assert "SameSite=lax" in cookie
+
+
+def test_me_authenticates_via_cookie_only(client, make_user):
+    # Sem header Authorization: o cookie gravado no login basta para /me.
+    make_user(email="cookie-me@example.com")
+    _login(client, "cookie-me@example.com")
+
+    resp = client.get(f"{API}/me")
+    assert resp.status_code == 200
+    assert resp.json()["email"] == "cookie-me@example.com"
+
+
+def test_refresh_via_cookie_rotates_tokens(client, make_user):
+    make_user(email="cookie-refresh@example.com")
+    old_refresh = _login(client, "cookie-refresh@example.com").json()["refresh_token"]
+
+    # Sem header nem corpo: o refresh_token vem do cookie.
+    resp = client.post(f"{API}/refresh")
+    assert resp.status_code == 200
+    assert resp.json()["access_token"]
+
+    # Rotação também vale no fluxo por cookie: o refresh antigo foi blacklistado.
+    reuse = client.post(
+        f"{API}/refresh",
+        headers={"Authorization": f"Bearer {old_refresh}"},
+    )
+    assert reuse.status_code == 401
+
+
+def test_logout_clears_cookies(client, make_user):
+    make_user(email="cookie-logout@example.com")
+    _login(client, "cookie-logout@example.com")
+
+    resp = client.post(f"{API}/logout")
+    assert resp.status_code == 200
+
+    # Cookies limpos na resposta (Max-Age=0) e sessão morta para o cliente.
+    set_cookies = resp.headers.get_list("set-cookie")
+    cleared = [c.split("=", 1)[0] for c in set_cookies if 'Max-Age=0' in c]
+    assert "access_token" in cleared
+    assert "refresh_token" in cleared
+    assert client.get(f"{API}/me").status_code == 401
+
+
+# --------------------------------------------------------------------------- #
 # /me
 # --------------------------------------------------------------------------- #
 

@@ -12,7 +12,9 @@ from src.models.database_instance import DatabaseInstance, InstanceStatus
 from src.models.user import User
 from src.services.auth import is_token_blacklisted
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+# auto_error=False: sem header Authorization não levanta 401 na hora —
+# get_current_user tenta o cookie HttpOnly "access_token" antes de rejeitar.
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
 
 def _read_active_company(request: Request, user: User) -> uuid.UUID | None:
@@ -36,7 +38,7 @@ def _read_active_company(request: Request, user: User) -> uuid.UUID | None:
 
 def get_current_user(
     request: Request,
-    token: str = Depends(oauth2_scheme),
+    token: str | None = Depends(oauth2_scheme),
     db: Session = Depends(get_db),
 ) -> User:
     credentials_exception = HTTPException(
@@ -44,6 +46,13 @@ def get_current_user(
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+    # Header Authorization tem precedência (API clients, Swagger, testes);
+    # o cookie HttpOnly é o caminho do frontend (não exposto a XSS).
+    if token is None:
+        token = request.cookies.get("access_token")
+    if token is None:
+        raise credentials_exception
 
     try:
         payload = jwt.decode(

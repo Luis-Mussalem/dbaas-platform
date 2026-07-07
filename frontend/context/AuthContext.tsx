@@ -7,7 +7,6 @@ import { getCurrentUser, login as apiLogin, logout as apiLogout } from "@/lib/ap
 // ─── Context shape ─────────────────────────────────────────────────────────────
 
 interface AuthContextValue {
-  token: string | null;
   user: User | null;
   isLoading: boolean;
   login: (username: string, password: string) => Promise<void>;
@@ -28,42 +27,41 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
-  const [token, setToken] = useState<string | null>(() =>
-    typeof window !== "undefined" ? localStorage.getItem("access_token") : null
-  );
+  // A sessão vive em cookies HttpOnly — JS não enxerga token nenhum. A única
+  // fonte de verdade do "estou logado?" é o próprio backend, via /auth/me.
   const [user, setUser] = useState<User | null>(null);
+  // Na /login não há sessão para hidratar — já inicia sem loading (o inicializador
+  // lazy evita o setState síncrono no effect que o lint react-hooks proíbe).
   const [isLoading, setIsLoading] = useState(
-    () => typeof window !== "undefined" && !!localStorage.getItem("access_token")
+    () => typeof window === "undefined" || window.location.pathname !== "/login"
   );
 
   useEffect(() => {
-    if (!token) return;
+    // Na /login não há sessão para hidratar — evita um /me + refresh inúteis.
+    if (window.location.pathname === "/login") return;
 
+    let active = true;
     getCurrentUser()
       .then((u) => {
-        setUser(u);
-        setIsLoading(false);
+        if (active) setUser(u);
       })
       .catch(() => {
-        localStorage.removeItem("access_token");
-        localStorage.removeItem("refresh_token");
-        document.cookie = "auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-        setToken(null);
-        setUser(null);
-        setIsLoading(false);
+        if (active) setUser(null);
+      })
+      .finally(() => {
+        if (active) setIsLoading(false);
       });
-  }, [token]);
+    return () => {
+      active = false;
+    };
+  }, []);
 
   async function login(username: string, password: string): Promise<void> {
-    const response = await apiLogin(username, password);
-    localStorage.setItem("access_token", response.access_token);
-    localStorage.setItem("refresh_token", response.refresh_token);
-    // Secure só em HTTPS: em http://localhost o flag impediria a gravação do
-    // cookie e o middleware derrubaria o usuário para /login em dev.
-    const secure = window.location.protocol === "https:" ? "; Secure" : "";
-    document.cookie = `auth_token=${response.access_token}; path=/; SameSite=Lax${secure}`;
-    setIsLoading(true);
-    setToken(response.access_token);
+    // O backend grava os cookies HttpOnly na resposta do login; em seguida
+    // buscamos o usuário já autenticado por eles.
+    await apiLogin(username, password);
+    const u = await getCurrentUser();
+    setUser(u);
   }
 
   async function refreshUser(): Promise<void> {
@@ -72,18 +70,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }
 
   function logout(): void {
-    const refreshToken = localStorage.getItem("refresh_token");
-    // Fire-and-forget: blacklist tokens on backend (best-effort, never blocks UI)
-    apiLogout(refreshToken).catch(() => undefined);
-    localStorage.removeItem("access_token");
-    localStorage.removeItem("refresh_token");
-    document.cookie = "auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-    setToken(null);
-    setUser(null);
+    // O backend blacklista os tokens e limpa os cookies na resposta; só então
+    // navegamos, para o proxy já ver a sessão encerrada. Se a chamada falhar
+    // (rede), navegamos mesmo assim — o usuário pediu para sair.
+    apiLogout()
+      .catch(() => undefined)
+      .finally(() => {
+        setUser(null);
+        window.location.href = "/login";
+      });
   }
 
   return (
-    <AuthContext.Provider value={{ token, user, isLoading, login, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, isLoading, login, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

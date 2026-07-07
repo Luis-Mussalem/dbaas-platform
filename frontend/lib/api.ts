@@ -34,44 +34,17 @@ import type {
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8001/api/v1";
 
-function getToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem("access_token");
-}
-
-function getRefreshToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem("refresh_token");
-}
+// Os tokens vivem em cookies HttpOnly gravados pelo backend (login/refresh) —
+// JavaScript não lê nem escreve nada de sessão. Todo fetch vai com
+// credentials: "include" e o navegador anexa os cookies sozinho.
 
 // Empresa-ativa do superuser (Stage B). Gravada pelo WorkspaceSwitcher em
 // "active_company_id"; enviada no header X-Company-Id para o backend filtrar.
 // Ausente = superuser vê todas; para usuário comum o backend ignora o header.
+// (Não é credencial — pode ficar em localStorage.)
 function getActiveCompany(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem("active_company_id");
-}
-
-// Grava o par de tokens em localStorage E no cookie auth_token.
-// O cookie é o que o middleware.ts (server-side) lê para proteger as rotas;
-// o localStorage é o que este cliente lê para montar o header Authorization.
-// Os dois precisam andar juntos — por isso uma única função centraliza a escrita.
-function setSession(accessToken: string, refreshToken: string): void {
-  localStorage.setItem("access_token", accessToken);
-  localStorage.setItem("refresh_token", refreshToken);
-  // Secure só em HTTPS: em http://localhost o flag impediria a gravação do
-  // cookie e o middleware derrubaria o usuário para /login em dev.
-  const secure = window.location.protocol === "https:" ? "; Secure" : "";
-  document.cookie = `auth_token=${accessToken}; path=/; SameSite=Lax${secure}`;
-}
-
-// Apaga a sessão por completo (localStorage + cookie). Usada quando o refresh
-// falha — o usuário precisa logar de novo.
-function clearSession(): void {
-  localStorage.removeItem("access_token");
-  localStorage.removeItem("refresh_token");
-  document.cookie =
-    "auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
 }
 
 // Dedupe: se várias requisições tomarem 401 ao mesmo tempo, todas reutilizam
@@ -79,25 +52,15 @@ function clearSession(): void {
 // Análogo ao singleton get_provisioner() do backend (@lru_cache).
 let refreshPromise: Promise<boolean> | null = null;
 
-// Tenta renovar o access token usando o refresh token.
-// Retorna true se conseguiu (e já gravou os novos tokens), false caso contrário.
+// Tenta renovar a sessão: o backend lê o refresh token do cookie HttpOnly e,
+// se válido, devolve os novos tokens já gravados em cookies na resposta.
 async function refreshAccessToken(): Promise<boolean> {
-  const refreshToken = getRefreshToken();
-  if (!refreshToken) return false;
-
   if (!refreshPromise) {
-    // O endpoint /auth/refresh lê o refresh token do header Authorization
-    // (Bearer), não do corpo — igual ao backend em routers/auth.py.
     refreshPromise = fetch(`${API_BASE}/auth/refresh`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${refreshToken}` },
+      credentials: "include",
     })
-      .then(async (res) => {
-        if (!res.ok) return false;
-        const data = await res.json();
-        setSession(data.access_token, data.refresh_token);
-        return true;
-      })
+      .then((res) => res.ok)
       .catch(() => false)
       .finally(() => {
         // Libera o "lock" para futuras renovações depois que esta terminar.
@@ -138,8 +101,6 @@ async function request<T>(
   options: RequestInit = {},
   retry = true
 ): Promise<T> {
-  const token = getToken();
-
   // Não fazemos refresh nos próprios endpoints de autenticação:
   // - /auth/login pode dar 401 por senha errada (não é token expirado)
   // - /auth/refresh é a própria renovação (evita recursão infinita)
@@ -150,9 +111,9 @@ async function request<T>(
 
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(activeCompany ? { "X-Company-Id": activeCompany } : {}),
       ...options.headers,
     },
@@ -165,9 +126,10 @@ async function request<T>(
       // retry=false garante que repetimos a chamada UMA única vez.
       return request<T>(path, options, false);
     }
-    // Refresh falhou → sessão morta: limpa tudo e manda para o login.
-    clearSession();
-    if (typeof window !== "undefined") {
+    // Refresh falhou → sessão morta: manda para o login. (Cookies HttpOnly
+    // não podem ser apagados por JS; o próximo login os sobrescreve.)
+    // Guard contra loop de reload quando o 401 acontece na própria /login.
+    if (typeof window !== "undefined" && window.location.pathname !== "/login") {
       window.location.href = "/login";
     }
     throw new Error("Session expired");
@@ -201,10 +163,12 @@ export async function login(
   });
 }
 
-export async function logout(refreshToken: string | null = null): Promise<void> {
+// O backend lê os tokens dos cookies HttpOnly, blacklista os dois e limpa os
+// cookies na resposta — nenhum token transita pelo corpo.
+export async function logout(): Promise<void> {
   return request<void>("/auth/logout", {
     method: "POST",
-    body: JSON.stringify({ refresh_token: refreshToken }),
+    body: JSON.stringify({}),
   });
 }
 
