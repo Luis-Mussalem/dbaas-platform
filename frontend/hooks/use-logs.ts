@@ -1,0 +1,25 @@
+import { useCallback } from "react";
+import { getInstanceLogs } from "@/lib/api";
+import { useResource } from "@/hooks/use-resource";
+
+interface UseLogsResult {
+  logs: string | null;
+  isLoading: boolean;
+  error: string | null;
+  refresh: () => Promise<void>;
+}
+
+// Logs do container. Sem polling automático — o operador atualiza sob demanda
+// (um tail contínuo seria custoso e ruidoso na UI).
+export function useLogs(instanceId: string, tail = 200): UseLogsResult {
+  const fetcher = useCallback(
+    () => getInstanceLogs(instanceId, tail).then((r) => r.logs),
+    [instanceId, tail]
+  );
+  const { data, isLoading, error, refresh } = useResource(
+    fetcher,
+    "Falha ao carregar logs"
+  );
+
+  return { logs: data, isLoading, error, refresh };
+}

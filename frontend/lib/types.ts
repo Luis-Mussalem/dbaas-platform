@@ -339,3 +339,36 @@ export interface DashboardSummary {
   p95_latency_ms: number | null;
   fleet_uptime_pct: number | null;
 }
+
+// ─── Replication (PHASE 9) ────────────────────────────────────────────────────
+
+export type ReplicationState =
+  | "pending"
+  | "provisioning"
+  | "streaming"
+  | "catchup"
+  | "disconnected"
+  | "promoted"
+  | "failed";
+
+// Resumo do standby embutido no Replica (nome/status/porta na frota).
+export interface ReplicaInstanceInfo {
+  id: string;
+  name: string;
+  status: InstanceStatus;
+  host: string | null;
+  port: number | null;
+}
+
+export interface Replica {
+  id: string;
+  primary_instance_id: string;
+  replica_instance_id: string;
+  replication_state: ReplicationState;
+  lag_bytes: number | null;
+  lag_seconds: number | null;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+  replica_instance: ReplicaInstanceInfo | null;
+}

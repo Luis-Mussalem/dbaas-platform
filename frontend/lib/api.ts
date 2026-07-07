@@ -9,6 +9,7 @@ import type {
   MetricsSnapshot,
   MetricHistoryResponse,
   MetricWindow,
+  Replica,
   HealthCheck,
   SlowQueriesResponse,
   ActiveConnectionsResponse,
@@ -324,6 +325,39 @@ export async function getSchema(instanceId: string): Promise<SchemaResponse> {
 
 export async function getLocks(instanceId: string): Promise<LocksResponse> {
   return request<LocksResponse>(`/instances/${instanceId}/locks`);
+}
+
+// Logs do container da instância (stdout/stderr do PostgreSQL). tail = nº de
+// linhas finais. 409 se o container não existir (instância nunca provisionada).
+export async function getInstanceLogs(
+  instanceId: string,
+  tail = 200
+): Promise<{ logs: string }> {
+  return request<{ logs: string }>(
+    `/instances/${instanceId}/logs?tail=${tail}`
+  );
+}
+
+// ─── Replication (PHASE 9) ────────────────────────────────────────────────────
+
+export async function listReplicas(instanceId: string): Promise<Replica[]> {
+  return request<Replica[]>(`/instances/${instanceId}/replicas`);
+}
+
+// Cria um standby em streaming a partir do primário. Operação longa no backend
+// (pg_basebackup + boot do container) — a chamada só resolve ao final.
+export async function createReplica(instanceId: string): Promise<Replica> {
+  return request<Replica>(`/instances/${instanceId}/replicas`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
+export async function promoteReplica(replicaId: string): Promise<Replica> {
+  return request<Replica>(`/replicas/${replicaId}/promote`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
 }
 
 // ─── SQL Console ────────────────────────────────────────────────────────────

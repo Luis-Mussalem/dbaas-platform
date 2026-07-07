@@ -30,9 +30,10 @@ import { BackupsTab } from "@/components/BackupsTab";
 import { MaintenanceTab } from "@/components/MaintenanceTab";
 import { AlertsTab } from "@/components/AlertsTab";
 import { MetricsTab } from "@/components/MetricsTab";
+import { ReplicasTab } from "@/components/ReplicasTab";
+import { LogsTab } from "@/components/LogsTab";
 import { ConnectionsTable } from "@/components/ConnectionsTable";
 import { SchemaExplorer } from "@/components/SchemaExplorer";
-import { EmptyState } from "@/components/EmptyState";
 import { formatBytes } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { BTN, BTN_DANGER } from "@/lib/ui";
@@ -43,6 +44,7 @@ const TABS = [
   { id: "backups", label: "Backups" },
   { id: "maintenance", label: "Manutenção" },
   { id: "alerts", label: "Alertas" },
+  { id: "replication", label: "Replicação" },
   { id: "logs", label: "Logs" },
 ];
 
@@ -248,9 +250,8 @@ export default function InstanceDetailPage() {
       {tab === "backups" && <BackupsTab instance={instance} />}
       {tab === "maintenance" && <MaintenanceTab instance={instance} />}
       {tab === "alerts" && <AlertsTab instance={instance} />}
-      {tab === "logs" && (
-        <EmptyState title="Logs" subtitle="Sem endpoint de logs por instância ainda." />
-      )}
+      {tab === "replication" && <ReplicasTab instance={instance} />}
+      {tab === "logs" && <LogsTab instance={instance} />}
     </div>
   );
 }
