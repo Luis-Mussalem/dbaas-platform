@@ -5,7 +5,7 @@ import type { Instance } from "@/lib/types";
 import { useMetrics } from "@/hooks/use-metrics";
 import { useMetricHistory } from "@/hooks/use-metric-history";
 import { formatBytes } from "@/lib/format";
-import { instanceGradient, instanceInitials } from "@/lib/identity-color";
+import { instanceGradient, instanceInitials, instanceLineColor } from "@/lib/identity-color";
 import { HealthBadge } from "@/components/StatusBadge";
 import { EnvBadge } from "@/components/EnvBadge";
 import { RegionTag } from "@/components/RegionTag";
@@ -31,13 +31,12 @@ export function InstanceCard({ instance }: { instance: Instance }) {
   const storagePct =
     capacityBytes && sizeBytes ? Math.min(100, (sizeBytes / capacityBytes) * 100) : null;
 
-  // Cor do sparkline/saúde segue o status: parada = neutro, falhou = vermelho.
+  // A linha do sparkline usa a cor de IDENTIDADE da empresa (mesma do avatar),
+  // exceto quando falhou — aí o vermelho de status prevalece como sinal forte.
   const sparkColor =
     instance.status === "failed"
       ? "var(--danger)"
-      : instance.status === "running"
-        ? "var(--brand)"
-        : "var(--fg-3)";
+      : instanceLineColor(instance.name, instance.environment);
 
   return (
     <Link
@@ -47,10 +46,10 @@ export function InstanceCard({ instance }: { instance: Instance }) {
       {/* topo: ícone + nome + região  ·  saúde */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
-          {/* avatar com cor de identidade por instância (hash do id) + iniciais */}
+          {/* avatar com cor de identidade da EMPRESA (matiz) + tom pelo ambiente */}
           <div
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] text-[11px] font-bold text-white"
-            style={{ backgroundImage: instanceGradient(instance.id) }}
+            style={{ backgroundImage: instanceGradient(instance.name, instance.environment) }}
           >
             {instanceInitials(instance.name)}
           </div>
