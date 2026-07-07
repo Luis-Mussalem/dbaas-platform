@@ -2,6 +2,7 @@
 
 import { type KeyboardEvent, useMemo, useRef, useState } from "react";
 import { Loader2, Play, Workflow } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 import { useInstances } from "@/hooks/use-instances";
 import { runQuery, explainQuery } from "@/lib/api";
 import type { QueryResult } from "@/lib/types";
@@ -10,15 +11,18 @@ import { SchemaBrowser } from "@/components/sql/SchemaBrowser";
 import { ResultsTable } from "@/components/sql/ResultsTable";
 import { QueryHistory } from "@/components/sql/QueryHistory";
 
-// ─── Histórico (localStorage, por instância) ────────────────────────────────
+// ─── Histórico (localStorage, por empresa + instância) ──────────────────────
 // Mantido fora do componente: são funções puras de I/O, não dependem de estado.
+// O escopo de empresa evita que o histórico de um tenant apareça para outro no
+// mesmo navegador (troca de workspace do superuser ou de conta).
 const HISTORY_LIMIT = 15;
-const historyKey = (instanceId: string) => `sql_history:${instanceId}`;
+const historyKey = (companyScope: string, instanceId: string) =>
+  `sql_history:${companyScope}:${instanceId}`;
 
-function loadHistory(instanceId: string): string[] {
+function loadHistory(companyScope: string, instanceId: string): string[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(historyKey(instanceId));
+    const raw = localStorage.getItem(historyKey(companyScope, instanceId));
     const parsed = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed) ? parsed : [];
   } catch {
@@ -26,13 +30,21 @@ function loadHistory(instanceId: string): string[] {
   }
 }
 
-function saveHistory(instanceId: string, items: string[]): void {
+function saveHistory(companyScope: string, instanceId: string, items: string[]): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(historyKey(instanceId), JSON.stringify(items));
+  localStorage.setItem(historyKey(companyScope, instanceId), JSON.stringify(items));
 }
 
 export default function SqlPage() {
+  const { user } = useAuth();
   const { instances, isLoading, error: instancesError } = useInstances();
+
+  // Empresa ativa: a do WorkspaceSwitcher (superuser) ou a do próprio usuário.
+  // Trocar de workspace recarrega a página, então ler uma vez por render basta.
+  const companyScope =
+    (typeof window !== "undefined" ? localStorage.getItem("active_company_id") : null) ??
+    user?.company_id ??
+    "all";
 
   // Só instâncias RUNNING aceitam query (o backend devolve 409 para as demais).
   // useMemo estabiliza a referência do array para os efeitos abaixo.
@@ -70,7 +82,7 @@ export default function SqlPage() {
   const [prevId, setPrevId] = useState<string | null | undefined>(undefined);
   if (prevId !== effectiveId) {
     setPrevId(effectiveId);
-    setHistory(effectiveId ? loadHistory(effectiveId) : []);
+    setHistory(effectiveId ? loadHistory(companyScope, effectiveId) : []);
     setResult(null);
     setPlan(null);
     setError(null);
@@ -81,14 +93,14 @@ export default function SqlPage() {
     const trimmed = raw.trim();
     setHistory((prev) => {
       const next = [trimmed, ...prev.filter((q) => q !== trimmed)].slice(0, HISTORY_LIMIT);
-      saveHistory(effectiveId, next);
+      saveHistory(companyScope, effectiveId, next);
       return next;
     });
   }
 
   function clearHistory() {
     if (!effectiveId) return;
-    saveHistory(effectiveId, []);
+    saveHistory(companyScope, effectiveId, []);
     setHistory([]);
   }
 

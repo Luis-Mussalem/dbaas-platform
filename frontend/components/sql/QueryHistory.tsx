@@ -31,8 +31,9 @@ export function QueryHistory({
         </button>
       </div>
       <ul className="p-2">
-        {items.map((q, i) => (
-          <li key={i}>
+        {/* O histórico é deduplicado ao salvar — a própria query é a key. */}
+        {items.map((q) => (
+          <li key={q}>
             <button
               onClick={() => onSelect(q)}
               title="Carregar no editor"

@@ -13,9 +13,9 @@ import { useToast } from "@/context/ToastProvider";
 import { cn } from "@/lib/utils";
 import { timeAgo } from "@/lib/format";
 import type { Company } from "@/lib/types";
+import { INPUT } from "@/lib/ui";
 
-const INPUT =
-  "h-8 rounded-md border border-border bg-background px-2 text-[13px] text-foreground outline-none transition focus:border-brand";
+// Variante única desta página (h-7 com borda) — as compartilhadas estão em lib/ui.
 const BTN_SM =
   "inline-flex h-7 items-center rounded-md border border-border px-2.5 text-[12px] font-medium text-fg-2 transition hover:bg-surface-2 hover:text-foreground disabled:opacity-50";
 
@@ -33,9 +33,18 @@ export default function AdminUsersPage() {
     if (me && !me.is_superuser && me.role !== "admin") router.replace("/");
   }, [me, router]);
 
+  // Só superuser pode listar empresas (403 para os demais) — evita chamada
+  // inútil e permite tratar erro real com toast em vez de engoli-lo.
+  // `toast` é memoizado no ToastProvider — não re-dispara o effect.
+  const isSuperuserMe = me?.is_superuser === true;
   useEffect(() => {
-    listCompanies().then(setCompanies).catch(() => {});
-  }, []);
+    if (!isSuperuserMe) return;
+    listCompanies()
+      .then(setCompanies)
+      .catch((err) =>
+        toast.error(err instanceof Error ? err.message : "Falha ao carregar empresas")
+      );
+  }, [isSuperuserMe, toast]);
 
   const { users, isLoading, error, create, update } = useUsers(
     filterCompanyId || undefined

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Check, ChevronLeft, ChevronRight, X, Zap, RefreshCw } from "lucide-react";
 import { createInstance } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { BTN_PRIMARY, BTN_DEFAULT } from "@/lib/ui";
 import { useToast } from "@/context/ToastProvider";
 import type { Environment } from "@/lib/types";
 
@@ -45,11 +46,6 @@ const SIZES: Size[] = [
 ];
 
 const STEPS = ["Identidade", "Tamanho", "Revisar"];
-
-// Classes de botão reutilizadas (mantêm consistência visual).
-const BTN = "inline-flex h-9 items-center gap-1.5 rounded-md px-4 text-sm font-medium transition";
-const BTN_PRIMARY = `${BTN} bg-primary text-primary-foreground hover:brightness-110`;
-const BTN_DEFAULT = `${BTN} border border-border text-fg-2 hover:bg-surface-2 hover:text-foreground`;
 
 export default function CreateInstancePage() {
   const router = useRouter();

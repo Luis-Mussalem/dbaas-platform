@@ -4,11 +4,7 @@ import { useState } from "react";
 import { Mail, KeyRound, Check, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { updateUser } from "@/lib/api";
-
-const INPUT =
-  "h-9 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-brand";
-const BTN =
-  "inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50";
+import { BTN_PRIMARY, INPUT_LG } from "@/lib/ui";
 
 // Pequeno aviso de sucesso/erro reutilizado pelos dois formulários.
 function Notice({ kind, text }: { kind: "ok" | "error"; text: string }) {
@@ -130,11 +126,11 @@ export default function SettingsPage() {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className={INPUT}
+            className={INPUT_LG}
             placeholder="voce@exemplo.com"
           />
           {emailMsg && <Notice kind={emailMsg.kind} text={emailMsg.text} />}
-          <button type="submit" disabled={emailBusy} className={BTN}>
+          <button type="submit" disabled={emailBusy} className={BTN_PRIMARY}>
             {emailBusy ? "Salvando…" : "Salvar email"}
           </button>
         </div>
@@ -153,7 +149,7 @@ export default function SettingsPage() {
             type="password"
             value={pwd}
             onChange={(e) => setPwd(e.target.value)}
-            className={INPUT}
+            className={INPUT_LG}
             placeholder="Nova senha"
             autoComplete="new-password"
           />
@@ -161,12 +157,12 @@ export default function SettingsPage() {
             type="password"
             value={pwd2}
             onChange={(e) => setPwd2(e.target.value)}
-            className={INPUT}
+            className={INPUT_LG}
             placeholder="Confirmar nova senha"
             autoComplete="new-password"
           />
           {pwdMsg && <Notice kind={pwdMsg.kind} text={pwdMsg.text} />}
-          <button type="submit" disabled={pwdBusy} className={BTN}>
+          <button type="submit" disabled={pwdBusy} className={BTN_PRIMARY}>
             {pwdBusy ? "Salvando…" : "Alterar senha"}
           </button>
         </div>

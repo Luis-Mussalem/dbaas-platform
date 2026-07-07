@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useCallback } from "react";
 import {
   createInstance,
   deleteInstance,
   listInstances,
   updateInstanceStatus,
 } from "@/lib/api";
+import { useResource } from "@/hooks/use-resource";
 import type { Instance, InstanceCreate } from "@/lib/types";
 
 // ─── Return type ───────────────────────────────────────────────────────────────
@@ -21,30 +22,25 @@ interface UseInstancesResult {
 // ─── Hook ──────────────────────────────────────────────────────────────────────
 
 export function useInstances(): UseInstancesResult {
-  const [instances, setInstances] = useState<Instance[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  // Fetch all instances once on mount
-  useEffect(() => {
-    listInstances()
-      .then(setInstances)
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
-      .finally(() => setIsLoading(false));
-  }, []);
+  const fetcher = useCallback(() => listInstances(), []);
+  const { data, isLoading, error, setData } = useResource(
+    fetcher,
+    "Failed to load"
+  );
+  const instances = data ?? [];
 
   // Add new instance to the local list after creation
-  async function create(data: InstanceCreate): Promise<void> {
-    const instance = await createInstance(data);
-    setInstances((prev) => [...prev, instance]);
+  async function create(payload: InstanceCreate): Promise<void> {
+    const instance = await createInstance(payload);
+    setData((prev) => [...(prev ?? []), instance]);
   }
 
   // Update status of one instance in the local list
   // Returns the updated instance so the detail page can set its own state
   async function updateStatus(id: string, action: "start" | "stop"): Promise<Instance> {
     const updated = await updateInstanceStatus(id, action);
-    setInstances((prev) =>
-      prev.map((inst) => (inst.id === id ? updated : inst))
+    setData((prev) =>
+      (prev ?? []).map((inst) => (inst.id === id ? updated : inst))
     );
     return updated;
   }
@@ -52,7 +48,7 @@ export function useInstances(): UseInstancesResult {
   // Remove instance from the local list after deletion
   async function remove(id: string): Promise<void> {
     await deleteInstance(id);
-    setInstances((prev) => prev.filter((inst) => inst.id !== id));
+    setData((prev) => (prev ?? []).filter((inst) => inst.id !== id));
   }
 
   return { instances, isLoading, error, create, updateStatus, remove };

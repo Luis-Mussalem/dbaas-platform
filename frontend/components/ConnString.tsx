@@ -24,10 +24,20 @@ export function ConnString({
   const uri = `postgresql://${user ?? "user"}:••••••••@${host}:${port ?? 5432}/${db ?? ""}`;
 
   function copy() {
-    navigator.clipboard?.writeText(uri).catch(() => {});
-    setCopied(true);
-    toast.success("String de conexão copiada.");
-    setTimeout(() => setCopied(false), 1400);
+    // Sucesso só depois que o clipboard confirmar — sem toast falso quando a
+    // cópia falha (clipboard indisponível fora de HTTPS/localhost, permissão).
+    if (!navigator.clipboard) {
+      toast.error("Não foi possível copiar — clipboard indisponível.");
+      return;
+    }
+    navigator.clipboard
+      .writeText(uri)
+      .then(() => {
+        setCopied(true);
+        toast.success("String de conexão copiada.");
+        setTimeout(() => setCopied(false), 1400);
+      })
+      .catch(() => toast.error("Não foi possível copiar."));
   }
 
   return (

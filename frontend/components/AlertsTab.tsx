@@ -22,13 +22,7 @@ import type {
 } from "@/lib/types";
 import { timeAgo } from "@/lib/format";
 import { cn } from "@/lib/utils";
-
-const BTN =
-  "inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-3 text-[13px] font-medium text-fg-2 transition hover:bg-surface-2 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50";
-const BTN_GHOST =
-  "inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium text-fg-2 transition hover:bg-surface-2 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50";
-const INPUT =
-  "h-8 rounded-md border border-border bg-background px-2 text-[13px] text-foreground outline-none transition focus:border-brand";
+import { BTN, BTN_GHOST, INPUT } from "@/lib/ui";
 
 // Metadados de cada métrica: rótulo legível + unidade exibida ao lado do limiar.
 // Espelha o enum AlertMetricType do backend (src/schemas/alert.py).

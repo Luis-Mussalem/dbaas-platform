@@ -9,11 +9,7 @@ import { useConfirm } from "@/context/ConfirmProvider";
 import type { Backup, BackupStatus, BackupStrategy, Instance } from "@/lib/types";
 import { formatBytes, timeAgo } from "@/lib/format";
 import { cn } from "@/lib/utils";
-
-const BTN_SM =
-  "inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-3 text-[13px] font-medium text-fg-2 transition hover:bg-surface-2 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50";
-const BTN_GHOST =
-  "inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium text-fg-2 transition hover:bg-surface-2 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50";
+import { BTN, BTN_GHOST } from "@/lib/ui";
 
 const STATUS_CLS: Record<BackupStatus, string> = {
   completed: "text-ok border-ok/25 bg-ok/10",
@@ -78,20 +74,20 @@ export function BackupsTab({ instance }: { instance: Instance }) {
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
         <h2 className="text-sm font-semibold">Backups</h2>
         <div className="flex items-center gap-2">
-          <button onClick={refresh} className={BTN_SM}>
+          <button onClick={refresh} className={BTN}>
             <RefreshCw size={13} /> Atualizar
           </button>
           <button
             onClick={() => handleCreate("logical")}
             disabled={!isRunning || busy !== null}
-            className={BTN_SM}
+            className={BTN}
           >
             <Save size={13} /> {busy === "logical" ? "Criando…" : "Backup lógico"}
           </button>
           <button
             onClick={() => handleCreate("physical")}
             disabled={!isRunning || busy !== null}
-            className={BTN_SM}
+            className={BTN}
           >
             <Save size={13} /> {busy === "physical" ? "Criando…" : "Backup físico"}
           </button>

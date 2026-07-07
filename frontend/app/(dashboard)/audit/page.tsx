@@ -5,11 +5,7 @@ import { ScrollText } from "lucide-react";
 import { useAudit } from "@/hooks/use-audit";
 import { timeAgo } from "@/lib/format";
 import { cn } from "@/lib/utils";
-
-const INPUT =
-  "h-8 rounded-md border border-border bg-background px-2 text-[13px] text-foreground outline-none transition focus:border-brand";
-const BTN =
-  "inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-3 text-[13px] font-medium text-fg-2 transition hover:bg-surface-2 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50";
+import { BTN, INPUT } from "@/lib/ui";
 
 // Metadados de cada ação: rótulo legível + "tom" (cor do badge). Espelha a
 // tabela _AUDIT_ACTIONS do middleware (backend/src/core/audit_middleware.py).

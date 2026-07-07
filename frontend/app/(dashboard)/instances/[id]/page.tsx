@@ -35,6 +35,7 @@ import { SchemaExplorer } from "@/components/SchemaExplorer";
 import { EmptyState } from "@/components/EmptyState";
 import { formatBytes } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { BTN, BTN_DANGER } from "@/lib/ui";
 
 const TABS = [
   { id: "overview", label: "Visão geral" },
@@ -44,11 +45,6 @@ const TABS = [
   { id: "alerts", label: "Alertas" },
   { id: "logs", label: "Logs" },
 ];
-
-const BTN_SM =
-  "inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-3 text-[13px] font-medium text-fg-2 transition hover:bg-surface-2 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50";
-const BTN_DANGER =
-  "inline-flex h-8 items-center gap-1.5 rounded-md border border-danger/30 px-3 text-[13px] font-medium text-danger transition hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-50";
 
 // Dias desde a criação ("ativo há Nd"), só informativo.
 function daysSince(iso: string): number {
@@ -189,16 +185,16 @@ export default function InstanceDetailPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <button onClick={load} disabled={isActing} className={BTN_SM}>
+            <button onClick={load} disabled={isActing} className={BTN}>
               <RefreshCw size={13} /> Atualizar
             </button>
             {canStart && (
-              <button onClick={() => handleStatus("start")} disabled={isActing} className={BTN_SM}>
+              <button onClick={() => handleStatus("start")} disabled={isActing} className={BTN}>
                 <Play size={13} /> {isActing ? "Iniciando…" : "Iniciar"}
               </button>
             )}
             {canStop && (
-              <button onClick={() => handleStatus("stop")} disabled={isActing} className={BTN_SM}>
+              <button onClick={() => handleStatus("stop")} disabled={isActing} className={BTN}>
                 <Square size={13} /> {isActing ? "Parando…" : "Parar"}
               </button>
             )}
@@ -356,8 +352,9 @@ function SlowQueries({ instance }: { instance: Instance }) {
             </tr>
           </thead>
           <tbody>
-            {display.map((q, i) => (
-              <tr key={i} className="border-t border-border">
+            {/* pg_stat_statements normaliza as queries — o texto é único por linha. */}
+            {display.map((q) => (
+              <tr key={q.query} className="border-t border-border">
                 <td className="max-w-0 truncate px-4 py-2 font-mono text-xs text-fg-2">
                   {q.query}
                 </td>

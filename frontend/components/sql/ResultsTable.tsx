@@ -37,8 +37,10 @@ export function ResultsTable({ result }: { result: QueryResult }) {
               </tr>
             </thead>
             <tbody>
+              {/* Linhas não têm id próprio e podem se repetir (SELECT 1) — a key
+                  combina conteúdo + posição para ser estável e única. */}
               {rows.map((row, r) => (
-                <tr key={r} className="border-t border-border">
+                <tr key={`${r}|${row.join("")}`} className="border-t border-border">
                   {row.map((cell, c) => (
                     <td
                       key={c}

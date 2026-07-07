@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback } from "react";
 import { getMetrics } from "@/lib/api";
+import { useResource } from "@/hooks/use-resource";
 import type { MetricsSnapshot } from "@/lib/types";
 
 const POLL_INTERVAL_MS = 10_000;
@@ -11,26 +12,12 @@ interface UseMetricsResult {
 }
 
 export function useMetrics(instanceId: string): UseMetricsResult {
-  const [metrics, setMetrics] = useState<MetricsSnapshot | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const fetcher = useCallback(() => getMetrics(instanceId), [instanceId]);
+  const { data, isLoading, error } = useResource(
+    fetcher,
+    "Failed to load metrics",
+    POLL_INTERVAL_MS
+  );
 
-  useEffect(() => {
-    function fetchMetrics() {
-      getMetrics(instanceId)
-        .then(setMetrics)
-        .catch((err) =>
-          setError(err instanceof Error ? err.message : "Failed to load metrics")
-        )
-        .finally(() => setIsLoading(false));
-    }
-
-    fetchMetrics();
-
-    const intervalId = setInterval(fetchMetrics, POLL_INTERVAL_MS);
-
-    return () => clearInterval(intervalId);
-  }, [instanceId]);
-
-  return { metrics, isLoading, error };
+  return { metrics: data, isLoading, error };
 }
