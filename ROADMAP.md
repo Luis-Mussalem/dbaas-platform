@@ -315,7 +315,7 @@ Audit log records all relevant platform actions.
 
 ---
 
-## PHASE 9 — Replication & High Availability `[ ]`
+## PHASE 9 — Replication & High Availability `[x]`
 
 > An "unbreakable" database does not depend on a single instance. Replication
 > guarantees that if the primary server fails, there is a copy ready to take over.
@@ -340,6 +340,18 @@ Audit log records all relevant platform actions.
 **Completion criterion:** Primary instance replicates data in real time to a standby.
 Replication lag monitored. Replica can be promoted to primary via API.
 
+**Implemented deliverables:**
+- `Replica` model + `ReplicationState` enum + Alembic migration `d4f6a8b0c2e1`
+- `DockerProvisioner.create_replica` — `pg_basebackup -R` from the primary into a
+  new volume, standby boots as hot standby; `promote_replica` via `pg_promote()`;
+  primary gains `max_wal_senders`/`max_replication_slots`/`hot_standby` and a
+  `pg_hba.conf` replication entry is added on demand
+- Replica joins the fleet as a companion `DatabaseInstance` (status, port, metrics)
+- `replication_poller` — 30s lag monitor via `pg_stat_replication` (bytes + seconds)
+- Router `POST /instances/{id}/replicas`, `GET /instances/{id}/replicas`,
+  `POST /replicas/{id}/promote` (company-scoped through the primary)
+- Frontend "Replicação" tab (create, live lag, promote) + 7 service/scoping tests
+
 > 💡 **Key concept — Streaming Replication:**
 > The primary sends WAL records to the standby in real time via TCP connection.
 > The standby continuously applies WAL records, maintaining a nearly identical copy.
@@ -347,7 +359,7 @@ Replication lag monitored. Replica can be promoted to primary via API.
 
 ---
 
-## PHASE 10 — Polish, Tests & Deploy `[ ]`
+## PHASE 10 — Polish, Tests & Deploy `[x]`
 
 > Making the project production-ready and portfolio-ready.
 
@@ -360,6 +372,15 @@ Replication lag monitored. Replica can be promoted to primary via API.
 | README.md | Professional, with architecture, setup, screenshots |
 
 **Completion criterion:** CI green. README demonstrates the project to recruiters.
+
+**Implemented deliverables:**
+- 271 tests, 84% backend coverage (exceeds the 80% target)
+- Multi-stage backend `Dockerfile` + new standalone frontend `Dockerfile`; full
+  stack in `docker-compose.yaml` (postgres + pgAdmin + backend + frontend)
+- CI: backend `ruff` + `pytest`; frontend `eslint` + `tsc` + `next build`; backend Docker build
+- OpenAPI: title/description/version + 12 domain tags (all routers tagged)
+- Per-instance container logs endpoint (`GET /instances/{id}/logs`) + frontend Logs tab
+- README with a Screenshots section and full architecture/setup docs
 
 ---
 
@@ -606,8 +627,8 @@ PHASE 0 (Foundation)
                                   └─→ PHASE 5.5 (Foundation for Growth)
                                         └─→ PHASE 6 (Automated Maintenance)
                                               └─→ PHASE 8 (Administration Panel)
-                                                    ├─→ PHASE 9 (Replication & High Availability)
-                                                    │     └─→ PHASE 10 (Deploy & Polish)
+                                                    ├─→ PHASE 9 (Replication & High Availability) ✓
+                                                    │     └─→ PHASE 10 (Deploy & Polish) ✓
                                                     └─→ F0 (Frontend Setup)
                                                           └─→ F1 (Auth UI)
                                                                 └─→ F2 (Instances UI)

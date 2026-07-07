@@ -16,7 +16,7 @@ The project simulates real-world DBaaS concepts commonly found in modern platfor
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)
 
 [![CI](https://github.com/Luis-Mussalem/dbaas-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/Luis-Mussalem/dbaas-platform/actions/workflows/ci.yml)
-![Tests](https://img.shields.io/badge/tests-262%20passing-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-271%20passing-brightgreen?style=flat-square)
 ![Coverage](https://img.shields.io/badge/coverage-84%25-brightgreen?style=flat-square)
 ![Ruff](https://img.shields.io/badge/lint-ruff-blue?style=flat-square)
 
@@ -53,6 +53,19 @@ This project explores how database infrastructure can be abstracted into a full-
 - Exposing all of the above through a modern web interface
 
 The goal is not only to build APIs, but to design systems that simulate operational challenges found in real backend and infrastructure environments.
+
+---
+
+# Screenshots
+
+> The dashboard is a Next.js 16 App Router frontend (TypeScript, Tailwind v4).
+> All data shown is real — provisioned PostgreSQL containers with seeded datasets.
+
+| | |
+|---|---|
+| ![Fleet dashboard](docs/images/dashboard.png) **Fleet dashboard** — real-time KPIs (queries/s, P95 latency, 30-day uptime), region map and per-instance health. | ![Instance detail](docs/images/instance-detail.png) **Instance detail** — live metrics, connections, schema and slow queries per instance. |
+| ![SQL console](docs/images/sql-console.png) **SQL console** — read-only SELECT runner with schema browser, results grid and `EXPLAIN` plans. | ![Replication](docs/images/replication.png) **Replication & HA** — streaming standbys with live lag and one-click promotion (failover). |
+| ![Container logs](docs/images/logs.png) **Container logs** — live PostgreSQL stdout/stderr per instance. | ![Multi-tenant RBAC](docs/images/admin-users.png) **Multi-tenancy** — company workspaces, employee management and the capability/permission matrix. |
 
 ---
 
@@ -194,6 +207,15 @@ This project focuses heavily on backend engineering and operational concepts, in
 
 ---
 
+## Replication & High Availability
+- Streaming physical replicas provisioned from a primary via `pg_basebackup` (`-R`, hot standby)
+- Each standby joins the fleet as a first-class instance (own status, port, metrics)
+- Continuous lag monitoring on the primary (`pg_stat_replication`) — bytes and seconds behind, refreshed every 30 s
+- Manual failover: promote a standby to standalone primary (`pg_promote`) via `POST /replicas/{id}/promote`
+- Company-scoped like every other resource (a replica of another company's instance is a 404)
+
+---
+
 ## Administration & Audit
 - Platform dashboard with consolidated health view across all instances
 - Audit log with automatic event capture via middleware (no manual annotation)
@@ -216,12 +238,15 @@ This project focuses heavily on backend engineering and operational concepts, in
 ## Frontend Interface
 - JWT authentication with token rotation (login, logout, protected routes)
 - Instance list with status badges and resource summary
-- Instance detail with tabbed views (overview, backups, maintenance, alerts, metrics)
+- Instance detail with tabbed views (overview, metrics, backups, maintenance, alerts, replication, logs)
 - Start / Stop / Delete actions with reactive status updates
 - Time-series metric charts (cache hit ratio, connections) with 15m/1h/6h/24h window selector
 - Live monitoring: slow queries and active locks
 - Backups management — list, create, restore and scheduling
 - Maintenance actions and alert rules/events management
+- Replication tab — create standbys, watch live lag, promote to primary
+- Container logs viewer — live PostgreSQL stdout/stderr per instance
+- SQL console — read-only query runner with schema browser, results grid and `EXPLAIN` plans
 - Consolidated dashboard and audit log
 - Workspace switcher — active-company selection propagated to every API call
 - Redesigned dark UI: collapsible sidebar, world-map region picker, light/dark themes
@@ -387,7 +412,7 @@ This mirrors backup strategies used in real PostgreSQL production environments.
 Quality is enforced automatically on every push and pull request.
 
 ## Automated Test Suite
-- **262 tests** with **84% backend coverage** (`pytest` + `pytest-cov`)
+- **271 tests** with **84% backend coverage** (`pytest` + `pytest-cov`)
 - Isolated PostgreSQL test database (`dbaas_test`, created by the test suite) —
   never touches development data
 - External dependencies are faked, not invoked: Docker SDK, `subprocess`
@@ -404,7 +429,7 @@ GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs thr
 | Job | What it does |
 |---|---|
 | **Backend** | `ruff` lint + `pytest` against a PostgreSQL 16 service container |
-| **Frontend** | `npm ci` + `next build` (catches TypeScript/compile breakage) |
+| **Frontend** | `eslint` + `tsc --noEmit` + `next build` |
 | **Docker** | Builds the multi-stage backend image (validates the Dockerfile) |
 
 ## Containerization
@@ -488,27 +513,37 @@ The example file already contains all required configuration variables for:
 
 ---
 
-## Start infrastructure with Docker
+## Option A — Full stack with Docker Compose
+
+Builds and runs everything (PostgreSQL + pgAdmin + backend API + frontend):
 
 ```bash
-docker compose up -d
+docker compose up --build
 ```
+
+- Frontend: `http://localhost:3000`
+- API / Swagger: `http://localhost:8001/docs`
+
+The backend runs in `network_mode: host` so the provisioner can reach the
+sibling database containers it creates on the host loopback, and mounts the
+Docker socket + the repo's `data/` directory (see the comments in
+[`docker-compose.yaml`](docker-compose.yaml)). Run the command from the repo root.
 
 ---
 
-## Run the API
+## Option B — Run backend & frontend manually (development)
+
+Start only the infrastructure, then run each app with hot reload:
 
 ```bash
+docker compose up -d postgres pgadmin
+
+# API (from backend/, with the virtualenv active)
 source .venv/bin/activate
 cd backend
 uvicorn src.main:app --reload --port 8001
-```
 
----
-
-## Run the frontend
-
-```bash
+# Frontend (from frontend/)
 cd frontend
 npm install
 npm run dev
@@ -577,8 +612,10 @@ docker build -t dbaas-backend backend/
 - Alerting & notifications system
 - Administration panel & audit log
 - Multi-tenancy (companies, per-company scoping, employee management, company-admin RBAC, audit scoping)
-- Automated testing (262 tests, 84% coverage)
-- Continuous integration & multi-stage Docker image
+- Streaming replication & high availability (standbys, lag monitoring, manual failover)
+- Per-instance container logs endpoint
+- Automated testing (271 tests, 84% coverage)
+- Continuous integration & full-stack Docker Compose (multi-stage backend + frontend images)
 
 ## Frontend — Complete
 
@@ -594,11 +631,13 @@ docker build -t dbaas-backend backend/
 | Consolidated dashboard + audit log | ✅ Complete |
 | Time-series metric charts (cache hit ratio, connections) | ✅ Complete |
 | SQL console (read-only SELECT, schema browser, EXPLAIN, history) | ✅ Complete |
+| Replication tab (create standby, live lag, promote) | ✅ Complete |
+| Container logs viewer | ✅ Complete |
 
 ## Planned Future Phases
 
-- Replication & high availability
-- Cloud deployment
+- Cloud deployment (managed hosting, TLS, domain)
+- Observability stack integration (Prometheus / Grafana)
 
 ---
 
