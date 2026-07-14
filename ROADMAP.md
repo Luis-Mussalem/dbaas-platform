@@ -374,7 +374,7 @@ Replication lag monitored. Replica can be promoted to primary via API.
 **Completion criterion:** CI green. README demonstrates the project to recruiters.
 
 **Implemented deliverables:**
-- 271 tests, 84% backend coverage (exceeds the 80% target)
+- 272 tests, 82% backend coverage (exceeds the 80% target)
 - Multi-stage backend `Dockerfile` + new standalone frontend `Dockerfile`; full
   stack in `docker-compose.yaml` (postgres + pgAdmin + backend + frontend)
 - CI: backend `ruff` + `pytest`; frontend `eslint` + `tsc` + `next build`; backend Docker build
@@ -424,7 +424,7 @@ Replication lag monitored. Replica can be promoted to primary via API.
 | Deliverable | Description |
 |-------------|-------------|
 | Employee management (backend) | `UserCreate`/`UserRead`/`UserUpdate` admin schemas; `EmployeeService` with CRUD; superuser-only endpoints (`POST /users`, `GET /users`, `PATCH /users/{id}`, `DELETE /users/{id}`) scoped by `company_id` |
-| Employee management (frontend) | Admin screen at `/admin/employees` — list, create, edit and deactivate users within a company; superuser-only access guard |
+| Employee management (frontend) | Admin screen at `/admin/users` — list, create, edit and deactivate users within a company; superuser-only access guard |
 | Tests | 16 tests covering employee CRUD, company scoping isolation, and superuser bypass |
 
 **Stage D — RBAC (Company-Admin Delegation) — DONE `[x]`**:

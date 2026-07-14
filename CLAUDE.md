@@ -18,11 +18,13 @@ only their own company; the admin superuser sees and switches between all.
   the `WorkspaceSwitcher` and propagated as an `X-Company-Id` header; employee management,
   company-admin RBAC (`is_superuser` × `admin`/`member`), and per-company audit scoping
   are all in place.
-- **Progress** — backend phases 0–8 complete; frontend F0–F7 complete (SQL Console shipped).
-  A visual-polish pass (2026-07-02) added real fleet KPIs (queries/s, P95 latency, 30-day
-  uptime via a new `instance_status_history` table), per-user last-activity, and a
-  dashboard/instances/employees redesign. Full phase detail and dependency map in
-  [ROADMAP.md](ROADMAP.md).
+- **Progress** — ROADMAP 100% complete: backend phases 0–10 and frontend F0–F7 all
+  shipped. Phase 9 (streaming replication & HA — standbys via `pg_basebackup -R`, lag
+  monitoring, manual failover) and Phase 10 (container logs, full-stack docker-compose,
+  frontend CI, OpenAPI tags) landed 2026-07-07. A visual-polish pass (2026-07-02) added
+  real fleet KPIs (queries/s, P95 latency, 30-day uptime via `instance_status_history`),
+  per-user last-activity, and a dashboard/instances/employees redesign. 272 tests, 82%
+  backend coverage. Full phase detail and dependency map in [ROADMAP.md](ROADMAP.md).
 
 ## Architecture
 

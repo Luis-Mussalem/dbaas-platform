@@ -5,11 +5,24 @@ Drop the captured PNGs here with these exact names (referenced by the root `READ
 | File | Screen | How to reach it |
 |------|--------|-----------------|
 | `dashboard.png` | Fleet dashboard (Painel) | `/` — the KPI row + region map + instance cards |
-| `instance-detail.png` | Instance detail, "Visão geral" or "Métricas" tab | `/instances/{id}` |
+| `instance-vision.png` | Instance overview, "Visão geral" tab | `/instances/{id}` — stat cards, connections, schema explorer, slow queries |
+| `instance-detail.png` | Instance metrics, "Métricas" tab | `/instances/{id}` → "Métricas" — pick a window (1h/6h) with a populated curve |
 | `sql-console.png` | SQL console | `/sql` — run a `SELECT` so the results grid is populated |
-| `replication.png` | Replication tab | `/instances/{id}` → "Replicação" (create a replica first, so lag shows) |
 | `logs.png` | Container logs tab | `/instances/{id}` → "Logs" |
 | `admin-users.png` | Employees / RBAC matrix | `/admin/users` (log in as the superuser) |
+
+> `logs.png` is **not currently referenced by the root README**: the captured file
+> predates the WAL-archive fix and shows the `Permission denied` wall that the
+> README's case study describes as resolved. Re-link it once recaptured.
+
+> The Replication tab is intentionally **not** in the README: with no standby
+> provisioned it renders empty, and a screenshot of an empty state undersells the
+> feature. Replication is covered in the README's feature list instead.
+
+> **Never screenshot `/docs` or `/redoc`.** Swagger's title comes from `APP_NAME`
+> in your local `.env` (`backend/src/main.py`), which holds the real product name —
+> it must not reach this public repo. The dashboard is safe: the sidebar brand is
+> hardcoded as "DBaaS".
 
 ## Getting to a screenshot-ready state (real data)
 

@@ -16,8 +16,8 @@ The project simulates real-world DBaaS concepts commonly found in modern platfor
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)
 
 [![CI](https://github.com/Luis-Mussalem/dbaas-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/Luis-Mussalem/dbaas-platform/actions/workflows/ci.yml)
-![Tests](https://img.shields.io/badge/tests-271%20passing-brightgreen?style=flat-square)
-![Coverage](https://img.shields.io/badge/coverage-84%25-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-272%20passing-brightgreen?style=flat-square)
+![Coverage](https://img.shields.io/badge/coverage-82%25-brightgreen?style=flat-square)
 ![Ruff](https://img.shields.io/badge/lint-ruff-blue?style=flat-square)
 
 ![JWT Authentication](https://img.shields.io/badge/Auth-JWT-black?style=flat-square)
@@ -54,18 +54,48 @@ This project explores how database infrastructure can be abstracted into a full-
 
 The goal is not only to build APIs, but to design systems that simulate operational challenges found in real backend and infrastructure environments.
 
+## Project at a Glance
+
+| | |
+|---|---|
+| **API surface** | 60 REST endpoints across 14 domain routers (`/api/v1`) |
+| **Codebase** | ~22,000 lines — 9,200 backend (Python) · 5,000 tests · 7,500 frontend (TypeScript) |
+| **Test suite** | 272 automated tests, 82% backend coverage, running in CI on every push |
+| **Data layer** | 15 Alembic migrations, 14 SQLAlchemy models |
+| **Frontend** | 10 routes, 33 reusable React components, fully typed API client |
+| **Background automation** | 6 concurrent loops — status, metrics, alerts, backups, maintenance, replication lag |
+| **Delivery** | 3-job CI pipeline + one-command full-stack Docker Compose |
+
+## Table of Contents
+
+- [Screenshots](#screenshots)
+- [Core Engineering Concepts](#core-engineering-concepts)
+- [Tech Stack](#tech-stack)
+- [Features](#features)
+- [Architecture](#architecture)
+- [Provisioning Workflow](#provisioning-workflow)
+- [Security Approach](#security-approach)
+- [Observability](#observability)
+- [Backup & Recovery Strategy](#backup--recovery-strategy)
+- [Testing & Quality Assurance](#testing--quality-assurance)
+- [Running the Project](#running-the-project)
+- [Current Development Status](#current-development-status)
+
 ---
 
 # Screenshots
 
 > The dashboard is a Next.js 16 App Router frontend (TypeScript, Tailwind v4).
-> All data shown is real — provisioned PostgreSQL containers with seeded datasets.
+> Data shown is collected from real provisioned PostgreSQL containers with seeded
+> datasets — the only exception is the per-query latency chart, labelled
+> *demonstração* in the UI itself (the backend collects fleet-wide P95, not
+> per-execution latency).
 
 | | |
 |---|---|
-| ![Fleet dashboard](docs/images/dashboard.png) **Fleet dashboard** — real-time KPIs (queries/s, P95 latency, 30-day uptime), region map and per-instance health. | ![Instance detail](docs/images/instance-detail.png) **Instance detail** — live metrics, connections, schema and slow queries per instance. |
-| ![SQL console](docs/images/sql-console.png) **SQL console** — read-only SELECT runner with schema browser, results grid and `EXPLAIN` plans. | ![Replication](docs/images/replication.png) **Replication & HA** — streaming standbys with live lag and one-click promotion (failover). |
-| ![Container logs](docs/images/logs.png) **Container logs** — live PostgreSQL stdout/stderr per instance. | ![Multi-tenant RBAC](docs/images/admin-users.png) **Multi-tenancy** — company workspaces, employee management and the capability/permission matrix. |
+| ![Fleet dashboard](docs/images/dashboard.png) **Fleet dashboard** — real-time KPIs (queries/s, P95 latency, 30-day uptime), region map and per-instance health. | ![Instance overview](docs/images/instance-vision.png) **Instance overview** — connections, cache hit, size and status at a glance, with live connections, schema explorer and slow queries (`pg_stat_statements`). |
+| ![Instance metrics](docs/images/instance-detail.png) **Instance metrics** — time-series charts for active connections and cache hit ratio, with a 15m/1h/6h/24h window selector. | ![SQL console](docs/images/sql-console.png) **SQL console** — read-only SELECT runner with schema browser, results grid and `EXPLAIN` plans. |
+| ![Multi-tenant RBAC](docs/images/admin-users.png) **Multi-tenancy** — company workspaces, employee management and the capability/permission matrix. | |
 
 ---
 
@@ -260,33 +290,40 @@ The project is organized as a monorepo separating backend, frontend, and data la
 ```text
 dbaas-platform/
 │
-├── backend/                  # Python / FastAPI
+├── backend/                  # Python / FastAPI control plane
 │   ├── src/
-│   │   ├── collectors/       # PostgreSQL metrics & statistics collectors
-│   │   ├── core/             # Configuration, security, database setup
-│   │   ├── models/           # SQLAlchemy ORM models
-│   │   ├── routers/          # API routes/endpoints
-│   │   ├── schemas/          # Pydantic request/response schemas
-│   │   ├── services/         # Business logic and workflows
-│   │   └── main.py           # FastAPI application entrypoint
-│   ├── alembic/              # Database migrations
-│   └── requirements.txt
+│   │   ├── collectors/       # PostgreSQL metrics & statistics collectors (pg_stat_*)
+│   │   ├── core/             # Config, security, encryption, scoping, SQL guard, audit middleware
+│   │   ├── models/           # SQLAlchemy ORM models (instances, backups, alerts, replicas, …)
+│   │   ├── routers/          # 14 API routers — 60 REST endpoints under /api/v1
+│   │   ├── schemas/          # Pydantic v2 request/response schemas
+│   │   ├── services/         # Business logic, background pollers & schedulers
+│   │   │   └── provisioning/ # Provisioner interface + Docker implementation
+│   │   └── main.py           # FastAPI application entrypoint (lifespan tasks)
+│   ├── alembic/              # 15 database migrations
+│   ├── tests/                # 272 tests (~5,000 lines)
+│   └── Dockerfile            # Multi-stage, non-root runtime image
 │
-├── frontend/                 # Next.js (TypeScript, App Router)
+├── frontend/                 # Next.js 16 dashboard (TypeScript, App Router)
 │   ├── app/
-│   │   ├── layout.tsx        # Root layout with global auth provider
-│   │   ├── page.tsx          # Instance list dashboard
-│   │   ├── login/            # Login page
-│   │   └── instances/[id]/   # Instance detail (dynamic route)
-│   ├── components/           # Reusable UI components
-│   ├── context/              # React Context (auth state)
-│   ├── hooks/                # Custom hooks (instances, metrics)
-│   ├── lib/                  # API client, types, utilities
-│   └── middleware.ts         # Route protection (Next.js middleware)
+│   │   ├── (dashboard)/      # Authenticated shell: sidebar, topbar, workspace switcher
+│   │   │   ├── page.tsx      #   Fleet dashboard (KPIs, region map, health)
+│   │   │   ├── instances/    #   Instance list, creation, and tabbed detail views
+│   │   │   ├── sql/          #   SQL console (schema browser, results grid, EXPLAIN)
+│   │   │   ├── admin/users/  #   Employee management & RBAC matrix
+│   │   │   └── audit/        #   Audit trail
+│   │   └── login/            # Login page
+│   ├── components/           # 33 reusable UI components
+│   ├── context/              # React Context (auth, theme, toasts, confirmations)
+│   ├── hooks/                # Data hooks — one per API resource
+│   ├── lib/                  # Typed API client, shared types, utilities
+│   ├── middleware.ts         # Route protection (Next.js middleware)
+│   └── Dockerfile            # Standalone production image
 │
 ├── data/                     # Runtime backups and WAL archives (gitignored)
 │
-├── docker-compose.yaml       # PostgreSQL + pgAdmin
+├── .github/workflows/ci.yml  # CI: backend, frontend and Docker jobs in parallel
+├── docker-compose.yaml       # Full stack: PostgreSQL + pgAdmin + backend API + frontend
 └── .env.example              # Environment variable template
 ```
 
@@ -412,7 +449,7 @@ This mirrors backup strategies used in real PostgreSQL production environments.
 Quality is enforced automatically on every push and pull request.
 
 ## Automated Test Suite
-- **271 tests** with **84% backend coverage** (`pytest` + `pytest-cov`)
+- **272 tests** with **82% backend coverage** (`pytest` + `pytest-cov`)
 - Isolated PostgreSQL test database (`dbaas_test`, created by the test suite) —
   never touches development data
 - External dependencies are faked, not invoked: Docker SDK, `subprocess`
@@ -454,6 +491,39 @@ Examples include:
 - Token lifecycle cleanup
 - URL encoding edge cases
 - Docker networking restrictions
+
+## Case study — the WAL archive that silently never ran
+
+A representative example of the class of bug this project exists to teach.
+
+**Symptom.** The container-logs view of a healthy, RUNNING instance was a wall of
+`cp: can't create '/archive/…': Permission denied`, once per second.
+
+**Root cause.** The provisioner creates the WAL archive directory on the host and
+bind-mounts it as `/archive`. A bind mount carries the host's ownership into the
+container, but the process writing to it is PostgreSQL *inside* the container —
+uid 70 in the Alpine image, an id that has no meaning on the host and never matches
+the directory's owner. `mkdir` applied the default umask (0755), so uid 70 had read
+and execute but no write, and every `archive_command` failed.
+
+**Why it mattered more than the log noise.** PostgreSQL will not recycle a WAL
+segment it has not successfully archived. With `archive_mode=on` and an archive
+command that always fails, `pg_wal` grows without bound until the disk fills — and
+Point-in-Time Recovery, a headline feature, had no segments to replay from.
+
+**Why the tests were green.** The suite fakes the Docker SDK and `subprocess` on
+purpose, so it runs without Docker. Nothing ever executed the real `cp`. The defect
+lived in the gap between a mocked boundary and the real one — visible only by reading
+the logs of an actual container.
+
+**Fix.** An explicit `chmod` on the archive directory at provision time, plus a
+regression test asserting the mode bits and the mount, so the silent failure cannot
+return. Verified end-to-end against real containers: a freshly provisioned instance
+now reports `archived_count > 0` and `failed_count = 0` in `pg_stat_archiver`.
+
+**Lesson.** Mocks verify the code you wrote; only real infrastructure verifies the
+assumptions you made. A green suite and a healthy status endpoint both agreed the
+instance was fine while its disaster-recovery path had never once worked.
 
 The project maintains an internal engineering log documenting:
 - root causes
@@ -614,7 +684,7 @@ docker build -t dbaas-backend backend/
 - Multi-tenancy (companies, per-company scoping, employee management, company-admin RBAC, audit scoping)
 - Streaming replication & high availability (standbys, lag monitoring, manual failover)
 - Per-instance container logs endpoint
-- Automated testing (271 tests, 84% coverage)
+- Automated testing (272 tests, 82% coverage)
 - Continuous integration & full-stack Docker Compose (multi-stage backend + frontend images)
 
 ## Frontend — Complete
