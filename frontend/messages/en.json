@@ -1,0 +1,228 @@
+{
+  "Actions": {
+    "label": {
+      "backup_created": "Backup created",
+      "instance_created": "Instance created",
+      "instance_deleted": "Instance deleted",
+      "instance_status_changed": "Status changed",
+      "login": "Login",
+      "logout": "Logout",
+      "maintenance_run": "Maintenance run",
+      "register": "Account registered",
+      "restore_initiated": "Restore started",
+      "schedule_created": "Schedule created",
+      "schedule_deleted": "Schedule deleted"
+    },
+    "phrase": {
+      "backup_created": "created a backup of",
+      "instance_created": "created instance",
+      "instance_deleted": "deleted instance",
+      "instance_status_changed": "changed the status of",
+      "login": "signed in",
+      "logout": "signed out",
+      "maintenance_run": "ran maintenance on",
+      "register": "registered an account",
+      "restore_initiated": "started a restore of",
+      "schedule_created": "created a schedule on",
+      "schedule_deleted": "deleted a schedule of"
+    }
+  },
+  "ActivityFeed": {
+    "empty": "No activity yet.",
+    "operator": "operator",
+    "system": "system",
+    "title": "Recent activity"
+  },
+  "Capabilities": {
+    "capability": "Capability",
+    "note": "Company admins act only within their own company and never on superusers.",
+    "rows": {
+      "createUsers": "Create users",
+      "crossCompany": "Cross-company visibility",
+      "editRole": "Edit role / status",
+      "listCompanyUsers": "List company users",
+      "otherUsers": "View other users",
+      "ownProfile": "View own profile",
+      "toggleSuperuser": "Toggle superuser flag",
+      "viewAudit": "View audit log"
+    },
+    "subtitle": "what each role can do",
+    "title": "Permission matrix"
+  },
+  "Common": {
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "error": "Action failed",
+    "loadFailed": "Failed to load",
+    "loading": "Loading…",
+    "none": "—",
+    "unavailableStopped": "Unavailable (instance stopped)."
+  },
+  "Connections": {
+    "empty": "No active connections.",
+    "query": "Query",
+    "state": "State",
+    "title": "Active connections",
+    "user": "User",
+    "wait": "Wait"
+  },
+  "Dashboard": {
+    "empty": {
+      "noneHere": "No databases in this environment",
+      "noneHereSub": "Try a different environment filter.",
+      "noneYet": "No databases yet",
+      "noneYetSub": "Create your first instance to start monitoring."
+    },
+    "greeting": "{period, select, morning {Hello, good morning} afternoon {Hello, good afternoon} evening {Hello, good evening} other {Hello}} ✦",
+    "instanceCount": "{count, plural, one {# instance} other {# instances}}",
+    "kpi": {
+      "p95": "P95 latency",
+      "p95Sub": "across monitored queries",
+      "qps": "Queries/s",
+      "qpsSub": "transactions/s (commits)",
+      "spend": "Monthly spend",
+      "spendSub": "estimated from specs",
+      "uptime": "Uptime 30d",
+      "uptimeCollecting": "collecting history",
+      "uptimeSub": "last 30 days"
+    },
+    "summaryAlerts": "{count, plural, =0 {Your databases are healthy.} one {# active alert requires attention.} other {# active alerts require attention.}}",
+    "summaryBackups": "{count, plural, one {# backup in the last 24h.} other {# backups in the last 24h.}}",
+    "yourDatabases": "Your databases"
+  },
+  "Environments": {
+    "all": "All",
+    "development": "development",
+    "production": "production",
+    "staging": "staging"
+  },
+  "Health": {
+    "deleted": "Deleted",
+    "deleting": "Deleting",
+    "failed": "Failed",
+    "pending": "Pending",
+    "provisioning": "Provisioning",
+    "running": "Healthy",
+    "stopped": "Paused"
+  },
+  "InstanceCard": {
+    "cacheHit": "cache hit",
+    "connections": "connections",
+    "size": "size",
+    "storage": "Storage"
+  },
+  "InstanceDetail": {
+    "activeFor": "active for {days}d",
+    "cacheHit": "Cache hit",
+    "cacheHitTarget": "target > 95%",
+    "connString": {
+      "copied": "Connection string copied.",
+      "copy": "Copy",
+      "copyFailed": "Could not copy.",
+      "copyUnavailable": "Could not copy — clipboard unavailable.",
+      "label": "CONNECTION STRING",
+      "note": "The password is encrypted and never exposed by the API."
+    },
+    "connections": {
+      "activeMax": "active / max",
+      "label": "Connections"
+    },
+    "database": "database",
+    "deleteConfirm": "Delete \"{name}\"?",
+    "deleteConfirmSub": "This action cannot be undone.",
+    "deleted": "\"{name}\" deleted.",
+    "notFound": "Instance not found",
+    "refresh": "Refresh",
+    "size": "Size",
+    "slowQueries": {
+      "avg": "Avg",
+      "calls": "Calls",
+      "empty": "No slow queries recorded.",
+      "query": "Query",
+      "title": "Slow queries"
+    },
+    "start": "Start",
+    "started": "Instance started.",
+    "starting": "Starting…",
+    "status": "Status",
+    "stop": "Stop",
+    "stopped": "Instance stopped.",
+    "stopping": "Stopping…",
+    "tabs": {
+      "alerts": "Alerts",
+      "backups": "Backups",
+      "logs": "Logs",
+      "maintenance": "Maintenance",
+      "metrics": "Metrics",
+      "overview": "Overview",
+      "replication": "Replication"
+    }
+  },
+  "Instances": {
+    "empty": {
+      "noneHere": "No databases in this environment",
+      "noneHereSub": "Try a different environment filter.",
+      "noneYet": "No instances yet",
+      "noneYetSub": "Create your first instance to start managing."
+    },
+    "managedCount": "{count, plural, one {# managed database} other {# managed databases}}",
+    "new": "New instance",
+    "title": "Instances"
+  },
+  "Logs": {
+    "empty": "No logs to show.",
+    "subtitle": "Last 200 lines from PostgreSQL (stdout/stderr).",
+    "title": "Container logs"
+  },
+  "Metrics": {
+    "cacheHit": "Cache hit ratio (%)",
+    "connections": "Active connections",
+    "emptySeries": "Not enough data in this window.",
+    "latency": "Latency (p50 / p95 / p99)",
+    "tag": {
+      "demo": "demo",
+      "real": "real"
+    },
+    "title": "Metrics"
+  },
+  "Nav": {
+    "audit": "Logs & Audit",
+    "dashboard": "Dashboard",
+    "employees": "Employees",
+    "help": "Help",
+    "instances": "Instances",
+    "logout": "Sign out",
+    "onlineNow": "Online now",
+    "settings": "Settings",
+    "sql": "SQL Console",
+    "group": {
+      "account": "Account",
+      "admin": "Administration",
+      "workspace": "Workspace"
+    }
+  },
+  "RegionMap": {
+    "aria": "World map with the distribution of regions",
+    "empty": "No region set.",
+    "illustrative": "illustrative",
+    "subtitle": "Distribution of your databases",
+    "title": "Region map"
+  },
+  "Status": {
+    "deleted": "Deleted",
+    "deleting": "Deleting",
+    "failed": "Failed",
+    "pending": "Pending",
+    "provisioning": "Provisioning",
+    "running": "Running",
+    "stopped": "Stopped"
+  },
+  "Topbar": {
+    "crumb": {
+      "admin": "Administration",
+      "detail": "Detail"
+    },
+    "newInstance": "New instance",
+    "toggleTheme": "Toggle theme"
+  }
+}

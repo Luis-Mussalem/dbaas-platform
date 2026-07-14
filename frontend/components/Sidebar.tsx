@@ -2,50 +2,23 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import {
-  LayoutDashboard,
-  Database,
-  Terminal,
-  ScrollText,
-  Settings,
-  HelpCircle,
-  LogOut,
-  Users,
-  type LucideIcon,
-} from "lucide-react";
+import { useTranslations } from "next-intl";
+import { LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { useInstances } from "@/hooks/use-instances";
 import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
-
-// Itens de navegação — `href` é a URL real (a fonte da verdade do "ativo").
-type NavItem = { href: string; label: string; icon: LucideIcon; badge?: string };
-
-const WORKSPACE_NAV: NavItem[] = [
-  { href: "/", label: "Painel", icon: LayoutDashboard },
-  { href: "/instances", label: "Instâncias", icon: Database },
-  { href: "/sql", label: "Console SQL", icon: Terminal },
-];
-
-const ACCOUNT_NAV: NavItem[] = [
-  { href: "/settings", label: "Configurações", icon: Settings },
-  { href: "/help", label: "Ajuda", icon: HelpCircle },
-];
-
-const ADMIN_NAV: NavItem[] = [
-  { href: "/admin/users", label: "Funcionários", icon: Users },
-  { href: "/audit", label: "Logs & Auditoria", icon: ScrollText },
-];
-
-// "/" só fica ativo na raiz exata; as demais ficam ativas também nas subrotas
-// (ex.: /instances ativo em /instances/abc).
-function isActive(pathname: string, href: string): boolean {
-  if (href === "/") return pathname === "/";
-  return pathname === href || pathname.startsWith(href + "/");
-}
+import {
+  ACCOUNT_NAV,
+  ADMIN_NAV,
+  WORKSPACE_NAV,
+  isActive,
+  type NavItem,
+} from "@/lib/nav";
 
 export function Sidebar() {
   const pathname = usePathname();
+  const t = useTranslations("Nav");
   const { user, logout } = useAuth();
   const { instances } = useInstances();
   const router = useRouter();
@@ -79,28 +52,42 @@ export function Sidebar() {
 
       {/* Navegação */}
       <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto">
-        <NavSection label="Workspace" />
-        {WORKSPACE_NAV.map((item) => {
-          // Injeta a contagem real no item de Instâncias; os demais ficam como definidos.
-          const withBadge =
-            item.href === "/instances" && instanceCount > 0
-              ? { ...item, badge: String(instanceCount) }
-              : item;
-          return (
-            <NavLink key={item.href} item={withBadge} active={isActive(pathname, item.href)} />
-          );
-        })}
+        <NavSection label={t("group.workspace")} />
+        {WORKSPACE_NAV.map((item) => (
+          <NavLink
+            key={item.href}
+            item={item}
+            label={t(item.key)}
+            active={isActive(pathname, item.href)}
+            // Contagem real só no item de Instâncias; oculta quando 0.
+            badge={
+              item.href === "/instances" && instanceCount > 0
+                ? String(instanceCount)
+                : undefined
+            }
+          />
+        ))}
         {(user?.is_superuser || user?.role === "admin") && (
           <>
-            <NavSection label="Administração" />
+            <NavSection label={t("group.admin")} />
             {ADMIN_NAV.map((item) => (
-              <NavLink key={item.href} item={item} active={isActive(pathname, item.href)} />
+              <NavLink
+                key={item.href}
+                item={item}
+                label={t(item.key)}
+                active={isActive(pathname, item.href)}
+              />
             ))}
           </>
         )}
-        <NavSection label="Conta" />
+        <NavSection label={t("group.account")} />
         {ACCOUNT_NAV.map((item) => (
-          <NavLink key={item.href} item={item} active={isActive(pathname, item.href)} />
+          <NavLink
+            key={item.href}
+            item={item}
+            label={t(item.key)}
+            active={isActive(pathname, item.href)}
+          />
         ))}
       </nav>
 
@@ -114,11 +101,11 @@ export function Sidebar() {
             <div className="truncate text-[12.5px] font-medium text-foreground">
               {user?.email ?? "—"}
             </div>
-            <div className="text-[11px] text-fg-3">Online agora</div>
+            <div className="text-[11px] text-fg-3">{t("onlineNow")}</div>
           </div>
           <button
             onClick={handleLogout}
-            title="Sair"
+            title={t("logout")}
             className="flex h-6.5 w-6.5 items-center justify-center rounded-md border border-border bg-surface text-fg-2 transition-colors hover:bg-surface-2 hover:text-foreground"
           >
             <LogOut size={14} />
@@ -137,7 +124,17 @@ function NavSection({ label }: { label: string }) {
   );
 }
 
-function NavLink({ item, active }: { item: NavItem; active: boolean }) {
+function NavLink({
+  item,
+  label,
+  active,
+  badge,
+}: {
+  item: NavItem;
+  label: string;
+  active: boolean;
+  badge?: string;
+}) {
   const Icon = item.icon;
   return (
     <Link
@@ -150,10 +147,10 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
       )}
     >
       <Icon size={16} className="shrink-0" />
-      <span>{item.label}</span>
-      {item.badge && (
+      <span>{label}</span>
+      {badge && (
         <span className="ml-auto rounded-full bg-bg-2 px-1.5 text-[11px] text-fg-3">
-          {item.badge}
+          {badge}
         </span>
       )}
     </Link>

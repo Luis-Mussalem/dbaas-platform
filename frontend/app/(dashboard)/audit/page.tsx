@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { ScrollText } from "lucide-react";
 import { useAudit } from "@/hooks/use-audit";
-import { timeAgo } from "@/lib/format";
+import { useFormatters } from "@/hooks/use-formatters";
 import { cn } from "@/lib/utils";
 import { BTN, INPUT } from "@/lib/ui";
 
@@ -47,6 +47,7 @@ function shortId(id: string): string {
 }
 
 export default function AuditPage() {
+  const { ago } = useFormatters();
   // Estado dos filtros vive AQUI (na página) e é passado ao hook como
   // parâmetro. Trocar um <select> re-renderiza a página → o hook recebe novos
   // filtros → o effect reseta para a página 0. "" significa "sem filtro".
@@ -151,7 +152,7 @@ export default function AuditPage() {
                       className="px-4 py-2 text-fg-2"
                       title={new Date(log.timestamp).toLocaleString("pt-BR")}
                     >
-                      {timeAgo(log.timestamp)}
+                      {ago(log.timestamp)}
                     </td>
                   </tr>
                 );

@@ -7,7 +7,7 @@ import { useBackups } from "@/hooks/use-backups";
 import { useToast } from "@/context/ToastProvider";
 import { useConfirm } from "@/context/ConfirmProvider";
 import type { Backup, BackupStatus, BackupStrategy, Instance } from "@/lib/types";
-import { formatBytes, timeAgo } from "@/lib/format";
+import { useFormatters } from "@/hooks/use-formatters";
 import { cn } from "@/lib/utils";
 import { BTN, BTN_GHOST } from "@/lib/ui";
 
@@ -27,6 +27,7 @@ const STATUS_LABEL: Record<BackupStatus, string> = {
 };
 
 export function BackupsTab({ instance }: { instance: Instance }) {
+  const { ago, bytes } = useFormatters();
   const { backups, isLoading, error, refresh } = useBackups(instance.id);
   // `busy` guarda qual ação está em andamento: "logical", "physical" ou o id do backup em restore.
   const [busy, setBusy] = useState<string | null>(null);
@@ -133,8 +134,8 @@ export function BackupsTab({ instance }: { instance: Instance }) {
                     {b.backup_type === "manual" ? "manual" : "agendado"}
                   </span>
                 </td>
-                <td className="px-4 py-2 text-fg-2">{timeAgo(b.created_at)}</td>
-                <td className="px-4 py-2 font-mono text-fg-2">{formatBytes(b.size_bytes)}</td>
+                <td className="px-4 py-2 text-fg-2">{ago(b.created_at)}</td>
+                <td className="px-4 py-2 font-mono text-fg-2">{bytes(b.size_bytes)}</td>
                 <td className="px-4 py-2">
                   <span
                     className={cn(

@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { getMetricHistory } from "@/lib/api";
 import type { Instance, MetricWindow } from "@/lib/types";
 import { Segmented } from "@/components/Segmented";
 import { MetricArea, MultiLineChart, type ChartPoint } from "@/components/MetricChart";
 
+// Janelas de tempo: os rótulos são unidades técnicas, iguais nos dois idiomas.
 const WINDOWS: { value: MetricWindow; label: string }[] = [
   { value: "15m", label: "15m" },
   { value: "1h", label: "1h" },
@@ -13,13 +15,9 @@ const WINDOWS: { value: MetricWindow; label: string }[] = [
   { value: "24h", label: "24h" },
 ];
 
-function hhmm(iso: string): string {
-  return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-}
-
 // Série de latência DEMO (p50/p95/p99) — sintética, claramente rotulada.
 // O backend ainda não coleta latência por query; isto ilustra o gráfico.
-function demoLatency(n: number): ChartPoint[] {
+function demoLatency(n: number, hhmm: (iso: string) => string): ChartPoint[] {
   const base = Date.now() - n * 60_000;
   return Array.from({ length: n }, (_, i) => {
     const wob = Math.sin(i / 4) * 3;
@@ -33,6 +31,17 @@ function demoLatency(n: number): ChartPoint[] {
 }
 
 export function MetricsTab({ instance }: { instance: Instance }) {
+  const t = useTranslations("Metrics");
+  const locale = useLocale();
+  // Intl preso ao locale, e não o useFormatters: o hhmm roda DENTRO do effect
+  // de busca, e o objeto do useFormatters muda a cada 60s (useNow) — isso
+  // refaria o fetch das séries a cada minuto. Aqui só muda ao trocar de idioma.
+  const timeFormat = useMemo(
+    () => new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }),
+    [locale]
+  );
+  const hhmm = useCallback((iso: string) => timeFormat.format(new Date(iso)), [timeFormat]);
+
   const [range, setRange] = useState<MetricWindow>("1h");
   const [conns, setConns] = useState<ChartPoint[]>([]);
   const [cache, setCache] = useState<ChartPoint[]>([]);
@@ -57,17 +66,17 @@ export function MetricsTab({ instance }: { instance: Instance }) {
     return () => {
       active = false;
     };
-  }, [instance.id, range]);
+  }, [instance.id, range, hhmm]);
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold">Métricas</h2>
+        <h2 className="text-sm font-semibold">{t("title")}</h2>
         <Segmented options={WINDOWS} value={range} onChange={setRange} size="sm" />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <ChartCard title="Conexões ativas" tag="real">
+        <ChartCard title={t("connections")} tag="real">
           {conns.length > 1 ? (
             <MetricArea data={conns} color="#34d399" />
           ) : (
@@ -75,7 +84,7 @@ export function MetricsTab({ instance }: { instance: Instance }) {
           )}
         </ChartCard>
 
-        <ChartCard title="Cache hit ratio (%)" tag="real">
+        <ChartCard title={t("cacheHit")} tag="real">
           {cache.length > 1 ? (
             <MetricArea data={cache} color="#60a5fa" />
           ) : (
@@ -84,9 +93,9 @@ export function MetricsTab({ instance }: { instance: Instance }) {
         </ChartCard>
       </div>
 
-      <ChartCard title="Latência (p50 / p95 / p99)" tag="demonstração">
+      <ChartCard title={t("latency")} tag="demo">
         <MultiLineChart
-          data={demoLatency(40)}
+          data={demoLatency(40, hhmm)}
           series={[
             { key: "p50", color: "#34d399" },
             { key: "p95", color: "#60a5fa" },
@@ -104,9 +113,12 @@ function ChartCard({
   children,
 }: {
   title: string;
-  tag: "real" | "demonstração";
+  // "demo" marca a série sintética de latência — o rótulo exibido é traduzido,
+  // mas a distinção real/demo é do dado, não do idioma.
+  tag: "real" | "demo";
   children: React.ReactNode;
 }) {
+  const t = useTranslations("Metrics.tag");
   return (
     <div className="rounded-xl border border-border bg-surface p-4">
       <div className="mb-2 flex items-center justify-between">
@@ -118,7 +130,7 @@ function ChartCard({
               : "border-border text-fg-3"
           }`}
         >
-          {tag}
+          {t(tag)}
         </span>
       </div>
       {children}
@@ -127,9 +139,6 @@ function ChartCard({
 }
 
 function Empty() {
-  return (
-    <p className="py-14 text-center text-sm text-fg-3">
-      Sem série suficiente nesta janela.
-    </p>
-  );
+  const t = useTranslations("Metrics");
+  return <p className="py-14 text-center text-sm text-fg-3">{t("emptySeries")}</p>;
 }

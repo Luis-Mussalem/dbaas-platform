@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import type { Instance } from "@/lib/types";
 import { useMetrics } from "@/hooks/use-metrics";
 import { useMetricHistory } from "@/hooks/use-metric-history";
-import { formatBytes } from "@/lib/format";
+import { useFormatters } from "@/hooks/use-formatters";
 import { instanceGradient, instanceInitials, instanceLineColor } from "@/lib/identity-color";
 import { HealthBadge } from "@/components/StatusBadge";
 import { EnvBadge } from "@/components/EnvBadge";
@@ -12,6 +13,9 @@ import { RegionTag } from "@/components/RegionTag";
 import { Sparkline } from "@/components/Sparkline";
 
 export function InstanceCard({ instance }: { instance: Instance }) {
+  const t = useTranslations("InstanceCard");
+  const tc = useTranslations("Common");
+  const { bytes, ratio } = useFormatters();
   // Métricas ao vivo do banco (poll a cada 10s pelo hook). Para instâncias
   // não-RUNNING, o backend devolve a última leitura armazenada (ou vazio).
   const { metrics } = useMetrics(instance.id);
@@ -80,31 +84,31 @@ export function InstanceCard({ instance }: { instance: Instance }) {
       {/* métricas ao vivo */}
       <div className="flex items-center justify-between">
         <Metric
-          label="conexões"
+          label={t("connections")}
           value={
             connActive != null
               ? `${Math.round(connActive)}${connMax ? `/${Math.round(connMax)}` : ""}`
-              : "—"
+              : tc("none")
           }
         />
         <Metric
-          label="cache hit"
-          value={cacheHit != null ? `${cacheHit.toFixed(1)}%` : "—"}
+          label={t("cacheHit")}
+          value={cacheHit != null ? `${ratio(cacheHit)}%` : tc("none")}
           align="right"
         />
-        <Metric label="tamanho" value={formatBytes(sizeBytes)} align="right" />
+        <Metric label={t("size")} value={bytes(sizeBytes)} align="right" />
       </div>
 
       {/* armazenamento */}
       <div>
         <div className="mb-1.5 flex items-center justify-between text-[11.5px] text-fg-3">
-          <span>Armazenamento</span>
+          <span>{t("storage")}</span>
           <span className="font-mono text-fg-2">
             {storagePct != null
-              ? `${storagePct.toFixed(0)}%`
+              ? `${Math.round(storagePct)}%`
               : instance.storage_gb
                 ? `${instance.storage_gb} GB`
-                : "—"}
+                : tc("none")}
           </span>
         </div>
         <div className="h-1 overflow-hidden rounded-full bg-bg-2">

@@ -1,0 +1,228 @@
+{
+  "Actions": {
+    "label": {
+      "backup_created": "Backup criado",
+      "instance_created": "Instância criada",
+      "instance_deleted": "Instância removida",
+      "instance_status_changed": "Status alterado",
+      "login": "Login",
+      "logout": "Logout",
+      "maintenance_run": "Manutenção executada",
+      "register": "Conta registrada",
+      "restore_initiated": "Restore iniciado",
+      "schedule_created": "Agendamento criado",
+      "schedule_deleted": "Agendamento removido"
+    },
+    "phrase": {
+      "backup_created": "criou um backup de",
+      "instance_created": "criou a instância",
+      "instance_deleted": "removeu a instância",
+      "instance_status_changed": "alterou o status de",
+      "login": "entrou na plataforma",
+      "logout": "saiu da plataforma",
+      "maintenance_run": "rodou manutenção em",
+      "register": "registrou uma conta",
+      "restore_initiated": "iniciou um restore de",
+      "schedule_created": "criou um agendamento em",
+      "schedule_deleted": "removeu um agendamento de"
+    }
+  },
+  "ActivityFeed": {
+    "empty": "Nenhuma atividade ainda.",
+    "operator": "operador",
+    "system": "sistema",
+    "title": "Atividade recente"
+  },
+  "Capabilities": {
+    "capability": "Capacidade",
+    "note": "Company admins agem apenas dentro da própria empresa e nunca sobre superusers.",
+    "rows": {
+      "createUsers": "Criar usuários",
+      "crossCompany": "Visibilidade entre empresas",
+      "editRole": "Editar papel / status",
+      "listCompanyUsers": "Listar usuários da empresa",
+      "otherUsers": "Ver outros usuários",
+      "ownProfile": "Ver o próprio perfil",
+      "toggleSuperuser": "Alternar flag de superuser",
+      "viewAudit": "Ver registro de auditoria"
+    },
+    "subtitle": "o que cada papel pode fazer",
+    "title": "Matriz de permissões"
+  },
+  "Common": {
+    "cancel": "Cancelar",
+    "delete": "Excluir",
+    "error": "Ação falhou",
+    "loadFailed": "Falha ao carregar",
+    "loading": "Carregando…",
+    "none": "—",
+    "unavailableStopped": "Indisponível (instância parada)."
+  },
+  "Connections": {
+    "empty": "Nenhuma conexão ativa.",
+    "query": "Query",
+    "state": "Estado",
+    "title": "Conexões ativas",
+    "user": "Usuário",
+    "wait": "Espera"
+  },
+  "Dashboard": {
+    "empty": {
+      "noneHere": "Nenhum banco neste ambiente",
+      "noneHereSub": "Tente outro filtro de ambiente.",
+      "noneYet": "Nenhum banco ainda",
+      "noneYetSub": "Crie sua primeira instância para começar a monitorar."
+    },
+    "greeting": "{period, select, morning {Olá, bom dia} afternoon {Olá, boa tarde} evening {Olá, boa noite} other {Olá}} ✦",
+    "instanceCount": "{count, plural, one {# instância} other {# instâncias}}",
+    "kpi": {
+      "p95": "Latência P95",
+      "p95Sub": "entre queries monitoradas",
+      "qps": "Queries/s",
+      "qpsSub": "transações/s (commits)",
+      "spend": "Gasto mensal",
+      "spendSub": "estimativa por specs",
+      "uptime": "Uptime 30d",
+      "uptimeCollecting": "coletando histórico",
+      "uptimeSub": "últimos 30 dias"
+    },
+    "summaryAlerts": "{count, plural, =0 {Seus bancos estão saudáveis.} one {# alerta ativo requer atenção.} other {# alertas ativos requerem atenção.}}",
+    "summaryBackups": "{count, plural, one {# backup nas últimas 24h.} other {# backups nas últimas 24h.}}",
+    "yourDatabases": "Seus bancos"
+  },
+  "Environments": {
+    "all": "Todos",
+    "development": "desenvolvimento",
+    "production": "produção",
+    "staging": "homologação"
+  },
+  "Health": {
+    "deleted": "Removida",
+    "deleting": "Removendo",
+    "failed": "Falhou",
+    "pending": "Pendente",
+    "provisioning": "Provisionando",
+    "running": "Saudável",
+    "stopped": "Pausado"
+  },
+  "InstanceCard": {
+    "cacheHit": "cache hit",
+    "connections": "conexões",
+    "size": "tamanho",
+    "storage": "Armazenamento"
+  },
+  "InstanceDetail": {
+    "activeFor": "ativo há {days}d",
+    "cacheHit": "Cache hit",
+    "cacheHitTarget": "meta > 95%",
+    "connString": {
+      "copied": "String de conexão copiada.",
+      "copy": "Copiar",
+      "copyFailed": "Não foi possível copiar.",
+      "copyUnavailable": "Não foi possível copiar — clipboard indisponível.",
+      "label": "STRING DE CONEXÃO",
+      "note": "A senha é cifrada e não é exposta pela API."
+    },
+    "connections": {
+      "activeMax": "ativas / máx",
+      "label": "Conexões"
+    },
+    "database": "banco",
+    "deleteConfirm": "Excluir \"{name}\"?",
+    "deleteConfirmSub": "Esta ação não pode ser desfeita.",
+    "deleted": "\"{name}\" excluída.",
+    "notFound": "Instância não encontrada",
+    "refresh": "Atualizar",
+    "size": "Tamanho",
+    "slowQueries": {
+      "avg": "Média",
+      "calls": "Chamadas",
+      "empty": "Sem queries lentas registradas.",
+      "query": "Query",
+      "title": "Queries lentas"
+    },
+    "start": "Iniciar",
+    "started": "Instância iniciada.",
+    "starting": "Iniciando…",
+    "status": "Status",
+    "stop": "Parar",
+    "stopped": "Instância parada.",
+    "stopping": "Parando…",
+    "tabs": {
+      "alerts": "Alertas",
+      "backups": "Backups",
+      "logs": "Logs",
+      "maintenance": "Manutenção",
+      "metrics": "Métricas",
+      "overview": "Visão geral",
+      "replication": "Replicação"
+    }
+  },
+  "Instances": {
+    "empty": {
+      "noneHere": "Nenhum banco neste ambiente",
+      "noneHereSub": "Tente outro filtro de ambiente.",
+      "noneYet": "Nenhuma instância ainda",
+      "noneYetSub": "Crie sua primeira instância para começar a gerenciar."
+    },
+    "managedCount": "{count, plural, one {# banco gerenciado} other {# bancos gerenciados}}",
+    "new": "Nova instância",
+    "title": "Instâncias"
+  },
+  "Logs": {
+    "empty": "Sem logs para exibir.",
+    "subtitle": "Últimas 200 linhas do PostgreSQL (stdout/stderr).",
+    "title": "Logs do container"
+  },
+  "Metrics": {
+    "cacheHit": "Cache hit ratio (%)",
+    "connections": "Conexões ativas",
+    "emptySeries": "Sem série suficiente nesta janela.",
+    "latency": "Latência (p50 / p95 / p99)",
+    "tag": {
+      "demo": "demonstração",
+      "real": "real"
+    },
+    "title": "Métricas"
+  },
+  "Nav": {
+    "audit": "Logs & Auditoria",
+    "dashboard": "Painel",
+    "employees": "Funcionários",
+    "help": "Ajuda",
+    "instances": "Instâncias",
+    "logout": "Sair",
+    "onlineNow": "Online agora",
+    "settings": "Configurações",
+    "sql": "Console SQL",
+    "group": {
+      "account": "Conta",
+      "admin": "Administração",
+      "workspace": "Workspace"
+    }
+  },
+  "RegionMap": {
+    "aria": "Mapa-múndi com a distribuição das regiões",
+    "empty": "Nenhuma região definida.",
+    "illustrative": "ilustrativo",
+    "subtitle": "Distribuição dos seus bancos",
+    "title": "Mapa de regiões"
+  },
+  "Status": {
+    "deleted": "Removida",
+    "deleting": "Removendo",
+    "failed": "Falhou",
+    "pending": "Pendente",
+    "provisioning": "Provisionando",
+    "running": "Rodando",
+    "stopped": "Parada"
+  },
+  "Topbar": {
+    "crumb": {
+      "admin": "Administração",
+      "detail": "Detalhe"
+    },
+    "newInstance": "Nova instância",
+    "toggleTheme": "Alternar tema"
+  }
+}

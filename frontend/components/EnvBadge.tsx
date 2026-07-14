@@ -1,7 +1,10 @@
-import type { Environment } from "@/lib/types";
-import { ENVIRONMENTS } from "@/lib/environment";
+"use client";
 
-// Tag de ambiente: rótulo PT + cor semântica, derivados da fonte única
+import { useTranslations } from "next-intl";
+import type { Environment } from "@/lib/types";
+import { environmentTone } from "@/lib/environment";
+
+// Tag de ambiente: rótulo traduzido + cor semântica, derivada da fonte única
 // lib/environment. Só as classes Tailwind do tom moram aqui (o resto é
 // compartilhado). Ambiente nulo → não renderiza.
 const TONE_CLS: Record<"ok" | "warn" | "info", string> = {
@@ -11,14 +14,15 @@ const TONE_CLS: Record<"ok" | "warn" | "info", string> = {
 };
 
 export function EnvBadge({ environment }: { environment: Environment | null }) {
+  const t = useTranslations("Environments");
   if (!environment) return null;
-  const e = ENVIRONMENTS.find((x) => x.value === environment);
-  if (!e) return null;
+  const tone = environmentTone(environment);
+  if (!tone) return null;
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${TONE_CLS[e.tone]}`}
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${TONE_CLS[tone]}`}
     >
-      {e.label}
+      {t(environment)}
     </span>
   );
 }

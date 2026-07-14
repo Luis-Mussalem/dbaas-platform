@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import {
   ChevronLeft,
   Play,
@@ -34,19 +35,20 @@ import { ReplicasTab } from "@/components/ReplicasTab";
 import { LogsTab } from "@/components/LogsTab";
 import { ConnectionsTable } from "@/components/ConnectionsTable";
 import { SchemaExplorer } from "@/components/SchemaExplorer";
-import { formatBytes } from "@/lib/format";
+import { useFormatters } from "@/hooks/use-formatters";
 import { cn } from "@/lib/utils";
 import { BTN, BTN_DANGER } from "@/lib/ui";
 
+// Os rótulos vêm de InstanceDetail.tabs.* — aqui só a ordem e os ids.
 const TABS = [
-  { id: "overview", label: "Visão geral" },
-  { id: "metrics", label: "Métricas" },
-  { id: "backups", label: "Backups" },
-  { id: "maintenance", label: "Manutenção" },
-  { id: "alerts", label: "Alertas" },
-  { id: "replication", label: "Replicação" },
-  { id: "logs", label: "Logs" },
-];
+  "overview",
+  "metrics",
+  "backups",
+  "maintenance",
+  "alerts",
+  "replication",
+  "logs",
+] as const;
 
 // Dias desde a criação ("ativo há Nd"), só informativo.
 function daysSince(iso: string): number {
@@ -54,6 +56,8 @@ function daysSince(iso: string): number {
 }
 
 export default function InstanceDetailPage() {
+  const t = useTranslations("InstanceDetail");
+  const tc = useTranslations("Common");
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
 
@@ -73,11 +77,11 @@ export default function InstanceDetailPage() {
       setInstance(data);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao carregar");
+      setError(err instanceof Error ? err.message : tc("loadFailed"));
     } finally {
       setIsLoading(false);
     }
-  }, [id]);
+  }, [id, tc]);
 
   useEffect(() => {
     let active = true;
@@ -89,7 +93,7 @@ export default function InstanceDetailPage() {
         }
       })
       .catch((err) => {
-        if (active) setError(err instanceof Error ? err.message : "Falha ao carregar");
+        if (active) setError(err instanceof Error ? err.message : tc("loadFailed"));
       })
       .finally(() => {
         if (active) setIsLoading(false);
@@ -97,7 +101,7 @@ export default function InstanceDetailPage() {
     return () => {
       active = false;
     };
-  }, [id]);
+  }, [id, tc]);
 
   async function handleStatus(action: "start" | "stop") {
     if (!instance) return;
@@ -106,9 +110,9 @@ export default function InstanceDetailPage() {
     try {
       const updated = await updateInstanceStatus(instance.id, action);
       setInstance(updated);
-      toast.success(action === "start" ? "Instância iniciada." : "Instância parada.");
+      toast.success(action === "start" ? t("started") : t("stopped"));
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Ação falhou";
+      const msg = err instanceof Error ? err.message : tc("error");
       setError(msg);
       toast.error(msg);
     } finally {
@@ -119,9 +123,9 @@ export default function InstanceDetailPage() {
   async function handleDelete() {
     if (!instance) return;
     const ok = await confirm({
-      title: `Excluir "${instance.name}"?`,
-      description: "Esta ação não pode ser desfeita.",
-      confirmText: "Excluir",
+      title: t("deleteConfirm", { name: instance.name }),
+      description: t("deleteConfirmSub"),
+      confirmText: tc("delete"),
       danger: true,
     });
     if (!ok) return;
@@ -129,19 +133,19 @@ export default function InstanceDetailPage() {
     setError(null);
     try {
       await deleteInstance(instance.id);
-      toast.success(`"${instance.name}" excluída.`);
+      toast.success(t("deleted", { name: instance.name }));
       router.push("/instances");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Falha ao excluir";
+      const msg = err instanceof Error ? err.message : tc("error");
       setError(msg);
       toast.error(msg);
       setIsActing(false);
     }
   }
 
-  if (isLoading) return <p className="text-sm text-fg-3">Carregando…</p>;
+  if (isLoading) return <p className="text-sm text-fg-3">{tc("loading")}</p>;
   if (!instance)
-    return <p className="text-sm text-danger">{error ?? "Instância não encontrada"}</p>;
+    return <p className="text-sm text-danger">{error ?? t("notFound")}</p>;
 
   const canStart = instance.status === "stopped" || instance.status === "failed";
   const canStop = instance.status === "running";
@@ -181,28 +185,28 @@ export default function InstanceDetailPage() {
                 <span className="text-fg-faint">·</span>
                 <span>{instance.cpu ?? "—"} vCPU · {ramGb ?? "—"} GB RAM · {instance.storage_gb ?? "—"} GB</span>
                 <span className="text-fg-faint">·</span>
-                <span>ativo há {daysSince(instance.created_at)}d</span>
+                <span>{t("activeFor", { days: daysSince(instance.created_at) })}</span>
               </div>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
             <button onClick={load} disabled={isActing} className={BTN}>
-              <RefreshCw size={13} /> Atualizar
+              <RefreshCw size={13} /> {t("refresh")}
             </button>
             {canStart && (
               <button onClick={() => handleStatus("start")} disabled={isActing} className={BTN}>
-                <Play size={13} /> {isActing ? "Iniciando…" : "Iniciar"}
+                <Play size={13} /> {isActing ? t("starting") : t("start")}
               </button>
             )}
             {canStop && (
               <button onClick={() => handleStatus("stop")} disabled={isActing} className={BTN}>
-                <Square size={13} /> {isActing ? "Parando…" : "Parar"}
+                <Square size={13} /> {isActing ? t("stopping") : t("stop")}
               </button>
             )}
             {canDelete && (
               <button onClick={handleDelete} disabled={isActing} className={BTN_DANGER}>
-                <Trash2 size={13} /> Excluir
+                <Trash2 size={13} /> {tc("delete")}
               </button>
             )}
           </div>
@@ -227,18 +231,18 @@ export default function InstanceDetailPage() {
 
         {/* ── Abas ── */}
         <div className="mt-4 flex gap-1 overflow-x-auto border-b border-border">
-          {TABS.map((tb) => (
+          {TABS.map((id) => (
             <button
-              key={tb.id}
-              onClick={() => setTab(tb.id)}
+              key={id}
+              onClick={() => setTab(id)}
               className={cn(
                 "-mb-px shrink-0 border-b-2 px-3 py-2 text-[13px] font-medium transition",
-                tab === tb.id
+                tab === id
                   ? "border-brand text-brand"
                   : "border-transparent text-fg-3 hover:text-fg-2"
               )}
             >
-              {tb.label}
+              {t(`tabs.${id}`)}
             </button>
           ))}
         </div>
@@ -264,6 +268,9 @@ function OverviewTab({
   instance: Instance;
   metrics: Record<string, number>;
 }) {
+  const t = useTranslations("InstanceDetail");
+  const tc = useTranslations("Common");
+  const { bytes, ratio } = useFormatters();
   const connActive = metrics.connections_active;
   const connMax = metrics.connections_max;
   const cacheHit = metrics.cache_hit_ratio;
@@ -276,23 +283,23 @@ function OverviewTab({
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard
-          label="Conexões"
+          label={t("connections.label")}
           value={
             connActive != null
               ? `${Math.round(connActive)}${connMax ? `/${Math.round(connMax)}` : ""}`
-              : "—"
+              : tc("none")
           }
-          sub="ativas / máx"
+          sub={t("connections.activeMax")}
           chart={connHistory.length > 1 ? connHistory : undefined}
         />
         <StatCard
-          label="Cache hit"
-          value={cacheHit != null ? `${cacheHit.toFixed(1)}%` : "—"}
-          sub="meta > 95%"
+          label={t("cacheHit")}
+          value={cacheHit != null ? `${ratio(cacheHit)}%` : tc("none")}
+          sub={t("cacheHitTarget")}
           accent={cacheHit != null && cacheHit < 95 ? "warn" : "ok"}
         />
-        <StatCard label="Tamanho" value={formatBytes(sizeBytes)} sub="banco" />
-        <StatCard label="Status" value={instance.status} />
+        <StatCard label={t("size")} value={bytes(sizeBytes)} sub={t("database")} />
+        <StatCard label={t("status")} value={instance.status} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
@@ -307,6 +314,8 @@ function OverviewTab({
 
 // ── Tabela de queries lentas (pg_stat_statements) ──
 function SlowQueries({ instance }: { instance: Instance }) {
+  const t = useTranslations("InstanceDetail");
+  const tc = useTranslations("Common");
   const [rows, setRows] = useState<SlowQuery[] | null>(null);
   const [failed, setFailed] = useState(false);
   const running = instance.status === "running";
@@ -329,16 +338,14 @@ function SlowQueries({ instance }: { instance: Instance }) {
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-surface">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <h2 className="text-sm font-semibold">Queries lentas</h2>
+        <h2 className="text-sm font-semibold">{t("slowQueries.title")}</h2>
         <span className="text-xs text-fg-3">pg_stat_statements</span>
       </div>
 
       {unavailable ? (
-        <p className="px-4 py-8 text-center text-sm text-fg-3">
-          Indisponível (instância parada ou sem dados).
-        </p>
+        <p className="px-4 py-8 text-center text-sm text-fg-3">{tc("unavailableStopped")}</p>
       ) : display === null ? (
-        <p className="px-4 py-8 text-center text-sm text-fg-3">Carregando…</p>
+        <p className="px-4 py-8 text-center text-sm text-fg-3">{tc("loading")}</p>
       ) : display.length === 0 ? (
         <p className="px-4 py-8 text-center text-sm text-fg-3">
           Sem queries lentas registradas.
@@ -347,9 +354,9 @@ function SlowQueries({ instance }: { instance: Instance }) {
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-[11.5px] uppercase tracking-wide text-fg-3">
-              <th className="px-4 py-2 font-medium">Query</th>
-              <th className="px-4 py-2 text-right font-medium">Média</th>
-              <th className="px-4 py-2 text-right font-medium">Chamadas</th>
+              <th className="px-4 py-2 font-medium">{t("slowQueries.query")}</th>
+              <th className="px-4 py-2 text-right font-medium">{t("slowQueries.avg")}</th>
+              <th className="px-4 py-2 text-right font-medium">{t("slowQueries.calls")}</th>
             </tr>
           </thead>
           <tbody>

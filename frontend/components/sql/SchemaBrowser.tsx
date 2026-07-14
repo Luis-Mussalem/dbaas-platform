@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { ChevronDown, ChevronRight, Table2 } from "lucide-react";
 import { getSchema } from "@/lib/api";
 import type { Instance, SchemaGroup } from "@/lib/types";
-import { formatNumber } from "@/lib/format";
+import { useFormatters } from "@/hooks/use-formatters";
 
 // Variante do SchemaExplorer para o Console SQL: cada tabela é um botão que
 // chama onPickTable(nome) — a página insere o nome no editor. Mesmo visual e
@@ -16,6 +16,7 @@ export function SchemaBrowser({
   instance: Instance;
   onPickTable: (table: string) => void;
 }) {
+  const { number } = useFormatters();
   const [groups, setGroups] = useState<SchemaGroup[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [open, setOpen] = useState<Set<string>>(new Set(["public"]));
@@ -86,7 +87,7 @@ export function SchemaBrowser({
                           <Table2 size={12} className="shrink-0 text-fg-3" />
                           <span className="flex-1 truncate font-mono">{t.table}</span>
                           <span className="font-mono text-[11px] text-fg-3">
-                            {formatNumber(t.estimated_rows)}
+                            {number(t.estimated_rows)}
                           </span>
                         </button>
                       </li>

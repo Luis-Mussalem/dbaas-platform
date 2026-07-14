@@ -6,7 +6,7 @@ import { runMaintenance } from "@/lib/api";
 import { useMaintenance } from "@/hooks/use-maintenance";
 import { useToast } from "@/context/ToastProvider";
 import type { Instance, TaskType, TaskStatus } from "@/lib/types";
-import { timeAgo } from "@/lib/format";
+import { useFormatters } from "@/hooks/use-formatters";
 import { cn } from "@/lib/utils";
 import { BTN, BTN_GHOST } from "@/lib/ui";
 
@@ -43,6 +43,7 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
 };
 
 export function MaintenanceTab({ instance }: { instance: Instance }) {
+  const { ago } = useFormatters();
   const { tasks, isLoading, error, refresh } = useMaintenance(instance.id);
   const [busy, setBusy] = useState<string | null>(null);
   const { toast } = useToast();
@@ -127,7 +128,7 @@ export function MaintenanceTab({ instance }: { instance: Instance }) {
                     </span>
                   </td>
                   <td className="px-4 py-2 text-fg-2">
-                    {timeAgo(t.started_at ?? t.scheduled_at)}
+                    {ago(t.started_at ?? t.scheduled_at)}
                   </td>
                   <td className="max-w-0 truncate px-4 py-2 font-mono text-xs text-fg-3">
                     {t.result_summary ?? "—"}

@@ -1,7 +1,10 @@
 // Registro de regiões: mapeia códigos (estilo AWS) para flag + cidade + país.
-// Compartilhado por RegionTag (no card) e RegionMap (painel do dashboard).
+// Compartilhado por RegionTag (no card), RegionMap (painel) e o wizard de criação.
 // `lat`/`lon` são as coordenadas geográficas REAIS da cidade da região; o
 // RegionMap as projeta num mapa-múndi para posicionar os marcadores.
+//
+// Fora do i18n de propósito: cidades e códigos de região são nomes próprios de
+// infraestrutura — a AWS não chama sa-east-1 de "Leste da América do Sul" em PT.
 
 export interface RegionInfo {
   code: string;
@@ -20,6 +23,12 @@ const REGIONS: Record<string, RegionInfo> = {
   "eu-central-1": { code: "eu-central-1", flag: "🇩🇪", city: "Frankfurt", country: "DE", lat: 50.1, lon: 8.7 },
   "ap-southeast-1": { code: "ap-southeast-1", flag: "🇸🇬", city: "Singapore", country: "SG", lat: 1.35, lon: 103.8 },
 };
+
+// Todas as regiões conhecidas, na ordem de declaração — usado pelo wizard de
+// criação, que antes mantinha uma cópia própria (e desatualizada) desta lista.
+export function listRegions(): RegionInfo[] {
+  return Object.values(REGIONS);
+}
 
 // Busca robusta: código desconhecido vira um item neutro (sem flag, sigla "—"),
 // para a UI nunca quebrar com uma região que ainda não está no registro.

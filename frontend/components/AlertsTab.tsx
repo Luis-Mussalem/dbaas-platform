@@ -20,7 +20,7 @@ import type {
   AlertCondition,
   AlertSeverity,
 } from "@/lib/types";
-import { timeAgo } from "@/lib/format";
+import { useFormatters } from "@/hooks/use-formatters";
 import { cn } from "@/lib/utils";
 import { BTN, BTN_GHOST, INPUT } from "@/lib/ui";
 
@@ -64,6 +64,7 @@ const EMPTY_FORM = {
 };
 
 export function AlertsTab({ instance }: { instance: Instance }) {
+  const { ago } = useFormatters();
   const { rules, events, isLoading, error, refresh } = useAlerts(instance.id);
   const [form, setForm] = useState(EMPTY_FORM);
   const [showForm, setShowForm] = useState(false);
@@ -193,7 +194,7 @@ export function AlertsTab({ instance }: { instance: Instance }) {
                   <p className="truncate text-sm text-foreground">{ev.message}</p>
                   <p className="mt-0.5 text-xs text-fg-3">
                     valor: <span className="font-mono">{ev.current_value}</span> ·{" "}
-                    {timeAgo(ev.triggered_at)}
+                    {ago(ev.triggered_at)}
                   </p>
                 </div>
                 <button

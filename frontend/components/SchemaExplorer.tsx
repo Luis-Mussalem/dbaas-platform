@@ -4,9 +4,10 @@ import { useEffect, useState } from "react";
 import { ChevronDown, ChevronRight, Table2 } from "lucide-react";
 import { getSchema } from "@/lib/api";
 import type { Instance, SchemaGroup } from "@/lib/types";
-import { formatNumber } from "@/lib/format";
+import { useFormatters } from "@/hooks/use-formatters";
 
 export function SchemaExplorer({ instance }: { instance: Instance }) {
+  const { number } = useFormatters();
   const [groups, setGroups] = useState<SchemaGroup[] | null>(null);
   const [failed, setFailed] = useState(false);
   // Quais schemas estão expandidos (Set de nomes). public começa aberto.
@@ -74,7 +75,7 @@ export function SchemaExplorer({ instance }: { instance: Instance }) {
                         <Table2 size={12} className="shrink-0 text-fg-3" />
                         <span className="flex-1 truncate font-mono">{t.table}</span>
                         <span className="font-mono text-[11px] text-fg-3">
-                          {formatNumber(t.estimated_rows)}
+                          {number(t.estimated_rows)}
                         </span>
                       </li>
                     ))}

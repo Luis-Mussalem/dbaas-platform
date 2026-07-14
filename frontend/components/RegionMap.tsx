@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import type { Instance } from "@/lib/types";
 import { regionInfo, project, type RegionInfo } from "@/lib/regions";
 import { WORLD_LAND_PATH } from "@/lib/world-geo";
@@ -8,6 +9,7 @@ import { WORLD_LAND_PATH } from "@/lib/world-geo";
 // sobre um mapa-múndi vetorial real (silhueta dos continentes, Natural Earth).
 // O contorno é ilustrativo; os marcadores e a lista trazem os números reais.
 export function RegionMap({ instances }: { instances: Instance[] }) {
+  const t = useTranslations("RegionMap");
   // Agrupa por região (ignora instâncias sem região definida).
   const counts = new Map<string, { info: RegionInfo; count: number }>();
   for (const inst of instances) {
@@ -22,12 +24,12 @@ export function RegionMap({ instances }: { instances: Instance[] }) {
   return (
     <div className="rounded-lg border border-border bg-surface p-3.5">
       <div className="mb-1 flex items-center justify-between">
-        <h2 className="text-sm font-semibold">Mapa de regiões</h2>
+        <h2 className="text-sm font-semibold">{t("title")}</h2>
         <span className="rounded-full border border-border px-1.5 py-0.5 text-[10px] text-fg-3">
-          ilustrativo
+          {t("illustrative")}
         </span>
       </div>
-      <p className="mb-3 text-[11.5px] text-fg-3">Distribuição dos seus bancos</p>
+      <p className="mb-3 text-[11.5px] text-fg-3">{t("subtitle")}</p>
 
       {/* Mapa-múndi vetorial (SVG 2:1). Continentes = path; bolhas = regiões. */}
       <div className="mb-3 overflow-hidden rounded-md border border-border bg-bg-2">
@@ -35,7 +37,7 @@ export function RegionMap({ instances }: { instances: Instance[] }) {
           viewBox="0 0 360 180"
           className="block w-full"
           role="img"
-          aria-label="Mapa-múndi com a distribuição das regiões"
+          aria-label={t("aria")}
         >
           {/* Silhueta dos continentes */}
           <path
@@ -63,7 +65,7 @@ export function RegionMap({ instances }: { instances: Instance[] }) {
       </div>
 
       {rows.length === 0 ? (
-        <p className="py-2 text-center text-xs text-fg-3">Nenhuma região definida.</p>
+        <p className="py-2 text-center text-xs text-fg-3">{t("empty")}</p>
       ) : (
         <ul className="flex flex-col gap-1">
           {rows.map(({ info, count }) => (

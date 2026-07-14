@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale } from "next-intl/server";
 import { ThemeProvider } from "@/context/ThemeProvider";
 import { AuthProvider } from "@/context/AuthContext";
 import { ToastProvider } from "@/context/ToastProvider";
@@ -21,14 +23,17 @@ export const metadata: Metadata = {
   description: "Database-as-a-Service — manage PostgreSQL instances",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Locale do cookie (i18n/request.ts). Sem cookie → "en".
+  const locale = await getLocale();
+
   return (
     <html
-      lang="pt-BR"
+      lang={locale}
       // "dark" é o tema inicial renderizado no servidor; o ThemeProvider
       // reconcilia com o localStorage no cliente. suppressHydrationWarning
       // silencia o aviso do React quando essa classe difere entre os dois.
@@ -36,13 +41,18 @@ export default function RootLayout({
       className={`${inter.variable} ${jetbrainsMono.variable} dark h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
-        <ThemeProvider>
-          <AuthProvider>
-            <ToastProvider>
-              <ConfirmProvider>{children}</ConfirmProvider>
-            </ToastProvider>
-          </AuthProvider>
-        </ThemeProvider>
+        {/* Mais externo: os demais providers têm texto próprio e precisam de
+            useTranslations. Sem props — herda locale/messages/formats/now do
+            getRequestConfig por ser renderizado de um Server Component. */}
+        <NextIntlClientProvider>
+          <ThemeProvider>
+            <AuthProvider>
+              <ToastProvider>
+                <ConfirmProvider>{children}</ConfirmProvider>
+              </ToastProvider>
+            </AuthProvider>
+          </ThemeProvider>
+        </NextIntlClientProvider>
       </body>
     </html>
   );

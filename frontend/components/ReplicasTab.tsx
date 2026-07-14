@@ -7,7 +7,7 @@ import { useReplicas } from "@/hooks/use-replicas";
 import { useToast } from "@/context/ToastProvider";
 import { useConfirm } from "@/context/ConfirmProvider";
 import type { Instance, ReplicationState } from "@/lib/types";
-import { formatBytes, timeAgo } from "@/lib/format";
+import { useFormatters } from "@/hooks/use-formatters";
 import { cn } from "@/lib/utils";
 import { BTN, BTN_GHOST } from "@/lib/ui";
 
@@ -31,6 +31,7 @@ function formatLagSeconds(seconds: number | null): string {
 }
 
 export function ReplicasTab({ instance }: { instance: Instance }) {
+  const { ago, bytes } = useFormatters();
   const { replicas, isLoading, error, refresh } = useReplicas(instance.id);
   const [creating, setCreating] = useState(false);
   const [promoting, setPromoting] = useState<string | null>(null);
@@ -146,12 +147,12 @@ export function ReplicasTab({ instance }: { instance: Instance }) {
                       </span>
                     </td>
                     <td className="px-4 py-2 text-right font-mono text-xs text-fg-2">
-                      {formatBytes(r.lag_bytes)}
+                      {bytes(r.lag_bytes)}
                     </td>
                     <td className="px-4 py-2 text-right font-mono text-xs text-fg-2">
                       {formatLagSeconds(r.lag_seconds)}
                     </td>
-                    <td className="px-4 py-2 text-fg-2">{timeAgo(r.created_at)}</td>
+                    <td className="px-4 py-2 text-fg-2">{ago(r.created_at)}</td>
                     <td className="px-4 py-2">
                       <button
                         className={BTN_GHOST}

@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { useInstances } from "@/hooks/use-instances";
 import { useDashboard } from "@/hooks/use-dashboard";
 import { InstanceCard } from "@/components/InstanceCard";
@@ -10,10 +11,17 @@ import { EmptyState } from "@/components/EmptyState";
 import { EnvFilterBar } from "@/components/EnvFilterBar";
 import { FleetKpiRow } from "@/components/FleetKpiRow";
 import { estimateMonthlyCost } from "@/lib/cost";
-import { greetingForHour } from "@/lib/greeting";
+import { periodForHour, type Period } from "@/lib/greeting";
 import { filterByEnvironment, type EnvFilter } from "@/lib/environment";
+import { CURRENCY } from "@/i18n/config";
+
+// O período nunca muda durante a sessão — nada a que assinar.
+const subscribeToNothing = () => () => {};
 
 export default function PainelPage() {
+  const t = useTranslations("Dashboard");
+  const tc = useTranslations("Common");
+  const locale = useLocale();
   // O Painel compõe TRÊS fontes de dados reais:
   //  - useDashboard(): agregados de GET /admin/dashboard
   //  - useInstances(): lista de instâncias
@@ -30,10 +38,24 @@ export default function PainelPage() {
     [instances, envFilter]
   );
 
-  const monthlyCost = useMemo(() => estimateMonthlyCost(instances), [instances]);
+  // Moeda segue o idioma: tabelas de preço independentes (ver lib/cost.ts).
+  const monthlyCost = useMemo(
+    () => estimateMonthlyCost(instances, CURRENCY[locale]),
+    [instances, locale]
+  );
+
+  // O período depende do relógio do usuário, que o servidor não conhece: lê-lo
+  // no render (ou num inicializador lazy) divergiria na hidratação se os fusos
+  // diferissem. useSyncExternalStore entrega `null` como snapshot de servidor e
+  // troca pelo valor real após hidratar — sem mismatch e sem setState em effect.
+  const period = useSyncExternalStore<Period | null>(
+    subscribeToNothing,
+    () => periodForHour(new Date().getHours()),
+    () => null
+  );
 
   if (isLoading) {
-    return <p className="text-sm text-fg-3">Carregando…</p>;
+    return <p className="text-sm text-fg-3">{tc("loading")}</p>;
   }
 
   const alerts = summary?.active_alerts ?? 0;
@@ -45,13 +67,11 @@ export default function PainelPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
-            Olá, {greetingForHour().toLowerCase()} ✦
+            {/* Sem período ainda (primeiro paint) → só a saudação neutra. */}
+            {t("greeting", { period: period ?? "other" })}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {alerts === 0
-              ? "Seus bancos estão saudáveis."
-              : `${alerts} alerta(s) ativo(s) requer(em) atenção.`}{" "}
-            {backups} backup(s) nas últimas 24h.
+            {t("summaryAlerts", { count: alerts })} {t("summaryBackups", { count: backups })}
           </p>
         </div>
         <EnvFilterBar value={envFilter} onChange={setEnvFilter} size="sm" />
@@ -64,18 +84,16 @@ export default function PainelPage() {
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold">Seus bancos</h2>
-            <span className="text-xs text-fg-3">{visibleInstances.length} instância(s)</span>
+            <h2 className="text-sm font-semibold">{t("yourDatabases")}</h2>
+            <span className="text-xs text-fg-3">
+              {t("instanceCount", { count: visibleInstances.length })}
+            </span>
           </div>
 
           {visibleInstances.length === 0 ? (
             <EmptyState
-              title={envFilter === "all" ? "Nenhum banco ainda" : "Nenhum banco neste ambiente"}
-              subtitle={
-                envFilter === "all"
-                  ? "Crie sua primeira instância para começar a monitorar."
-                  : "Tente outro filtro de ambiente."
-              }
+              title={envFilter === "all" ? t("empty.noneYet") : t("empty.noneHere")}
+              subtitle={envFilter === "all" ? t("empty.noneYetSub") : t("empty.noneHereSub")}
             />
           ) : (
             <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">

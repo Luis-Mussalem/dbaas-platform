@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { getConnections } from "@/lib/api";
 import type { ActiveConnection, Instance } from "@/lib/types";
 
@@ -19,6 +20,8 @@ function dur(seconds: number | null): string {
 }
 
 export function ConnectionsTable({ instance }: { instance: Instance }) {
+  const t = useTranslations("Connections");
+  const tc = useTranslations("Common");
   const [rows, setRows] = useState<ActiveConnection[] | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -40,27 +43,25 @@ export function ConnectionsTable({ instance }: { instance: Instance }) {
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-surface">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <h2 className="text-sm font-semibold">Conexões ativas</h2>
+        <h2 className="text-sm font-semibold">{t("title")}</h2>
         <span className="text-xs text-fg-3">pg_stat_activity</span>
       </div>
 
       {unavailable ? (
-        <p className="px-4 py-8 text-center text-sm text-fg-3">
-          Indisponível (instância parada).
-        </p>
+        <p className="px-4 py-8 text-center text-sm text-fg-3">{tc("unavailableStopped")}</p>
       ) : rows === null ? (
-        <p className="px-4 py-8 text-center text-sm text-fg-3">Carregando…</p>
+        <p className="px-4 py-8 text-center text-sm text-fg-3">{tc("loading")}</p>
       ) : rows.length === 0 ? (
-        <p className="px-4 py-8 text-center text-sm text-fg-3">Nenhuma conexão ativa.</p>
+        <p className="px-4 py-8 text-center text-sm text-fg-3">{t("empty")}</p>
       ) : (
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-[11.5px] uppercase tracking-wide text-fg-3">
               <th className="px-4 py-2 font-medium">PID</th>
-              <th className="px-4 py-2 font-medium">Usuário</th>
-              <th className="px-4 py-2 font-medium">Estado</th>
-              <th className="px-4 py-2 text-right font-medium">Espera</th>
-              <th className="px-4 py-2 font-medium">Query</th>
+              <th className="px-4 py-2 font-medium">{t("user")}</th>
+              <th className="px-4 py-2 font-medium">{t("state")}</th>
+              <th className="px-4 py-2 text-right font-medium">{t("wait")}</th>
+              <th className="px-4 py-2 font-medium">{t("query")}</th>
             </tr>
           </thead>
           <tbody>

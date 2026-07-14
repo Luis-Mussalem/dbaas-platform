@@ -2,38 +2,41 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useTransition } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { Plus, Sun, Moon } from "lucide-react";
 import { useTheme } from "@/context/ThemeProvider";
 import { Segmented } from "@/components/Segmented";
 import { InstanceSearch } from "@/components/InstanceSearch";
+import { navKeyFor } from "@/lib/nav";
+import { setLocale } from "@/i18n/locale-action";
+import type { Locale } from "@/i18n/config";
 
-// Mapa de URL → título exibido no breadcrumb.
-const TITLES: Record<string, string> = {
-  "/": "Painel",
-  "/instances": "Instâncias",
-  "/sql": "Console SQL",
-  "/audit": "Logs & Auditoria",
-  "/settings": "Configurações",
-  "/help": "Ajuda",
-  "/admin/users": "Funcionários",
-};
-
-// Deriva o breadcrumb da URL (no protótipo isso vinha do estado `route`).
+// Breadcrumb derivado da URL. Os rótulos vêm de lib/nav.ts + mensagens Nav.*,
+// a mesma fonte que a Sidebar usa — antes havia um mapa próprio aqui.
 function useCrumbs(pathname: string): string[] {
-  if (pathname.startsWith("/instances/")) return ["Instâncias", "Detalhe"];
-  if (pathname.startsWith("/admin/")) return ["Administração", TITLES[pathname] ?? pathname];
-  return [TITLES[pathname] ?? "Painel"];
+  const t = useTranslations("Nav");
+  const tTop = useTranslations("Topbar");
+
+  if (pathname.startsWith("/instances/")) return [t("instances"), tTop("crumb.detail")];
+
+  const key = navKeyFor(pathname);
+  if (pathname.startsWith("/admin/")) {
+    return [tTop("crumb.admin"), key ? t(key) : pathname];
+  }
+  return [key ? t(key) : t("dashboard")];
 }
 
 export function Topbar() {
   const pathname = usePathname();
   const crumbs = useCrumbs(pathname);
+  const t = useTranslations("Topbar");
   const { theme, toggleTheme } = useTheme();
 
-  // Controles cosméticos por enquanto (i18n real entra na Fase D do redesign).
-  // Mantidos para espelhar o layout do design; o estado é só visual.
-  const [lang, setLang] = useState<"pt" | "en">("pt");
+  // O locale é a verdade do cookie, servida pelo provider — sem estado local
+  // duplicado. A Server Action grava o cookie e revalida o layout.
+  const locale = useLocale();
+  const [isPending, startTransition] = useTransition();
 
   return (
     <header className="flex h-13 shrink-0 items-center gap-3 border-b border-border bg-background px-5">
@@ -54,15 +57,15 @@ export function Topbar() {
       {/* Busca rápida de instâncias (atalho "/") */}
       <InstanceSearch />
 
-      {/* Idioma (cosmético até a Fase D de i18n) */}
-      <div className="hidden sm:block">
-        <Segmented
+      {/* Idioma — grava o cookie via Server Action e revalida o layout */}
+      <div className={`hidden sm:block ${isPending ? "pointer-events-none opacity-60" : ""}`}>
+        <Segmented<Locale>
           size="sm"
-          value={lang}
-          onChange={setLang}
+          value={locale}
+          onChange={(next) => startTransition(() => void setLocale(next))}
           options={[
-            { value: "pt", label: "PT" },
             { value: "en", label: "EN" },
+            { value: "pt", label: "PT" },
           ]}
         />
       </div>
@@ -70,7 +73,7 @@ export function Topbar() {
       {/* Toggle de tema (sol/lua) — usa o ThemeProvider da Etapa 1 */}
       <button
         onClick={toggleTheme}
-        title="Alternar tema"
+        title={t("toggleTheme")}
         className="flex h-7.5 w-7.5 items-center justify-center rounded-md border border-border bg-surface text-fg-2 transition-colors hover:bg-surface-2 hover:text-foreground"
       >
         {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
@@ -82,7 +85,7 @@ export function Topbar() {
         className="flex h-7.5 items-center gap-1.5 rounded-md bg-primary px-3 text-[13px] font-medium text-primary-foreground transition hover:brightness-110"
       >
         <Plus size={14} />
-        Nova instância
+        {t("newInstance")}
       </Link>
     </header>
   );

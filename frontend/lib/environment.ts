@@ -1,31 +1,28 @@
 import type { Environment } from "@/lib/types";
 
 // Fonte única de verdade para ambientes: valor canônico do backend
-// (production/staging/development) → rótulo PT exibido + tom semântico.
-// Consumido por EnvBadge, EnvFilterBar e as páginas de painel/instâncias —
-// evita duplicar o mapa em cada lugar.
+// (production/staging/development) → tom semântico. O rótulo exibido não vive
+// mais aqui: vem das mensagens (Environments.*), traduzido por locale.
+// Consumido por EnvBadge, EnvFilterBar e as páginas de painel/instâncias.
 
 export type EnvFilter = "all" | Environment;
 
 export const ENVIRONMENTS: {
   value: Environment;
-  label: string;
   tone: "ok" | "warn" | "info";
 }[] = [
-  { value: "production", label: "produção", tone: "ok" },
-  { value: "staging", label: "homologação", tone: "warn" },
-  { value: "development", label: "desenvolvimento", tone: "info" },
+  { value: "production", tone: "ok" },
+  { value: "staging", tone: "warn" },
+  { value: "development", tone: "info" },
 ];
 
-// Opções do filtro segmentado, com "Todos" na frente.
-export const ENV_FILTERS: { value: EnvFilter; label: string }[] = [
-  { value: "all", label: "Todos" },
-  ...ENVIRONMENTS.map((e) => ({ value: e.value, label: e.label })),
-];
+// Valores do filtro segmentado, com "all" na frente. Os rótulos são montados
+// no componente (precisa de hook para traduzir).
+export const ENV_FILTER_VALUES: EnvFilter[] = ["all", ...ENVIRONMENTS.map((e) => e.value)];
 
-export function environmentLabel(env: Environment | null): string | null {
+export function environmentTone(env: Environment | null): "ok" | "warn" | "info" | null {
   if (!env) return null;
-  return ENVIRONMENTS.find((e) => e.value === env)?.label ?? null;
+  return ENVIRONMENTS.find((e) => e.value === env)?.tone ?? null;
 }
 
 export function filterByEnvironment<T extends { environment: Environment | null }>(

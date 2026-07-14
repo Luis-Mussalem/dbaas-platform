@@ -11,7 +11,7 @@ import { StatCard } from "@/components/StatCard";
 import { CapabilityLegend } from "@/components/CapabilityLegend";
 import { useToast } from "@/context/ToastProvider";
 import { cn } from "@/lib/utils";
-import { timeAgo } from "@/lib/format";
+import { useFormatters } from "@/hooks/use-formatters";
 import type { Company } from "@/lib/types";
 import { INPUT } from "@/lib/ui";
 
@@ -20,6 +20,7 @@ const BTN_SM =
   "inline-flex h-7 items-center rounded-md border border-border px-2.5 text-[12px] font-medium text-fg-2 transition hover:bg-surface-2 hover:text-foreground disabled:opacity-50";
 
 export default function AdminUsersPage() {
+  const { ago } = useFormatters();
   const router = useRouter();
   const { user: me } = useAuth();
   const { toast } = useToast();
@@ -124,7 +125,7 @@ export default function AdminUsersPage() {
         />
         <StatCard
           label="Última atividade"
-          value={lastActivityIso ? timeAgo(lastActivityIso) : "—"}
+          value={lastActivityIso ? ago(lastActivityIso) : "—"}
           sub="atividade mais recente na lista"
         />
       </div>

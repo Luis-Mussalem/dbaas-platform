@@ -1,44 +1,33 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Activity, Cpu } from "lucide-react";
 import { getAuditLogs } from "@/lib/api";
 import type { AuditLog } from "@/lib/types";
-import { timeAgo } from "@/lib/format";
+import { useFormatters } from "@/hooks/use-formatters";
+import { isAuditAction, toneFor, type Tone } from "@/lib/audit";
 
-// Traduz a "action" técnica do audit log para uma frase legível em PT.
-// (No design isso era texto mock; aqui vem do GET /admin/audit-log real.)
-const ACTION_LABELS: Record<string, string> = {
-  register: "registrou uma conta",
-  login: "entrou na plataforma",
-  logout: "saiu da plataforma",
-  instance_created: "criou a instância",
-  instance_status_changed: "alterou o status de",
-  instance_deleted: "removeu a instância",
-  backup_created: "criou um backup de",
-  restore_initiated: "iniciou um restore de",
-  schedule_created: "criou um agendamento em",
-  schedule_deleted: "removeu um agendamento de",
-  maintenance_run: "rodou manutenção em",
+// Cor do avatar por tom semântico. O tom vem da fonte única lib/audit.ts —
+// antes era derivado aqui por substring da ação, e discordava da tela de
+// Auditoria (login saía verde aqui e cinza lá).
+const TONE_CLS: Record<Tone, string> = {
+  ok: "text-ok bg-ok/12",
+  danger: "text-danger bg-danger/12",
+  warn: "text-warn bg-warn/12",
+  info: "text-info bg-info/12",
+  muted: "text-fg-3 bg-bg-2",
 };
-
-// Cor semântica do avatar derivada da ação — sem inventar nomes de usuário
-// (o audit log guarda user_id/ação, não o nome da pessoa).
-function toneFor(action: string): string {
-  if (action.includes("created") || action === "login" || action === "register")
-    return "text-ok bg-ok/12";
-  if (action.includes("deleted")) return "text-danger bg-danger/12";
-  if (action.includes("maintenance") || action.includes("restore"))
-    return "text-warn bg-warn/12";
-  if (action.includes("status")) return "text-info bg-info/12";
-  return "text-fg-3 bg-bg-2";
-}
 
 function shortId(id: string): string {
   return id.length > 8 ? id.slice(0, 8) : id;
 }
 
 export function ActivityFeed() {
+  const t = useTranslations("ActivityFeed");
+  const tc = useTranslations("Common");
+  const tAction = useTranslations("Actions.phrase");
+  const { ago } = useFormatters();
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -51,12 +40,12 @@ export function ActivityFeed() {
 
   return (
     <div className="rounded-lg border border-border bg-surface p-3.5">
-      <h2 className="mb-2 text-sm font-semibold">Atividade recente</h2>
+      <h2 className="mb-2 text-sm font-semibold">{t("title")}</h2>
 
       {isLoading ? (
-        <p className="py-4 text-center text-xs text-fg-3">Carregando…</p>
+        <p className="py-4 text-center text-xs text-fg-3">{tc("loading")}</p>
       ) : logs.length === 0 ? (
-        <p className="py-4 text-center text-xs text-fg-3">Nenhuma atividade ainda.</p>
+        <p className="py-4 text-center text-xs text-fg-3">{t("empty")}</p>
       ) : (
         <ul className="flex flex-col">
           {logs.map((log) => {
@@ -67,23 +56,24 @@ export function ActivityFeed() {
                 className="flex items-center gap-2.5 border-b border-border py-2 last:border-0"
               >
                 <div
-                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${toneFor(
-                    log.action
-                  )}`}
+                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
+                    TONE_CLS[toneFor(log.action)]
+                  }`}
                 >
                   {isSystem ? <Cpu size={13} /> : <Activity size={13} />}
                 </div>
                 <p className="flex-1 text-[12.5px] leading-snug text-fg-2">
                   <span className="font-medium text-foreground">
-                    {isSystem ? "sistema" : "operador"}
+                    {isSystem ? t("system") : t("operator")}
                   </span>{" "}
-                  {ACTION_LABELS[log.action] ?? log.action}
+                  {/* Ação desconhecida (backend novo) → mostra a chave crua. */}
+                  {isAuditAction(log.action) ? tAction(log.action) : log.action}
                   {log.resource_id && (
                     <span className="font-mono text-foreground"> {shortId(log.resource_id)}</span>
                   )}
                 </p>
                 <span className="shrink-0 font-mono text-[11px] text-fg-3">
-                  {timeAgo(log.timestamp)}
+                  {ago(log.timestamp)}
                 </span>
               </li>
             );
