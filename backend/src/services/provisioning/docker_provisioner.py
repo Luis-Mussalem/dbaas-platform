@@ -305,6 +305,13 @@ class DockerProvisioner(ProvisionerBase):
         # os segmentos WAL via archive_command — base para PITR no futuro.
         wal_dir = Path(settings.BACKUP_DIR).resolve() / str(instance_id) / "wal"
         wal_dir.mkdir(parents=True, exist_ok=True)
+        # O bind mount preserva dono/modo do host, mas quem escreve em /archive é o
+        # postgres DENTRO do container (uid 70 na imagem alpine) — uid que não existe
+        # no host e nunca casa com o dono do diretório. Sem permissão de escrita para
+        # "outros", todo archive_command falha com "Permission denied": o Postgres
+        # nunca recicla os WAL (pg_wal cresce até encher o disco) e o PITR fica sem
+        # base. chmod explícito porque o mkdir aplica o umask do processo (0755).
+        wal_dir.chmod(0o777)
 
         # Iniciar container — porta None no host = Docker atribui porta livre
         # ("127.0.0.1", None) = bind em localhost com porta dinâmica

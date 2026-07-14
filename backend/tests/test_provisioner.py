@@ -166,6 +166,26 @@ def test_create_without_port_cleans_up_and_raises(monkeypatch):
     assert container.removed is True  # cleanup acionado
 
 
+def test_create_makes_wal_dir_writable_by_container_postgres(tmp_backup_dir, monkeypatch):
+    """
+    O archive_command roda como postgres (uid 70) dentro do container e escreve no
+    bind mount /archive. Sem escrita para "outros" ele falha com Permission denied,
+    o pg_wal cresce sem limite e o PITR fica sem base — regressão silenciosa, já que
+    a suíte não sobe container real.
+    """
+    containers = _Containers(run_result=FakeContainer())
+    prov = _provisioner(containers, monkeypatch)
+
+    iid = uuid.uuid4()
+    prov.create(iid, engine_version="16")
+
+    wal_dir = tmp_backup_dir / str(iid) / "wal"
+    assert wal_dir.is_dir()
+    assert wal_dir.stat().st_mode & 0o007 == 0o007  # rwx para "outros"
+    # O diretório precisa chegar ao container montado em /archive.
+    assert containers.run_kwargs["volumes"][str(wal_dir)] == {"bind": "/archive", "mode": "rw"}
+
+
 def test_create_omits_resource_limits_when_unset(monkeypatch):
     containers = _Containers(run_result=FakeContainer())
     prov = _provisioner(containers, monkeypatch)
