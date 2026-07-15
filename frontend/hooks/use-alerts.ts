@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useTranslations } from "next-intl";
 import { listAlertRules, listAlertEvents } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
 import type { AlertRule, AlertEvent } from "@/lib/types";
@@ -15,6 +16,7 @@ interface UseAlertsResult {
 }
 
 export function useAlerts(instanceId: string): UseAlertsResult {
+  const t = useTranslations("Alerts");
   // Promise.all dispara as duas requisições JUNTAS e só resolve quando AMBAS
   // terminam (analogia ao asyncio.gather do Python). O fetcher devolve as duas
   // listas num objeto único para o useResource tratar como um recurso só.
@@ -26,10 +28,7 @@ export function useAlerts(instanceId: string): UseAlertsResult {
     return { rules, events };
   }, [instanceId]);
 
-  const { data, isLoading, error, refresh } = useResource(
-    fetcher,
-    "Falha ao carregar alertas"
-  );
+  const { data, isLoading, error, refresh } = useResource(fetcher, t("loadFailed"));
 
   return {
     rules: data?.rules ?? [],

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Save, Download, RefreshCw } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { createBackup, restoreBackup } from "@/lib/api";
 import { useBackups } from "@/hooks/use-backups";
 import { useToast } from "@/context/ToastProvider";
@@ -18,15 +19,9 @@ const STATUS_CLS: Record<BackupStatus, string> = {
   failed: "text-danger border-danger/25 bg-danger/10",
   deleted: "text-fg-3 border-border bg-bg-2",
 };
-const STATUS_LABEL: Record<BackupStatus, string> = {
-  completed: "Concluído",
-  running: "Em andamento",
-  pending: "Pendente",
-  failed: "Falhou",
-  deleted: "Removido",
-};
-
 export function BackupsTab({ instance }: { instance: Instance }) {
+  const t = useTranslations("Backups");
+  const tc = useTranslations("Common");
   const { ago, bytes } = useFormatters();
   const { backups, isLoading, error, refresh } = useBackups(instance.id);
   // `busy` guarda qual ação está em andamento: "logical", "physical" ou o id do backup em restore.
@@ -41,9 +36,9 @@ export function BackupsTab({ instance }: { instance: Instance }) {
     try {
       await createBackup(instance.id, strategy);
       await refresh();
-      toast.success(`Backup ${strategy === "logical" ? "lógico" : "físico"} criado.`);
+      toast.success(t("toast.created", { strategy }));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Falha ao criar backup");
+      toast.error(err instanceof Error ? err.message : t("toast.createFailed"));
     } finally {
       setBusy(null);
     }
@@ -51,19 +46,18 @@ export function BackupsTab({ instance }: { instance: Instance }) {
 
   async function handleRestore(backup: Backup) {
     const ok = await confirm({
-      title: "Restaurar este backup?",
-      description:
-        "Os dados atuais do banco serão substituídos. Esta ação é destrutiva.",
-      confirmText: "Restaurar",
+      title: t("restore.title"),
+      description: t("restore.description"),
+      confirmText: t("restore.action"),
       danger: true,
     });
     if (!ok) return;
     setBusy(backup.id);
     try {
       await restoreBackup(backup.id);
-      toast.success("Restauração iniciada.");
+      toast.success(t("toast.restoreStarted"));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Falha ao restaurar");
+      toast.error(err instanceof Error ? err.message : t("toast.restoreFailed"));
     } finally {
       setBusy(null);
     }
@@ -73,32 +67,33 @@ export function BackupsTab({ instance }: { instance: Instance }) {
     <div className="overflow-hidden rounded-xl border border-border bg-surface">
       {/* cabeçalho + ações */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
-        <h2 className="text-sm font-semibold">Backups</h2>
+        <h2 className="text-sm font-semibold">{t("title")}</h2>
         <div className="flex items-center gap-2">
           <button onClick={refresh} className={BTN}>
-            <RefreshCw size={13} /> Atualizar
+            <RefreshCw size={13} /> {tc("refresh")}
           </button>
           <button
             onClick={() => handleCreate("logical")}
             disabled={!isRunning || busy !== null}
             className={BTN}
           >
-            <Save size={13} /> {busy === "logical" ? "Criando…" : "Backup lógico"}
+            <Save size={13} /> {busy === "logical" ? tc("creating") : t("newLogical")}
           </button>
           <button
             onClick={() => handleCreate("physical")}
             disabled={!isRunning || busy !== null}
             className={BTN}
           >
-            <Save size={13} /> {busy === "physical" ? "Criando…" : "Backup físico"}
+            <Save size={13} /> {busy === "physical" ? tc("creating") : t("newPhysical")}
           </button>
         </div>
       </div>
 
       {!isRunning && (
         <div className="border-b border-border bg-bg-2 px-4 py-2 text-xs text-fg-3">
-          A instância precisa estar <span className="text-foreground">rodando</span> para
-          criar ou restaurar backups.
+          {t.rich("needsRunning", {
+            b: (chunks) => <span className="text-foreground">{chunks}</span>,
+          })}
         </div>
       )}
       {error && (
@@ -109,17 +104,17 @@ export function BackupsTab({ instance }: { instance: Instance }) {
 
       {/* tabela */}
       {isLoading ? (
-        <p className="px-4 py-8 text-center text-sm text-fg-3">Carregando…</p>
+        <p className="px-4 py-8 text-center text-sm text-fg-3">{tc("loading")}</p>
       ) : backups.length === 0 ? (
-        <p className="px-4 py-8 text-center text-sm text-fg-3">Nenhum backup ainda.</p>
+        <p className="px-4 py-8 text-center text-sm text-fg-3">{t("empty")}</p>
       ) : (
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-[11.5px] uppercase tracking-wide text-fg-3">
-              <th className="px-4 py-2 font-medium">Tipo</th>
-              <th className="px-4 py-2 font-medium">Criado</th>
-              <th className="px-4 py-2 font-medium">Tamanho</th>
-              <th className="px-4 py-2 font-medium">Status</th>
+              <th className="px-4 py-2 font-medium">{t("columns.type")}</th>
+              <th className="px-4 py-2 font-medium">{t("columns.created")}</th>
+              <th className="px-4 py-2 font-medium">{t("columns.size")}</th>
+              <th className="px-4 py-2 font-medium">{t("columns.status")}</th>
               <th className="px-4 py-2"></th>
             </tr>
           </thead>
@@ -127,11 +122,9 @@ export function BackupsTab({ instance }: { instance: Instance }) {
             {backups.map((b) => (
               <tr key={b.id} className="border-t border-border">
                 <td className="px-4 py-2">
-                  <span className="font-mono text-xs">
-                    {b.strategy === "logical" ? "lógico" : "físico"}
-                  </span>
+                  <span className="font-mono text-xs">{t(`strategy.${b.strategy}`)}</span>
                   <span className="ml-2 text-[11px] text-fg-3">
-                    {b.backup_type === "manual" ? "manual" : "agendado"}
+                    {b.backup_type === "manual" ? t("type.manual") : t("type.scheduled")}
                   </span>
                 </td>
                 <td className="px-4 py-2 text-fg-2">{ago(b.created_at)}</td>
@@ -144,7 +137,7 @@ export function BackupsTab({ instance }: { instance: Instance }) {
                     )}
                   >
                     <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                    {STATUS_LABEL[b.status]}
+                    {t(`status.${b.status}`)}
                   </span>
                 </td>
                 <td className="px-4 py-2 text-right">
@@ -154,7 +147,7 @@ export function BackupsTab({ instance }: { instance: Instance }) {
                       disabled={!isRunning || busy !== null}
                       className={BTN_GHOST}
                     >
-                      <Download size={13} /> {busy === b.id ? "Restaurando…" : "Restaurar"}
+                      <Download size={13} /> {busy === b.id ? t("restoring") : t("restore.action")}
                     </button>
                   )}
                 </td>

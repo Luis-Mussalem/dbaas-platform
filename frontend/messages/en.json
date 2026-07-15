@@ -33,6 +33,106 @@
     "system": "system",
     "title": "Recent activity"
   },
+  "Alerts": {
+    "activeEmpty": "No active alerts. 🎉",
+    "activeTitle": "Active alerts",
+    "columns": {
+      "active": "Active",
+      "condition": "Condition",
+      "name": "Name",
+      "severity": "Severity"
+    },
+    "deleteRule": "Delete rule",
+    "form": {
+      "condition": "Condition",
+      "metric": "Metric",
+      "name": "Name",
+      "namePlaceholder": "Low cache",
+      "severity": "Severity",
+      "threshold": "Threshold ({unit})"
+    },
+    "loadFailed": "Failed to load the alerts",
+    "metrics": {
+      "backup_age_hours": "Backup age",
+      "cache_hit_ratio": "Cache hit",
+      "connections_ratio": "Connection usage",
+      "db_usage_percent": "Disk usage",
+      "long_query_seconds": "Longest query"
+    },
+    "newRule": "New rule",
+    "remove": {
+      "title": "Delete the rule \"{name}\"?"
+    },
+    "resolve": "Resolve",
+    "resolving": "Resolving…",
+    "rulesEmpty": "No rules yet. Use “Seed defaults” to get started.",
+    "rulesTitle": "Alert rules",
+    "seed": "Seed defaults",
+    "seeding": "Seeding…",
+    "severity": {
+      "critical": "Critical",
+      "info": "Info",
+      "warning": "Warning"
+    },
+    "state": {
+      "active": "Active",
+      "inactive": "Inactive"
+    },
+    "toast": {
+      "createFailed": "Failed to create the rule",
+      "created": "Rule created.",
+      "deleteFailed": "Failed to delete the rule",
+      "deleted": "Rule deleted.",
+      "invalidForm": "Enter a name and a numeric threshold.",
+      "resolveFailed": "Failed to resolve the event",
+      "resolved": "Alert resolved.",
+      "seedFailed": "Failed to seed the defaults",
+      "seeded": "Default rules added.",
+      "updateFailed": "Failed to update the rule"
+    },
+    "valueLabel": "value"
+  },
+  "Backups": {
+    "columns": {
+      "created": "Created",
+      "size": "Size",
+      "status": "Status",
+      "type": "Type"
+    },
+    "empty": "No backups yet.",
+    "loadFailed": "Failed to load the backups",
+    "needsRunning": "The instance must be <b>running</b> to create or restore backups.",
+    "newLogical": "Logical backup",
+    "newPhysical": "Physical backup",
+    "restore": {
+      "action": "Restore",
+      "description": "The database's current data will be replaced. This action is destructive.",
+      "title": "Restore this backup?"
+    },
+    "restoring": "Restoring…",
+    "status": {
+      "completed": "Completed",
+      "deleted": "Deleted",
+      "failed": "Failed",
+      "pending": "Pending",
+      "running": "In progress"
+    },
+    "strategy": {
+      "logical": "logical",
+      "physical": "physical"
+    },
+    "title": "Backups",
+    "toast": {
+      "createFailed": "Failed to create the backup",
+      "created": "{strategy, select, logical {Logical backup created.} physical {Physical backup created.} other {Backup created.}}",
+      "restoreFailed": "Failed to restore",
+      "restoreStarted": "Restore started."
+    },
+    "type": {
+      "manual": "manual",
+      "scheduled": "scheduled"
+    }
+  },
   "Capabilities": {
     "capability": "Capability",
     "note": "Company admins act only within their own company and never on superusers.",
@@ -51,11 +151,15 @@
   },
   "Common": {
     "cancel": "Cancel",
+    "create": "Create",
+    "creating": "Creating…",
     "delete": "Delete",
     "error": "Action failed",
     "loadFailed": "Failed to load",
     "loading": "Loading…",
     "none": "—",
+    "refresh": "Refresh",
+    "requiresRunning": "requires a running instance",
     "unavailableStopped": "Unavailable (instance stopped)."
   },
   "Connections": {
@@ -240,6 +344,37 @@
     "subtitle": "Last 200 lines from PostgreSQL (stdout/stderr).",
     "title": "Container logs"
   },
+  "Maintenance": {
+    "columns": {
+      "result": "Result",
+      "status": "Status",
+      "task": "Task",
+      "when": "When"
+    },
+    "empty": "No tasks yet.",
+    "historyTitle": "History",
+    "loadFailed": "Failed to load the history",
+    "runTitle": "Run maintenance",
+    "running": "Running…",
+    "status": {
+      "completed": "Completed",
+      "failed": "Failed",
+      "pending": "Pending",
+      "running": "In progress"
+    },
+    "tasks": {
+      "analyze": "ANALYZE",
+      "kill_idle": "Kill idle",
+      "kill_long": "Kill long-running",
+      "reindex": "REINDEX",
+      "vacuum": "VACUUM ANALYZE",
+      "vacuum_full": "VACUUM FULL"
+    },
+    "toast": {
+      "ran": "{type, select, vacuum {VACUUM ANALYZE completed.} vacuum_full {VACUUM FULL completed.} analyze {ANALYZE completed.} reindex {REINDEX completed.} kill_idle {Idle connections terminated.} kill_long {Long-running queries terminated.} other {Maintenance completed.}}",
+      "runFailed": "Failed to run the maintenance"
+    }
+  },
   "Metrics": {
     "cacheHit": "Cache hit ratio (%)",
     "connections": "Active connections",
@@ -273,6 +408,46 @@
     "illustrative": "illustrative",
     "subtitle": "Distribution of your databases",
     "title": "Region map"
+  },
+  "Replicas": {
+    "columns": {
+      "actions": "Actions",
+      "created": "Created",
+      "lagBytes": "Lag (bytes)",
+      "lagTime": "Lag (time)",
+      "standby": "Standby",
+      "state": "State"
+    },
+    "create": "Create replica",
+    "creating": "Creating replica…",
+    "empty": "No replicas yet.",
+    "listTitle": "Replicas",
+    "loadFailed": "Failed to load the replicas",
+    "promote": {
+      "action": "Promote",
+      "already": "Already promoted",
+      "description": "The standby stops replicating and starts accepting writes as an independent primary. Manual failover — there is no automatic way to undo it.",
+      "title": "Promote this replica to primary?",
+      "tooltip": "Promote to primary"
+    },
+    "promoting": "Promoting…",
+    "state": {
+      "catchup": "Catching up",
+      "disconnected": "Disconnected",
+      "failed": "Failed",
+      "pending": "Pending",
+      "promoted": "Promoted",
+      "provisioning": "Provisioning",
+      "streaming": "Streaming"
+    },
+    "subtitle": "A standby receives the WAL from the primary in real time (hot standby, read-only).",
+    "title": "Streaming replication",
+    "toast": {
+      "createFailed": "Failed to create the replica",
+      "created": "Replica created and replicating.",
+      "promoteFailed": "Failed to promote the replica",
+      "promoted": "Replica promoted to primary."
+    }
   },
   "Sql": {
     "empty": {

@@ -33,6 +33,106 @@
     "system": "sistema",
     "title": "Atividade recente"
   },
+  "Alerts": {
+    "activeEmpty": "Nenhum alerta ativo. 🎉",
+    "activeTitle": "Alertas ativos",
+    "columns": {
+      "active": "Ativa",
+      "condition": "Condição",
+      "name": "Nome",
+      "severity": "Severidade"
+    },
+    "deleteRule": "Excluir regra",
+    "form": {
+      "condition": "Condição",
+      "metric": "Métrica",
+      "name": "Nome",
+      "namePlaceholder": "Cache baixo",
+      "severity": "Severidade",
+      "threshold": "Limiar ({unit})"
+    },
+    "loadFailed": "Falha ao carregar alertas",
+    "metrics": {
+      "backup_age_hours": "Idade do backup",
+      "cache_hit_ratio": "Cache hit",
+      "connections_ratio": "Uso de conexões",
+      "db_usage_percent": "Uso de disco",
+      "long_query_seconds": "Query mais longa"
+    },
+    "newRule": "Nova regra",
+    "remove": {
+      "title": "Excluir a regra \"{name}\"?"
+    },
+    "resolve": "Resolver",
+    "resolving": "Resolvendo…",
+    "rulesEmpty": "Nenhuma regra. Use “Semear padrões” para começar.",
+    "rulesTitle": "Regras de alerta",
+    "seed": "Semear padrões",
+    "seeding": "Semeando…",
+    "severity": {
+      "critical": "Crítico",
+      "info": "Info",
+      "warning": "Atenção"
+    },
+    "state": {
+      "active": "Ativa",
+      "inactive": "Inativa"
+    },
+    "toast": {
+      "createFailed": "Falha ao criar regra",
+      "created": "Regra criada.",
+      "deleteFailed": "Falha ao excluir regra",
+      "deleted": "Regra excluída.",
+      "invalidForm": "Informe um nome e um limiar numérico.",
+      "resolveFailed": "Falha ao resolver evento",
+      "resolved": "Alerta resolvido.",
+      "seedFailed": "Falha ao semear padrões",
+      "seeded": "Regras padrão adicionadas.",
+      "updateFailed": "Falha ao atualizar regra"
+    },
+    "valueLabel": "valor"
+  },
+  "Backups": {
+    "columns": {
+      "created": "Criado",
+      "size": "Tamanho",
+      "status": "Status",
+      "type": "Tipo"
+    },
+    "empty": "Nenhum backup ainda.",
+    "loadFailed": "Falha ao carregar backups",
+    "needsRunning": "A instância precisa estar <b>rodando</b> para criar ou restaurar backups.",
+    "newLogical": "Backup lógico",
+    "newPhysical": "Backup físico",
+    "restore": {
+      "action": "Restaurar",
+      "description": "Os dados atuais do banco serão substituídos. Esta ação é destrutiva.",
+      "title": "Restaurar este backup?"
+    },
+    "restoring": "Restaurando…",
+    "status": {
+      "completed": "Concluído",
+      "deleted": "Removido",
+      "failed": "Falhou",
+      "pending": "Pendente",
+      "running": "Em andamento"
+    },
+    "strategy": {
+      "logical": "lógico",
+      "physical": "físico"
+    },
+    "title": "Backups",
+    "toast": {
+      "createFailed": "Falha ao criar backup",
+      "created": "{strategy, select, logical {Backup lógico criado.} physical {Backup físico criado.} other {Backup criado.}}",
+      "restoreFailed": "Falha ao restaurar",
+      "restoreStarted": "Restauração iniciada."
+    },
+    "type": {
+      "manual": "manual",
+      "scheduled": "agendado"
+    }
+  },
   "Capabilities": {
     "capability": "Capacidade",
     "note": "Company admins agem apenas dentro da própria empresa e nunca sobre superusers.",
@@ -51,11 +151,15 @@
   },
   "Common": {
     "cancel": "Cancelar",
+    "create": "Criar",
+    "creating": "Criando…",
     "delete": "Excluir",
     "error": "Ação falhou",
     "loadFailed": "Falha ao carregar",
     "loading": "Carregando…",
     "none": "—",
+    "refresh": "Atualizar",
+    "requiresRunning": "requer instância rodando",
     "unavailableStopped": "Indisponível (instância parada)."
   },
   "Connections": {
@@ -240,6 +344,37 @@
     "subtitle": "Últimas 200 linhas do PostgreSQL (stdout/stderr).",
     "title": "Logs do container"
   },
+  "Maintenance": {
+    "columns": {
+      "result": "Resultado",
+      "status": "Status",
+      "task": "Tarefa",
+      "when": "Quando"
+    },
+    "empty": "Nenhuma tarefa ainda.",
+    "historyTitle": "Histórico",
+    "loadFailed": "Falha ao carregar histórico",
+    "runTitle": "Executar manutenção",
+    "running": "Executando…",
+    "status": {
+      "completed": "Concluído",
+      "failed": "Falhou",
+      "pending": "Pendente",
+      "running": "Em andamento"
+    },
+    "tasks": {
+      "analyze": "ANALYZE",
+      "kill_idle": "Encerrar idle",
+      "kill_long": "Encerrar longas",
+      "reindex": "REINDEX",
+      "vacuum": "VACUUM ANALYZE",
+      "vacuum_full": "VACUUM FULL"
+    },
+    "toast": {
+      "ran": "{type, select, vacuum {VACUUM ANALYZE executado.} vacuum_full {VACUUM FULL executado.} analyze {ANALYZE executado.} reindex {REINDEX executado.} kill_idle {Conexões idle encerradas.} kill_long {Queries longas encerradas.} other {Manutenção executada.}}",
+      "runFailed": "Falha ao executar manutenção"
+    }
+  },
   "Metrics": {
     "cacheHit": "Cache hit ratio (%)",
     "connections": "Conexões ativas",
@@ -273,6 +408,46 @@
     "illustrative": "ilustrativo",
     "subtitle": "Distribuição dos seus bancos",
     "title": "Mapa de regiões"
+  },
+  "Replicas": {
+    "columns": {
+      "actions": "Ações",
+      "created": "Criada",
+      "lagBytes": "Lag (bytes)",
+      "lagTime": "Lag (tempo)",
+      "standby": "Standby",
+      "state": "Estado"
+    },
+    "create": "Criar réplica",
+    "creating": "Criando réplica…",
+    "empty": "Nenhuma réplica ainda.",
+    "listTitle": "Réplicas",
+    "loadFailed": "Falha ao carregar réplicas",
+    "promote": {
+      "action": "Promover",
+      "already": "Já promovida",
+      "description": "O standby deixa de replicar e passa a aceitar escritas como um primário independente. Failover manual — não há como desfazer automaticamente.",
+      "title": "Promover esta réplica a primário?",
+      "tooltip": "Promover a primário"
+    },
+    "promoting": "Promovendo…",
+    "state": {
+      "catchup": "Alcançando",
+      "disconnected": "Desconectado",
+      "failed": "Falhou",
+      "pending": "Pendente",
+      "promoted": "Promovido",
+      "provisioning": "Provisionando",
+      "streaming": "Streaming"
+    },
+    "subtitle": "Um standby recebe o WAL do primário em tempo real (hot standby, read-only).",
+    "title": "Replicação em streaming",
+    "toast": {
+      "createFailed": "Falha ao criar réplica",
+      "created": "Réplica criada e replicando.",
+      "promoteFailed": "Falha ao promover réplica",
+      "promoted": "Réplica promovida a primário."
+    }
   },
   "Sql": {
     "empty": {

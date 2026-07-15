@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Plus, Trash2, RefreshCw, BellRing, Check } from "lucide-react";
+import { useTranslations } from "next-intl";
 import {
   createAlertRule,
   deleteAlertRule,
@@ -24,14 +25,14 @@ import { useFormatters } from "@/hooks/use-formatters";
 import { cn } from "@/lib/utils";
 import { BTN, BTN_GHOST, INPUT } from "@/lib/ui";
 
-// Metadados de cada métrica: rótulo legível + unidade exibida ao lado do limiar.
+// Unidade exibida ao lado do limiar de cada métrica (o rótulo vem do i18n).
 // Espelha o enum AlertMetricType do backend (src/schemas/alert.py).
-const METRICS: Record<AlertMetricType, { label: string; unit: string }> = {
-  connections_ratio: { label: "Uso de conexões", unit: "%" },
-  cache_hit_ratio: { label: "Cache hit", unit: "%" },
-  db_usage_percent: { label: "Uso de disco", unit: "%" },
-  long_query_seconds: { label: "Query mais longa", unit: "s" },
-  backup_age_hours: { label: "Idade do backup", unit: "h" },
+const METRIC_UNITS: Record<AlertMetricType, string> = {
+  connections_ratio: "%",
+  cache_hit_ratio: "%",
+  db_usage_percent: "%",
+  long_query_seconds: "s",
+  backup_age_hours: "h",
 };
 
 const CONDITIONS: Record<AlertCondition, string> = {
@@ -47,11 +48,8 @@ const SEVERITY_CLS: Record<AlertSeverity, string> = {
   warning: "text-warn border-warn/25 bg-warn/10",
   critical: "text-danger border-danger/25 bg-danger/10",
 };
-const SEVERITY_LABEL: Record<AlertSeverity, string> = {
-  info: "Info",
-  warning: "Atenção",
-  critical: "Crítico",
-};
+// Ordem de exibição do seletor de severidade (a chave é a fonte do rótulo i18n).
+const SEVERITIES: AlertSeverity[] = ["info", "warning", "critical"];
 
 // Estado inicial do formulário de nova regra. threshold é string porque vem de
 // um <input> (todo input HTML entrega texto); convertemos para número no envio.
@@ -64,6 +62,8 @@ const EMPTY_FORM = {
 };
 
 export function AlertsTab({ instance }: { instance: Instance }) {
+  const t = useTranslations("Alerts");
+  const tc = useTranslations("Common");
   const { ago } = useFormatters();
   const { rules, events, isLoading, error, refresh } = useAlerts(instance.id);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -82,7 +82,7 @@ export function AlertsTab({ instance }: { instance: Instance }) {
   async function create() {
     const threshold = Number(form.threshold);
     if (!form.name.trim() || Number.isNaN(threshold)) {
-      toast.error("Informe um nome e um limiar numérico.");
+      toast.error(t("toast.invalidForm"));
       return;
     }
     setBusy("create");
@@ -97,9 +97,9 @@ export function AlertsTab({ instance }: { instance: Instance }) {
       setForm(EMPTY_FORM);
       setShowForm(false);
       await refresh();
-      toast.success("Regra criada.");
+      toast.success(t("toast.created"));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Falha ao criar regra");
+      toast.error(err instanceof Error ? err.message : t("toast.createFailed"));
     } finally {
       setBusy(null);
     }
@@ -110,9 +110,9 @@ export function AlertsTab({ instance }: { instance: Instance }) {
     try {
       await seedDefaultAlertRules(instance.id);
       await refresh();
-      toast.success("Regras padrão adicionadas.");
+      toast.success(t("toast.seeded"));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Falha ao semear padrões");
+      toast.error(err instanceof Error ? err.message : t("toast.seedFailed"));
     } finally {
       setBusy(null);
     }
@@ -124,7 +124,7 @@ export function AlertsTab({ instance }: { instance: Instance }) {
       await updateAlertRule(rule.id, { is_active: !rule.is_active });
       await refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Falha ao atualizar regra");
+      toast.error(err instanceof Error ? err.message : t("toast.updateFailed"));
     } finally {
       setBusy(null);
     }
@@ -132,8 +132,8 @@ export function AlertsTab({ instance }: { instance: Instance }) {
 
   async function remove(rule: AlertRule) {
     const ok = await confirm({
-      title: `Excluir a regra "${rule.name}"?`,
-      confirmText: "Excluir",
+      title: t("remove.title", { name: rule.name }),
+      confirmText: tc("delete"),
       danger: true,
     });
     if (!ok) return;
@@ -141,9 +141,9 @@ export function AlertsTab({ instance }: { instance: Instance }) {
     try {
       await deleteAlertRule(rule.id);
       await refresh();
-      toast.success("Regra excluída.");
+      toast.success(t("toast.deleted"));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Falha ao excluir regra");
+      toast.error(err instanceof Error ? err.message : t("toast.deleteFailed"));
     } finally {
       setBusy(null);
     }
@@ -154,9 +154,9 @@ export function AlertsTab({ instance }: { instance: Instance }) {
     try {
       await resolveAlertEvent(event.id);
       await refresh();
-      toast.success("Alerta resolvido.");
+      toast.success(t("toast.resolved"));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Falha ao resolver evento");
+      toast.error(err instanceof Error ? err.message : t("toast.resolveFailed"));
     } finally {
       setBusy(null);
     }
@@ -168,7 +168,7 @@ export function AlertsTab({ instance }: { instance: Instance }) {
       <div className="overflow-hidden rounded-xl border border-border bg-surface">
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold">
-            <BellRing size={14} className="text-warn" /> Alertas ativos
+            <BellRing size={14} className="text-warn" /> {t("activeTitle")}
             {events.length > 0 && (
               <span className="rounded-full bg-danger/15 px-1.5 py-0.5 text-[11px] font-medium text-danger">
                 {events.length}
@@ -176,16 +176,14 @@ export function AlertsTab({ instance }: { instance: Instance }) {
             )}
           </h2>
           <button onClick={refresh} className={BTN_GHOST}>
-            <RefreshCw size={13} /> Atualizar
+            <RefreshCw size={13} /> {tc("refresh")}
           </button>
         </div>
 
         {isLoading ? (
-          <p className="px-4 py-8 text-center text-sm text-fg-3">Carregando…</p>
+          <p className="px-4 py-8 text-center text-sm text-fg-3">{tc("loading")}</p>
         ) : events.length === 0 ? (
-          <p className="px-4 py-8 text-center text-sm text-fg-3">
-            Nenhum alerta ativo. 🎉
-          </p>
+          <p className="px-4 py-8 text-center text-sm text-fg-3">{t("activeEmpty")}</p>
         ) : (
           <ul className="divide-y divide-border">
             {events.map((ev) => (
@@ -193,7 +191,7 @@ export function AlertsTab({ instance }: { instance: Instance }) {
                 <div className="min-w-0">
                   <p className="truncate text-sm text-foreground">{ev.message}</p>
                   <p className="mt-0.5 text-xs text-fg-3">
-                    valor: <span className="font-mono">{ev.current_value}</span> ·{" "}
+                    {t("valueLabel")}: <span className="font-mono">{ev.current_value}</span> ·{" "}
                     {ago(ev.triggered_at)}
                   </p>
                 </div>
@@ -202,7 +200,7 @@ export function AlertsTab({ instance }: { instance: Instance }) {
                   disabled={busy !== null}
                   className={BTN}
                 >
-                  <Check size={13} /> {busy === ev.id ? "Resolvendo…" : "Resolver"}
+                  <Check size={13} /> {busy === ev.id ? t("resolving") : t("resolve")}
                 </button>
               </li>
             ))}
@@ -213,17 +211,17 @@ export function AlertsTab({ instance }: { instance: Instance }) {
       {/* ── Regras ── */}
       <div className="overflow-hidden rounded-xl border border-border bg-surface">
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <h2 className="text-sm font-semibold">Regras de alerta</h2>
+          <h2 className="text-sm font-semibold">{t("rulesTitle")}</h2>
           <div className="flex items-center gap-2">
             <button onClick={seed} disabled={busy !== null} className={BTN_GHOST}>
-              {busy === "seed" ? "Semeando…" : "Semear padrões"}
+              {busy === "seed" ? t("seeding") : t("seed")}
             </button>
             <button
               onClick={() => setShowForm((v) => !v)}
               disabled={busy !== null}
               className={BTN}
             >
-              <Plus size={13} /> Nova regra
+              <Plus size={13} /> {t("newRule")}
             </button>
           </div>
         </div>
@@ -232,30 +230,36 @@ export function AlertsTab({ instance }: { instance: Instance }) {
         {showForm && (
           <div className="flex flex-wrap items-end gap-3 border-b border-border bg-surface-2/40 px-4 py-3">
             <label className="flex flex-col gap-1">
-              <span className="text-[11px] uppercase tracking-wide text-fg-3">Nome</span>
+              <span className="text-[11px] uppercase tracking-wide text-fg-3">
+                {t("form.name")}
+              </span>
               <input
                 value={form.name}
                 onChange={(e) => setField("name", e.target.value)}
-                placeholder="Cache baixo"
+                placeholder={t("form.namePlaceholder")}
                 className={cn(INPUT, "w-40")}
               />
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-[11px] uppercase tracking-wide text-fg-3">Métrica</span>
+              <span className="text-[11px] uppercase tracking-wide text-fg-3">
+                {t("form.metric")}
+              </span>
               <select
                 value={form.metric_type}
                 onChange={(e) => setField("metric_type", e.target.value as AlertMetricType)}
                 className={INPUT}
               >
-                {(Object.keys(METRICS) as AlertMetricType[]).map((m) => (
+                {(Object.keys(METRIC_UNITS) as AlertMetricType[]).map((m) => (
                   <option key={m} value={m}>
-                    {METRICS[m].label}
+                    {t(`metrics.${m}`)}
                   </option>
                 ))}
               </select>
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-[11px] uppercase tracking-wide text-fg-3">Condição</span>
+              <span className="text-[11px] uppercase tracking-wide text-fg-3">
+                {t("form.condition")}
+              </span>
               <select
                 value={form.condition}
                 onChange={(e) => setField("condition", e.target.value as AlertCondition)}
@@ -270,7 +274,7 @@ export function AlertsTab({ instance }: { instance: Instance }) {
             </label>
             <label className="flex flex-col gap-1">
               <span className="text-[11px] uppercase tracking-wide text-fg-3">
-                Limiar ({METRICS[form.metric_type].unit})
+                {t("form.threshold", { unit: METRIC_UNITS[form.metric_type] })}
               </span>
               <input
                 type="number"
@@ -281,41 +285,41 @@ export function AlertsTab({ instance }: { instance: Instance }) {
               />
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-[11px] uppercase tracking-wide text-fg-3">Severidade</span>
+              <span className="text-[11px] uppercase tracking-wide text-fg-3">
+                {t("form.severity")}
+              </span>
               <select
                 value={form.severity}
                 onChange={(e) => setField("severity", e.target.value as AlertSeverity)}
                 className={INPUT}
               >
-                {(Object.keys(SEVERITY_LABEL) as AlertSeverity[]).map((s) => (
+                {SEVERITIES.map((s) => (
                   <option key={s} value={s}>
-                    {SEVERITY_LABEL[s]}
+                    {t(`severity.${s}`)}
                   </option>
                 ))}
               </select>
             </label>
             <button onClick={create} disabled={busy !== null} className={BTN}>
-              {busy === "create" ? "Criando…" : "Criar"}
+              {busy === "create" ? tc("creating") : tc("create")}
             </button>
           </div>
         )}
 
         {isLoading ? (
-          <p className="px-4 py-8 text-center text-sm text-fg-3">Carregando…</p>
+          <p className="px-4 py-8 text-center text-sm text-fg-3">{tc("loading")}</p>
         ) : error ? (
           <p className="px-4 py-8 text-center text-sm text-danger">{error}</p>
         ) : rules.length === 0 ? (
-          <p className="px-4 py-8 text-center text-sm text-fg-3">
-            Nenhuma regra. Use “Semear padrões” para começar.
-          </p>
+          <p className="px-4 py-8 text-center text-sm text-fg-3">{t("rulesEmpty")}</p>
         ) : (
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-[11.5px] uppercase tracking-wide text-fg-3">
-                <th className="px-4 py-2 font-medium">Nome</th>
-                <th className="px-4 py-2 font-medium">Condição</th>
-                <th className="px-4 py-2 font-medium">Severidade</th>
-                <th className="px-4 py-2 font-medium">Ativa</th>
+                <th className="px-4 py-2 font-medium">{t("columns.name")}</th>
+                <th className="px-4 py-2 font-medium">{t("columns.condition")}</th>
+                <th className="px-4 py-2 font-medium">{t("columns.severity")}</th>
+                <th className="px-4 py-2 font-medium">{t("columns.active")}</th>
                 <th className="px-4 py-2" />
               </tr>
             </thead>
@@ -324,9 +328,8 @@ export function AlertsTab({ instance }: { instance: Instance }) {
                 <tr key={r.id} className="border-t border-border">
                   <td className="px-4 py-2 text-foreground">{r.name}</td>
                   <td className="px-4 py-2 font-mono text-xs text-fg-2">
-                    {METRICS[r.metric_type]?.label ?? r.metric_type} {CONDITIONS[r.condition]}{" "}
-                    {r.threshold}
-                    {METRICS[r.metric_type]?.unit}
+                    {t(`metrics.${r.metric_type}`)} {CONDITIONS[r.condition]} {r.threshold}
+                    {METRIC_UNITS[r.metric_type]}
                   </td>
                   <td className="px-4 py-2">
                     <span
@@ -335,7 +338,7 @@ export function AlertsTab({ instance }: { instance: Instance }) {
                         SEVERITY_CLS[r.severity]
                       )}
                     >
-                      {SEVERITY_LABEL[r.severity]}
+                      {t(`severity.${r.severity}`)}
                     </span>
                   </td>
                   <td className="px-4 py-2">
@@ -349,7 +352,7 @@ export function AlertsTab({ instance }: { instance: Instance }) {
                           : "bg-surface-2 text-fg-3 hover:bg-surface-2/70"
                       )}
                     >
-                      {r.is_active ? "Ativa" : "Inativa"}
+                      {r.is_active ? t("state.active") : t("state.inactive")}
                     </button>
                   </td>
                   <td className="px-4 py-2 text-right">
@@ -357,7 +360,7 @@ export function AlertsTab({ instance }: { instance: Instance }) {
                       onClick={() => remove(r)}
                       disabled={busy !== null}
                       className="inline-flex h-7 w-7 items-center justify-center rounded-md text-fg-3 transition hover:bg-danger/10 hover:text-danger disabled:opacity-50"
-                      aria-label="Excluir regra"
+                      aria-label={t("deleteRule")}
                     >
                       <Trash2 size={14} />
                     </button>

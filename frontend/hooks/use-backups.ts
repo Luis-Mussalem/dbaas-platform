@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useTranslations } from "next-intl";
 import { listBackups } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
 import type { Backup } from "@/lib/types";
@@ -13,11 +14,9 @@ interface UseBackupsResult {
 }
 
 export function useBackups(instanceId: string): UseBackupsResult {
+  const t = useTranslations("Backups");
   const fetcher = useCallback(() => listBackups(instanceId), [instanceId]);
-  const { data, isLoading, error, refresh } = useResource(
-    fetcher,
-    "Falha ao carregar backups"
-  );
+  const { data, isLoading, error, refresh } = useResource(fetcher, t("loadFailed"));
 
   return { backups: data ?? [], isLoading, error, refresh };
 }

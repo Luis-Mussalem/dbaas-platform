@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useTranslations } from "next-intl";
 import { listReplicas } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
 import type { Replica } from "@/lib/types";
@@ -15,10 +16,11 @@ interface UseReplicasResult {
 }
 
 export function useReplicas(instanceId: string): UseReplicasResult {
+  const t = useTranslations("Replicas");
   const fetcher = useCallback(() => listReplicas(instanceId), [instanceId]);
   const { data, isLoading, error, refresh } = useResource(
     fetcher,
-    "Falha ao carregar réplicas",
+    t("loadFailed"),
     POLL_INTERVAL_MS
   );
 
