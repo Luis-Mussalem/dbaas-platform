@@ -90,6 +90,72 @@
     "summaryBackups": "{count, plural, one {# backup nas últimas 24h.} other {# backups nas últimas 24h.}}",
     "yourDatabases": "Seus bancos"
   },
+  "Employees": {
+    "actions": {
+      "deactivate": "Desativar",
+      "demote": "Rebaixar",
+      "makeAdmin": "Tornar admin",
+      "makeMember": "Tornar membro",
+      "makeSuperuser": "Tornar superuser",
+      "reactivate": "Reativar"
+    },
+    "dialog": {
+      "companyLabel": "{superuser, select, true {Empresa (opcional para superusers)} other {Empresa}}",
+      "create": "Criar",
+      "createFailed": "Falha ao criar o usuário",
+      "creating": "Criando…",
+      "email": "E-mail",
+      "emailPlaceholder": "funcionario@empresa.com",
+      "password": "Senha",
+      "passwordPlaceholder": "Mín. 12 caracteres, maiúscula, dígito, símbolo",
+      "role": "Papel",
+      "selectCompany": "— selecione a empresa —",
+      "superuser": "Superuser (admin da plataforma)",
+      "title": "Novo funcionário"
+    },
+    "empty": "Nenhum usuário encontrado.",
+    "filters": {
+      "all": "Todos",
+      "allCompanies": "Todas as empresas",
+      "company": "Empresa",
+      "status": "Status"
+    },
+    "loadCompaniesFailed": "Falha ao carregar empresas",
+    "roles": {
+      "admin": "Admin",
+      "member": "Membro",
+      "superuser": "Superuser"
+    },
+    "selfDisabled": "Você não pode modificar a própria conta aqui",
+    "stats": {
+      "admins": "Donos / Admins",
+      "adminsSub": "superuser ou admin de empresa",
+      "lastActivity": "Última atividade",
+      "lastActivitySub": "atividade mais recente na lista",
+      "total": "Total de usuários",
+      "totalSub": "na visão atual"
+    },
+    "status": {
+      "active": "Ativo",
+      "inactive": "Inativo"
+    },
+    "subtitle": "Gerencie os usuários da plataforma e suas empresas.",
+    "table": {
+      "actions": "Ações",
+      "company": "Empresa",
+      "email": "E-mail",
+      "role": "Papel",
+      "status": "Status"
+    },
+    "title": "Funcionários",
+    "toast": {
+      "created": "Usuário criado.",
+      "deactivated": "Usuário desativado.",
+      "reactivated": "Usuário reativado.",
+      "roleUpdated": "Papel atualizado.",
+      "updated": "Usuário atualizado."
+    }
+  },
   "Environments": {
     "all": "Todos",
     "development": "desenvolvimento",

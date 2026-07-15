@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   createUserAdmin,
   deactivateUser,
@@ -18,6 +19,7 @@ interface UseUsersResult {
 }
 
 export function useUsers(companyId?: string): UseUsersResult {
+  const t = useTranslations("Common");
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +44,7 @@ export function useUsers(companyId?: string): UseUsersResult {
       })
       .catch((err) => {
         if (activeRef.current)
-          setError(err instanceof Error ? err.message : "Failed to load");
+          setError(err instanceof Error ? err.message : t("loadFailed"));
       })
       .finally(() => {
         if (activeRef.current) setIsLoading(false);
@@ -51,7 +53,9 @@ export function useUsers(companyId?: string): UseUsersResult {
     return () => {
       activeRef.current = false;
     };
-  }, [companyId, tick]);
+    // `t` só muda ao trocar de idioma (é memoizado pelo next-intl); refetch nesse
+    // caso é aceitável e mantém a mensagem de erro no idioma corrente.
+  }, [companyId, tick, t]);
 
   async function create(data: UserAdminCreate): Promise<void> {
     const created = await createUserAdmin(data);

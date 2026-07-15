@@ -90,6 +90,72 @@
     "summaryBackups": "{count, plural, one {# backup in the last 24h.} other {# backups in the last 24h.}}",
     "yourDatabases": "Your databases"
   },
+  "Employees": {
+    "actions": {
+      "deactivate": "Deactivate",
+      "demote": "Demote",
+      "makeAdmin": "Make admin",
+      "makeMember": "Make member",
+      "makeSuperuser": "Make superuser",
+      "reactivate": "Reactivate"
+    },
+    "dialog": {
+      "companyLabel": "{superuser, select, true {Company (optional for superusers)} other {Company}}",
+      "create": "Create",
+      "createFailed": "Could not create the user",
+      "creating": "Creating…",
+      "email": "Email",
+      "emailPlaceholder": "employee@company.com",
+      "password": "Password",
+      "passwordPlaceholder": "Min. 12 chars, uppercase, digit, symbol",
+      "role": "Role",
+      "selectCompany": "— select company —",
+      "superuser": "Superuser (platform admin)",
+      "title": "New employee"
+    },
+    "empty": "No users found.",
+    "filters": {
+      "all": "All",
+      "allCompanies": "All companies",
+      "company": "Company",
+      "status": "Status"
+    },
+    "loadCompaniesFailed": "Failed to load companies",
+    "roles": {
+      "admin": "Admin",
+      "member": "Member",
+      "superuser": "Superuser"
+    },
+    "selfDisabled": "You cannot modify your own account here",
+    "stats": {
+      "admins": "Owners / Admins",
+      "adminsSub": "superuser or company admin",
+      "lastActivity": "Last activity",
+      "lastActivitySub": "most recent activity in the list",
+      "total": "Total users",
+      "totalSub": "in the current view"
+    },
+    "status": {
+      "active": "Active",
+      "inactive": "Inactive"
+    },
+    "subtitle": "Manage platform users and their companies.",
+    "table": {
+      "actions": "Actions",
+      "company": "Company",
+      "email": "Email",
+      "role": "Role",
+      "status": "Status"
+    },
+    "title": "Employees",
+    "toast": {
+      "created": "User created.",
+      "deactivated": "User deactivated.",
+      "reactivated": "User reactivated.",
+      "roleUpdated": "Role updated.",
+      "updated": "User updated."
+    }
+  },
   "Environments": {
     "all": "All",
     "development": "development",

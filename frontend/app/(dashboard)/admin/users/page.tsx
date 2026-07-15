@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Users } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useAuth } from "@/context/AuthContext";
 import { useUsers } from "@/hooks/use-users";
 import { listCompanies } from "@/lib/api";
@@ -20,6 +21,8 @@ const BTN_SM =
   "inline-flex h-7 items-center rounded-md border border-border px-2.5 text-[12px] font-medium text-fg-2 transition hover:bg-surface-2 hover:text-foreground disabled:opacity-50";
 
 export default function AdminUsersPage() {
+  const t = useTranslations("Employees");
+  const tc = useTranslations("Common");
   const { ago } = useFormatters();
   const router = useRouter();
   const { user: me } = useAuth();
@@ -36,16 +39,17 @@ export default function AdminUsersPage() {
 
   // Só superuser pode listar empresas (403 para os demais) — evita chamada
   // inútil e permite tratar erro real com toast em vez de engoli-lo.
-  // `toast` é memoizado no ToastProvider — não re-dispara o effect.
+  // `toast` é memoizado no ToastProvider e `t` só muda ao trocar de idioma —
+  // nenhum dos dois re-dispara o effect à toa.
   const isSuperuserMe = me?.is_superuser === true;
   useEffect(() => {
     if (!isSuperuserMe) return;
     listCompanies()
       .then(setCompanies)
       .catch((err) =>
-        toast.error(err instanceof Error ? err.message : "Falha ao carregar empresas")
+        toast.error(err instanceof Error ? err.message : t("loadCompaniesFailed"))
       );
-  }, [isSuperuserMe, toast]);
+  }, [isSuperuserMe, toast, t]);
 
   const { users, isLoading, error, create, update } = useUsers(
     filterCompanyId || undefined
@@ -73,18 +77,18 @@ export default function AdminUsersPage() {
   async function handleToggleActive(userId: string, currentlyActive: boolean) {
     try {
       await update(userId, { is_active: !currentlyActive });
-      toast.success(currentlyActive ? "User deactivated" : "User reactivated");
+      toast.success(currentlyActive ? t("toast.deactivated") : t("toast.reactivated"));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Action failed");
+      toast.error(err instanceof Error ? err.message : tc("error"));
     }
   }
 
   async function handleToggleSuperuser(userId: string, currentlySuperuser: boolean) {
     try {
       await update(userId, { is_superuser: !currentlySuperuser });
-      toast.success("User updated");
+      toast.success(t("toast.updated"));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Action failed");
+      toast.error(err instanceof Error ? err.message : tc("error"));
     }
   }
 
@@ -92,9 +96,9 @@ export default function AdminUsersPage() {
     try {
       const newRole = currentRole === "admin" ? "member" : "admin";
       await update(userId, { role: newRole });
-      toast.success("Role updated");
+      toast.success(t("toast.roleUpdated"));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Action failed");
+      toast.error(err instanceof Error ? err.message : tc("error"));
     }
   }
 
@@ -105,10 +109,8 @@ export default function AdminUsersPage() {
         <div className="flex items-center gap-2">
           <Users size={20} className="text-fg-2" />
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Funcionários</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Gerencie os usuários da plataforma e suas empresas.
-            </p>
+            <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
+            <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
           </div>
         </div>
         <CreateUserDialog companies={companies} onCreate={create} isSuperuser={isSuperuser} />
@@ -116,17 +118,17 @@ export default function AdminUsersPage() {
 
       {/* métricas-resumo: total, donos/admins, atividade mais recente */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <StatCard label="Total de usuários" value={users.length} sub="na visão atual" />
+        <StatCard label={t("stats.total")} value={users.length} sub={t("stats.totalSub")} />
         <StatCard
-          label="Donos / Admins"
+          label={t("stats.admins")}
           value={adminCount}
-          sub="superuser ou admin de empresa"
+          sub={t("stats.adminsSub")}
           accent="ok"
         />
         <StatCard
-          label="Última atividade"
-          value={lastActivityIso ? ago(lastActivityIso) : "—"}
-          sub="atividade mais recente na lista"
+          label={t("stats.lastActivity")}
+          value={lastActivityIso ? ago(lastActivityIso) : tc("none")}
+          sub={t("stats.lastActivitySub")}
         />
       </div>
 
@@ -137,13 +139,15 @@ export default function AdminUsersPage() {
         <div className="flex flex-wrap items-end gap-3 border-b border-border px-4 py-3">
           {isSuperuser && (
             <label className="flex flex-col gap-1">
-              <span className="text-[11px] uppercase tracking-wide text-fg-3">Company</span>
+              <span className="text-[11px] uppercase tracking-wide text-fg-3">
+                {t("filters.company")}
+              </span>
               <select
                 value={filterCompanyId}
                 onChange={(e) => setFilterCompanyId(e.target.value)}
                 className={INPUT}
               >
-                <option value="">All companies</option>
+                <option value="">{t("filters.allCompanies")}</option>
                 {companies.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
@@ -151,35 +155,37 @@ export default function AdminUsersPage() {
             </label>
           )}
           <label className="flex flex-col gap-1">
-            <span className="text-[11px] uppercase tracking-wide text-fg-3">Status</span>
+            <span className="text-[11px] uppercase tracking-wide text-fg-3">
+              {t("filters.status")}
+            </span>
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value as typeof filterStatus)}
               className={INPUT}
             >
-              <option value="all">All</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
+              <option value="all">{t("filters.all")}</option>
+              <option value="active">{t("status.active")}</option>
+              <option value="inactive">{t("status.inactive")}</option>
             </select>
           </label>
         </div>
 
         {/* table */}
         {isLoading ? (
-          <p className="px-4 py-8 text-center text-sm text-fg-3">Loading…</p>
+          <p className="px-4 py-8 text-center text-sm text-fg-3">{tc("loading")}</p>
         ) : error ? (
           <p className="px-4 py-8 text-center text-sm text-danger">{error}</p>
         ) : visible.length === 0 ? (
-          <p className="px-4 py-8 text-center text-sm text-fg-3">No users found.</p>
+          <p className="px-4 py-8 text-center text-sm text-fg-3">{t("empty")}</p>
         ) : (
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-[11.5px] uppercase tracking-wide text-fg-3">
-                <th className="px-4 py-2 font-medium">Email</th>
-                <th className="px-4 py-2 font-medium">Company</th>
-                <th className="px-4 py-2 font-medium">Role</th>
-                <th className="px-4 py-2 font-medium">Status</th>
-                <th className="px-4 py-2 font-medium">Actions</th>
+                <th className="px-4 py-2 font-medium">{t("table.email")}</th>
+                <th className="px-4 py-2 font-medium">{t("table.company")}</th>
+                <th className="px-4 py-2 font-medium">{t("table.role")}</th>
+                <th className="px-4 py-2 font-medium">{t("table.status")}</th>
+                <th className="px-4 py-2 font-medium">{t("table.actions")}</th>
               </tr>
             </thead>
             <tbody>
@@ -187,7 +193,7 @@ export default function AdminUsersPage() {
                 <tr key={u.id} className="border-t border-border">
                   <td className="px-4 py-2 font-mono text-xs text-foreground">{u.email}</td>
                   <td className="px-4 py-2 text-fg-2">
-                    {u.company?.name ?? <span className="text-fg-3 italic">—</span>}
+                    {u.company?.name ?? <span className="text-fg-3 italic">{tc("none")}</span>}
                   </td>
                   <td className="px-4 py-2">
                     {u.is_superuser ? (
@@ -197,7 +203,7 @@ export default function AdminUsersPage() {
                           "border-info/25 bg-info/10 text-info"
                         )}
                       >
-                        Superuser
+                        {t("roles.superuser")}
                       </span>
                     ) : (
                       <span
@@ -208,7 +214,7 @@ export default function AdminUsersPage() {
                             : "border-border bg-surface-2 text-fg-2"
                         )}
                       >
-                        {u.role === "admin" ? "Admin" : "Member"}
+                        {u.role === "admin" ? t("roles.admin") : t("roles.member")}
                       </span>
                     )}
                   </td>
@@ -221,7 +227,7 @@ export default function AdminUsersPage() {
                           : "border-danger/25 bg-danger/10 text-danger"
                       )}
                     >
-                      {u.is_active ? "Active" : "Inactive"}
+                      {u.is_active ? t("status.active") : t("status.inactive")}
                     </span>
                   </td>
                   <td className="px-4 py-2">
@@ -229,29 +235,29 @@ export default function AdminUsersPage() {
                       <button
                         className={BTN_SM}
                         disabled={u.id === me.id}
-                        title={u.id === me.id ? "Cannot modify your own account here" : undefined}
+                        title={u.id === me.id ? t("selfDisabled") : undefined}
                         onClick={() => handleToggleActive(u.id, u.is_active)}
                       >
-                        {u.is_active ? "Deactivate" : "Reactivate"}
+                        {u.is_active ? t("actions.deactivate") : t("actions.reactivate")}
                       </button>
                       {isSuperuser && (
                         <button
                           className={BTN_SM}
                           disabled={u.id === me.id}
-                          title={u.id === me.id ? "Cannot modify your own account here" : undefined}
+                          title={u.id === me.id ? t("selfDisabled") : undefined}
                           onClick={() => handleToggleSuperuser(u.id, u.is_superuser)}
                         >
-                          {u.is_superuser ? "Demote" : "Make superuser"}
+                          {u.is_superuser ? t("actions.demote") : t("actions.makeSuperuser")}
                         </button>
                       )}
                       {!u.is_superuser && (
                         <button
                           className={BTN_SM}
                           disabled={u.id === me.id}
-                          title={u.id === me.id ? "Cannot modify your own account here" : undefined}
+                          title={u.id === me.id ? t("selfDisabled") : undefined}
                           onClick={() => handleToggleRole(u.id, u.role)}
                         >
-                          {u.role === "admin" ? "Make member" : "Make admin"}
+                          {u.role === "admin" ? t("actions.makeMember") : t("actions.makeAdmin")}
                         </button>
                       )}
                     </div>
