@@ -114,31 +114,31 @@ async def lifespan(app: FastAPI):
 # Descrição exibida no topo do /docs (Swagger UI) e /redoc.
 # Mantida genérica e reutilizável — sem credenciais, clientes ou dados reais.
 API_DESCRIPTION = """
-Plataforma de gestão de bancos PostgreSQL — provisionamento, monitoramento,
-automação e proteção de dados (DBA-as-a-Service).
+PostgreSQL database management platform — provisioning, monitoring, automation
+and data protection (DBA-as-a-Service).
 
-**Pilares:** Monitoramento · Backup & Recovery · Manutenção Automática · Alertas Proativos
+**Pillars:** Monitoring · Backup & Recovery · Automated Maintenance · Proactive Alerting
 
-Todas as rotas de domínio ficam sob `/api/v1/`. O `GET /health` permanece na
-raiz para probes de infraestrutura e load balancers.
-A maioria dos endpoints exige autenticação via Bearer JWT (`POST /api/v1/auth/login`).
+All domain routes live under `/api/v1/`. `GET /health` stays at the root for
+infrastructure probes and load balancers.
+Most endpoints require Bearer JWT authentication (`POST /api/v1/auth/login`).
 """
 
 # Ordem e descrição das tags no /docs. O FastAPI renderiza os grupos na ordem
 # desta lista — do fluxo de acesso (auth) ao painel administrativo.
 openapi_tags = [
-    {"name": "Health", "description": "Liveness/readiness da API e conectividade com o banco da plataforma."},
-    {"name": "Authentication", "description": "Registro, login, refresh e logout. Emite e revoga tokens JWT."},
-    {"name": "Users", "description": "Gestão self-service da conta do usuário autenticado."},
-    {"name": "Companies", "description": "Empresas (multi-tenant). Restrito ao superusuário da plataforma."},
-    {"name": "Instances", "description": "Ciclo de vida das instâncias de banco: criar, iniciar, parar e remover."},
-    {"name": "Monitoring", "description": "Métricas, health, slow queries, locks, índices e bloat por instância."},
-    {"name": "SQL Console", "description": "Execução de SELECT read-only e planos de execução (EXPLAIN) por instância."},
-    {"name": "Backups", "description": "Backups lógicos (pg_dump) e físicos (pg_basebackup), restore e agendamento."},
-    {"name": "Maintenance", "description": "VACUUM, ANALYZE, REINDEX, gestão de conexões e recomendações de tuning."},
-    {"name": "Alerts", "description": "Regras de alerta, avaliação automática e histórico de eventos."},
-    {"name": "Replication", "description": "Standbys em streaming, monitoramento de lag e promoção (failover manual)."},
-    {"name": "Administration", "description": "Visão consolidada da plataforma e trilha de auditoria."},
+    {"name": "Health", "description": "API liveness/readiness and connectivity to the platform database."},
+    {"name": "Authentication", "description": "Register, login, refresh and logout. Issues and revokes JWT tokens."},
+    {"name": "Users", "description": "Self-service management of the authenticated user's account."},
+    {"name": "Companies", "description": "Companies (multi-tenant). Restricted to the platform superuser."},
+    {"name": "Instances", "description": "Database instance lifecycle: create, start, stop and delete."},
+    {"name": "Monitoring", "description": "Metrics, health, slow queries, locks, indexes and bloat per instance."},
+    {"name": "SQL Console", "description": "Read-only SELECT execution and query plans (EXPLAIN) per instance."},
+    {"name": "Backups", "description": "Logical (pg_dump) and physical (pg_basebackup) backups, restore and scheduling."},
+    {"name": "Maintenance", "description": "VACUUM, ANALYZE, REINDEX, connection management and tuning recommendations."},
+    {"name": "Alerts", "description": "Alert rules, automatic evaluation and event history."},
+    {"name": "Replication", "description": "Streaming standbys, lag monitoring and promotion (manual failover)."},
+    {"name": "Administration", "description": "Consolidated platform view and audit trail."},
 ]
 
 app = FastAPI(

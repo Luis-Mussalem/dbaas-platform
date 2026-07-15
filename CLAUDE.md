@@ -18,13 +18,17 @@ only their own company; the admin superuser sees and switches between all.
   the `WorkspaceSwitcher` and propagated as an `X-Company-Id` header; employee management,
   company-admin RBAC (`is_superuser` × `admin`/`member`), and per-company audit scoping
   are all in place.
-- **Progress** — ROADMAP 100% complete: backend phases 0–10 and frontend F0–F7 all
+- **Progress** — ROADMAP 100% complete: backend phases 0–10 and frontend F0–F8 all
   shipped. Phase 9 (streaming replication & HA — standbys via `pg_basebackup -R`, lag
   monitoring, manual failover) and Phase 10 (container logs, full-stack docker-compose,
   frontend CI, OpenAPI tags) landed 2026-07-07. A visual-polish pass (2026-07-02) added
   real fleet KPIs (queries/s, P95 latency, 30-day uptime via `instance_status_history`),
   per-user last-activity, and a dashboard/instances/employees redesign. 272 tests, 82%
   backend coverage. Full phase detail and dependency map in [ROADMAP.md](ROADMAP.md).
+- **i18n** — the UI is bilingual (EN default, PT via the top-bar toggle), using next-intl
+  with the locale in a `NEXT_LOCALE` cookie (no `/[locale]/` in the URLs). ~460 keys in
+  `messages/{en,pt}.json`; parity is enforced in CI by `npm run i18n:check`. Everything
+  outside the UI — README, code, API errors, OpenAPI docs — is English only.
 
 ## Architecture
 
@@ -67,6 +71,7 @@ alembic revision --autogenerate -m "message"      # new migration
 # Frontend (from frontend/)
 npm run dev                                        # http://localhost:3000
 npm run build
+npm run i18n:check                                 # en/pt message parity (runs in CI)
 ```
 
 ## Conventions
@@ -78,6 +83,11 @@ npm run build
 - Comment only when the *why* is non-obvious (a constraint or workaround).
 
 **Frontend (TypeScript)** — App Router; small, single-responsibility components.
+- **No hardcoded UI strings.** Every user-visible string lives in `messages/{en,pt}.json`;
+  `en.json` is the source of the types. Add keys alphabetically to *both* files.
+- `t` is always the translator (`tc` for `Common`) — never shadow it with a `map` variable.
+- Never concatenate translated fragments: use one ICU `select`/`plural` with the full
+  sentence per branch.
 
 **Commits** — Conventional prefixes (`feat:`, `fix:`, `chore:`, `refactor:`, `docs:`), in English.
 

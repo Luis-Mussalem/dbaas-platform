@@ -41,7 +41,7 @@ class MaintenanceScheduleCreate(BaseModel):
     @classmethod
     def validate_cron(cls, v: str) -> str:
         if not croniter.is_valid(v):
-            raise ValueError(f"Expressão cron inválida: '{v}'")
+            raise ValueError(f"Invalid cron expression: '{v}'")
         return v
 
 

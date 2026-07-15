@@ -475,7 +475,7 @@ databases; the superuser can switch companies and the data follows the selection
 |-------------|-------------|
 | Login page | `/login` — email + password form, call to `POST /auth/login` |
 | JWT storage | Token stored in `localStorage`, injected via `api.ts` in every request |
-| Protected routes | Next.js `middleware.ts` redirects to `/login` if not authenticated |
+| Protected routes | Next.js `proxy.ts` (the Next 16 name for the `middleware` convention) redirects to `/login` if not authenticated |
 | Logout | Calls `POST /auth/logout`, clears token, redirects to `/login` |
 
 **Completion criterion:** Login functional. Protected routes redirect without token.
@@ -612,6 +612,42 @@ as a self-contained full-stack milestone — and delivered as one.
 
 ---
 
+## FRONTEND F8 — Internationalization (EN/PT) `[x]`
+
+> Shipped 2026-07-15. The top-bar language toggle existed since the redesign but was
+> decorative — a `useState` nothing read — while the UI was hardcoded Portuguese
+> (~330 strings across 44 files) and everything else in the project was already
+> English. This turned the toggle into a real feature, with **English as the default**.
+
+| Deliverable | Description |
+|-------------|-------------|
+| next-intl, no URL locale | No `/[locale]/` segments, so `app/` stays flat. Locale in an `HttpOnly` `NEXT_LOCALE` cookie written by a Server Action; `i18n/request.ts` reads it server-side to render `<html lang>`. A tampered cookie falls back to English. |
+| `messages/{en,pt}.json` | ~460 keys across 31 namespaces. `en.json` is the source of the `Messages` type via `global.d.ts`, so an unknown `t()` key is a `tsc` error. |
+| Locale-aware formatting | `lib/format.ts` deleted in favour of `hooks/use-formatters.ts` over `useFormatter`/`useNow`. `formatBRL` and `timeAgo` died; relative time no longer saturates at days. Every `toLocaleString("pt-BR")` is gone. |
+| Currency as rate cards | `lib/cost.ts` holds independent BRL/USD tables — regional list pricing, as AWS/GCP publish it. The ratio between totals is deliberately not an exchange rate. |
+| Grammar via ICU | Gender, number and participle agreement resolved with `select`/`plural` branches carrying the full sentence — never concatenation. PT uses the CLDR `one` branch for zero ("0 alerta ativo"). |
+| Drift guard-rails | `npm run i18n:check` ([frontend/i18n/check-messages.mjs](frontend/i18n/check-messages.mjs)) parses both files with a real ICU parser and compares parity, key order, placeholders, `select` branches and rich-text tags; runs in CI before the typecheck. `i18n/messages.check.ts` catches a missing key in the editor. |
+| Bug fixed | The employees screen was bilingual at once — a PT header above an EN table whose toasts said "User deactivated" in a Portuguese UI. |
+| Backend | `schemas/maintenance.py` — the only PT `ValueError` ("Expressão cron inválida") → English. The `/docs` API description and its 12 OpenAPI tag descriptions were also PT and were translated: the docs page is public and the rest of the portfolio reads English. |
+
+**Completion criterion:** an anonymous tab renders English with `<html lang="en">` and no
+cookie; the toggle switches to PT without a reload and survives a refresh; deleting a key
+from `pt.json` turns CI red. ✅ Met.
+
+**Consolidations made along the way** (the i18n forced them, they weren't the goal):
+- `lib/nav.ts` — the 4 navigation maps split across `Sidebar` and `Topbar` became one source
+- `lib/audit.ts` — `ACTION_LABELS` (feed) and `ACTION_META` (audit page) disagreed: `login`
+  rendered green in one and grey in the other. Tone now has a single source
+- The creation wizard kept its own copies of `ENVIRONMENTS` and `REGIONS`; the region copy
+  was stale and omitted `us-west-2`, so consolidating it **changed behaviour — the wizard
+  now offers Oregon** (5 regions → 6)
+- `components/CreateInstanceDialog.tsx` deleted (dead code, zero importers)
+
+**Known gap:** API error `detail` strings stay English in both locales. Translating them
+needs the backend to return structured codes + params — a project of its own.
+
+---
+
 ## Dependency Map
 
 ```
@@ -637,6 +673,7 @@ PHASE 0 (Foundation)
                                                                                   └─→ F5 (Maintenance & Alerts UI)
                                                                                         └─→ F6 (Consolidated Dashboard)
                                                                                               └─→ F7 (SQL Console) — full-stack milestone (own backend endpoint)
+                                                                                                    └─→ F8 (i18n EN/PT) — touches every screen, so it came last
 ```
 
 ## Public / Private Split

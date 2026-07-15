@@ -72,6 +72,7 @@ The goal is not only to build APIs, but to design systems that simulate operatio
 - [Core Engineering Concepts](#core-engineering-concepts)
 - [Tech Stack](#tech-stack)
 - [Features](#features)
+- [Internationalization](#internationalization)
 - [Architecture](#architecture)
 - [Provisioning Workflow](#provisioning-workflow)
 - [Security Approach](#security-approach)
@@ -86,10 +87,11 @@ The goal is not only to build APIs, but to design systems that simulate operatio
 # Screenshots
 
 > The dashboard is a Next.js 16 App Router frontend (TypeScript, Tailwind v4).
+> The UI ships in English and Portuguese — these captures are in English; the
+> language toggle is in the top bar.
 > Data shown is collected from real provisioned PostgreSQL containers with seeded
-> datasets — the only exception is the per-query latency chart, labelled
-> *demonstração* in the UI itself (the backend collects fleet-wide P95, not
-> per-execution latency).
+> datasets — the only exception is the per-query latency chart, labelled *demo*
+> in the UI itself (the backend collects fleet-wide P95, not per-execution latency).
 
 | | |
 |---|---|
@@ -155,6 +157,7 @@ This project focuses heavily on backend engineering and operational concepts, in
 - shadcn/ui + Base UI
 - recharts (metrics visualization)
 - lucide-react (icons)
+- next-intl (i18n — English/Portuguese)
 
 ---
 
@@ -280,6 +283,47 @@ This project focuses heavily on backend engineering and operational concepts, in
 - Consolidated dashboard and audit log
 - Workspace switcher — active-company selection propagated to every API call
 - Redesigned dark UI: collapsible sidebar, world-map region picker, light/dark themes
+- Bilingual UI (English/Portuguese) — see [Internationalization](#internationalization)
+
+---
+
+# Internationalization
+
+The UI ships in **English (default) and Portuguese**, via
+[next-intl](https://next-intl.dev). Four decisions are worth calling out:
+
+**No locale in the URL.** There are no `/[locale]/` segments, so the `app/`
+tree stays flat. The active locale lives in an `HttpOnly` `NEXT_LOCALE` cookie,
+written by a Server Action and read in `i18n/request.ts`. A cookie rather than
+`localStorage` because the server needs the locale to render `<html lang>` — the
+opposite trade-off from the theme, which is a class the client applies to the DOM.
+A tampered cookie falls back to English instead of throwing.
+
+**Full sentences per branch, never concatenation.** Gender, number and participle
+agreement don't survive string-joining. A backup toast is one ICU `select` whose
+branches each carry the whole sentence, so a translator controls the grammar:
+
+```jsonc
+"created": "{strategy, select, logical {Logical backup created.} physical {Physical backup created.} other {Backup created.}}"
+```
+
+Plural rules follow the CLDR per language — Portuguese uses the `one` branch for
+zero ("0 alerta ativo"), English uses `other` ("0 active alerts").
+
+**Prices are per-currency tables, not FX conversion.** `lib/cost.ts` holds
+independent BRL and USD rate cards, the way AWS and GCP publish regional pricing.
+The ratio between the two totals is deliberately *not* an exchange rate.
+
+**Drift fails the build.** `en.json` is the source of the `Messages` type
+(`global.d.ts`), so an unknown key is a `tsc` error. `npm run i18n:check` runs in
+CI ahead of the typecheck and parses both files with a real ICU parser to compare
+placeholders, `select` branches and rich-text tags — a regex can't do this, since
+it reads the text inside a `plural` branch as if it were a placeholder.
+
+Region names, city names and technical vocabulary (`VACUUM`, `WAL`, `p95`) are
+deliberately left untranslated — AWS doesn't rename `sa-east-1` per language.
+Error `detail` strings from the API stay English in both locales; translating them
+would need the backend to return structured codes, which is a project of its own.
 
 ---
 
@@ -316,8 +360,10 @@ dbaas-platform/
 │   ├── components/           # 33 reusable UI components
 │   ├── context/              # React Context (auth, theme, toasts, confirmations)
 │   ├── hooks/                # Data hooks — one per API resource
+│   ├── i18n/                 # next-intl setup + en/pt parity checker
 │   ├── lib/                  # Typed API client, shared types, utilities
-│   ├── middleware.ts         # Route protection (Next.js middleware)
+│   ├── messages/             # UI strings — en.json (source of types) and pt.json
+│   ├── proxy.ts              # Route protection (Next 16 renamed `middleware` → `proxy`)
 │   └── Dockerfile            # Standalone production image
 │
 ├── data/                     # Runtime backups and WAL archives (gitignored)
@@ -466,7 +512,7 @@ GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs thr
 | Job | What it does |
 |---|---|
 | **Backend** | `ruff` lint + `pytest` against a PostgreSQL 16 service container |
-| **Frontend** | `eslint` + `tsc --noEmit` + `next build` |
+| **Frontend** | `i18n:check` (en/pt parity) + `eslint` + `tsc --noEmit` + `next build` |
 | **Docker** | Builds the multi-stage backend image (validates the Dockerfile) |
 
 ## Containerization

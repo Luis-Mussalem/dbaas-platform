@@ -72,10 +72,10 @@ jobs:
         run: pytest --cov=src --cov-report=term-missing
 
   # ---------------------------------------------------------------------------
-  # Frontend: lint (eslint) + typecheck (tsc) + build de produção do Next.js.
+  # Frontend: paridade das mensagens + lint (eslint) + typecheck (tsc) + build.
   # ---------------------------------------------------------------------------
   frontend:
-    name: Frontend (lint + typecheck + build)
+    name: Frontend (i18n + lint + typecheck + build)
     runs-on: ubuntu-latest
 
     defaults:
@@ -94,6 +94,11 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      # Antes do typecheck: um drift de chave dá um erro de tsc genérico e
+      # difícil de ler; este step nomeia a chave que falta.
+      - name: Check i18n messages (en/pt parity)
+        run: npm run i18n:check
 
       - name: Lint (eslint)
         run: npm run lint
