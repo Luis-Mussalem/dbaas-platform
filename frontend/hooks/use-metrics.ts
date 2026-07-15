@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useTranslations } from "next-intl";
 import { getMetrics } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
 import type { MetricsSnapshot } from "@/lib/types";
@@ -12,10 +13,11 @@ interface UseMetricsResult {
 }
 
 export function useMetrics(instanceId: string): UseMetricsResult {
+  const t = useTranslations("Metrics");
   const fetcher = useCallback(() => getMetrics(instanceId), [instanceId]);
   const { data, isLoading, error } = useResource(
     fetcher,
-    "Failed to load metrics",
+    t("loadFailed"),
     POLL_INTERVAL_MS
   );
 

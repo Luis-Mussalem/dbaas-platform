@@ -3,51 +3,43 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, ChevronLeft, ChevronRight, X, Zap, RefreshCw } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { createInstance } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { BTN_PRIMARY, BTN_DEFAULT } from "@/lib/ui";
 import { useToast } from "@/context/ToastProvider";
+import { ENVIRONMENTS } from "@/lib/environment";
+import { listRegions } from "@/lib/regions";
 import type { Environment } from "@/lib/types";
 
 // Versões disponíveis (viram a tag postgres:<v>-alpine no provisionador).
 const PG_VERSIONS = ["17", "16", "15", "14"] as const;
 const RECOMMENDED = "16";
 
-// Ambientes (valor canônico → rótulo PT). Espelha o enum Environment do backend.
-const ENVIRONMENTS: { value: Environment; label: string }[] = [
-  { value: "production", label: "produção" },
-  { value: "staging", label: "homologação" },
-  { value: "development", label: "desenvolvimento" },
-];
-
-// Regiões disponíveis (código estilo AWS → cidade exibida).
-const REGIONS = [
-  { code: "sa-east-1", label: "🇧🇷 São Paulo" },
-  { code: "us-east-1", label: "🇺🇸 N. Virginia" },
-  { code: "eu-west-1", label: "🇮🇪 Ireland" },
-  { code: "eu-central-1", label: "🇩🇪 Frankfurt" },
-  { code: "ap-southeast-1", label: "🇸🇬 Singapore" },
-];
+const REGIONS = listRegions();
 
 // "Planos" do design viram presets de recursos reais (cpu/memória/disco).
+// `id` é a chave do i18n da descrição; `label` é nome de plano — não se traduz.
 type Size = {
-  id: string;
+  id: "hobby" | "starter" | "pro" | "business";
   label: string;
-  desc: string;
   cpu: number;
   memory_mb: number;
   storage_gb: number;
 };
 const SIZES: Size[] = [
-  { id: "hobby", label: "Hobby", desc: "Para experimentar", cpu: 1, memory_mb: 512, storage_gb: 10 },
-  { id: "starter", label: "Starter", desc: "Projetos pequenos", cpu: 2, memory_mb: 2048, storage_gb: 50 },
-  { id: "pro", label: "Pro", desc: "Produção", cpu: 4, memory_mb: 8192, storage_gb: 200 },
-  { id: "business", label: "Business", desc: "Escala alta", cpu: 8, memory_mb: 16384, storage_gb: 500 },
+  { id: "hobby", label: "Hobby", cpu: 1, memory_mb: 512, storage_gb: 10 },
+  { id: "starter", label: "Starter", cpu: 2, memory_mb: 2048, storage_gb: 50 },
+  { id: "pro", label: "Pro", cpu: 4, memory_mb: 8192, storage_gb: 200 },
+  { id: "business", label: "Business", cpu: 8, memory_mb: 16384, storage_gb: 500 },
 ];
 
-const STEPS = ["Identidade", "Tamanho", "Revisar"];
+const STEPS = ["identity", "size", "review"] as const;
 
 export default function CreateInstancePage() {
+  const t = useTranslations("NewInstance");
+  const tc = useTranslations("Common");
+  const tEnv = useTranslations("Environments");
   const router = useRouter();
 
   // ── estado do wizard ──
@@ -82,10 +74,10 @@ export default function CreateInstancePage() {
         ...(environment ? { environment } : {}),
         ...(region ? { region } : {}),
       });
-      toast.success(`Instância "${created.name}" provisionada.`);
+      toast.success(t("created", { name: created.name }));
       router.push(`/instances/${created.id}`);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Falha ao provisionar";
+      const msg = err instanceof Error ? err.message : t("createFailed");
       setError(msg);
       toast.error(msg);
       setCreating(false);
@@ -99,10 +91,13 @@ export default function CreateInstancePage() {
         <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-subtle text-brand">
           <RefreshCw size={28} className="animate-spin" />
         </div>
-        <h2 className="text-2xl font-semibold">Provisionando…</h2>
+        <h2 className="text-2xl font-semibold">{t("provisioning.title")}</h2>
         <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">
-          Subindo um container PostgreSQL {version} para{" "}
-          <span className="font-mono text-foreground">{name}</span>. Leva ~30 segundos.
+          {t.rich("provisioning.note", {
+            version,
+            name,
+            mono: (chunks) => <span className="font-mono text-foreground">{chunks}</span>,
+          })}
         </p>
       </div>
     );
@@ -113,18 +108,20 @@ export default function CreateInstancePage() {
       {/* header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Criar nova instância</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Passo {step + 1} de 3</p>
+          <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {t("step", { current: step + 1, total: STEPS.length })}
+          </p>
         </div>
         <button onClick={() => router.push("/instances")} className={BTN_DEFAULT}>
-          <X size={13} /> Cancelar
+          <X size={13} /> {tc("cancel")}
         </button>
       </div>
 
       {/* indicador de passos */}
       <div className="mb-7 flex items-center">
-        {STEPS.map((label, i) => (
-          <div key={label} className="flex flex-1 items-center gap-2">
+        {STEPS.map((key, i) => (
+          <div key={key} className="flex flex-1 items-center gap-2">
             <div
               className={cn(
                 "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-xs font-semibold transition",
@@ -143,7 +140,7 @@ export default function CreateInstancePage() {
                 i === step ? "text-foreground" : "text-fg-3"
               )}
             >
-              {label}
+              {t(`steps.${key}`)}
             </span>
             {i < STEPS.length - 1 && (
               <div className={cn("mx-3 h-px flex-1", i < step ? "bg-primary" : "bg-border")} />
@@ -164,21 +161,21 @@ export default function CreateInstancePage() {
           <div className="flex flex-col gap-5">
             <div className="flex flex-col gap-2">
               <label className="text-[11px] font-medium uppercase tracking-wide text-fg-3">
-                Nome da instância
+                {t("identity.nameLabel")}
               </label>
               <input
                 autoFocus
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="checkout-prod"
+                placeholder={t("identity.namePlaceholder")}
                 className="h-9 rounded-md border border-border-strong bg-surface px-3 text-sm outline-none focus:border-brand"
               />
-              <span className="text-xs text-fg-3">Algo memorável. Letras, números e hífens.</span>
+              <span className="text-xs text-fg-3">{t("identity.nameHint")}</span>
             </div>
 
             <div className="flex flex-col gap-2">
               <label className="text-[11px] font-medium uppercase tracking-wide text-fg-3">
-                Versão do PostgreSQL
+                {t("identity.versionLabel")}
               </label>
               <div className="flex flex-wrap gap-2">
                 {PG_VERSIONS.map((v) => (
@@ -195,7 +192,7 @@ export default function CreateInstancePage() {
                     {v}
                     {v === RECOMMENDED && (
                       <span className="absolute -right-1.5 -top-2 rounded bg-primary px-1.5 text-[9.5px] font-semibold text-primary-foreground">
-                        recomendado
+                        {t("recommended")}
                       </span>
                     )}
                   </button>
@@ -206,7 +203,7 @@ export default function CreateInstancePage() {
             {/* Ambiente (opcional) — usado para agrupar/filtrar no Painel */}
             <div className="flex flex-col gap-2">
               <label className="text-[11px] font-medium uppercase tracking-wide text-fg-3">
-                Ambiente <span className="text-fg-faint">(opcional)</span>
+                {t("environment")} <span className="text-fg-faint">{t("optional")}</span>
               </label>
               <div className="flex flex-wrap gap-2">
                 {ENVIRONMENTS.map((e) => (
@@ -220,7 +217,7 @@ export default function CreateInstancePage() {
                         : "border-border hover:border-border-strong"
                     )}
                   >
-                    {e.label}
+                    {tEnv(e.value)}
                   </button>
                 ))}
               </div>
@@ -229,17 +226,17 @@ export default function CreateInstancePage() {
             {/* Região (opcional) */}
             <div className="flex flex-col gap-2">
               <label className="text-[11px] font-medium uppercase tracking-wide text-fg-3">
-                Região <span className="text-fg-faint">(opcional)</span>
+                {t("region")} <span className="text-fg-faint">{t("optional")}</span>
               </label>
               <select
                 value={region}
                 onChange={(e) => setRegion(e.target.value)}
                 className="h-9 rounded-md border border-border-strong bg-surface px-3 text-sm outline-none focus:border-brand"
               >
-                <option value="">Sem região</option>
+                <option value="">{t("noRegion")}</option>
                 {REGIONS.map((r) => (
                   <option key={r.code} value={r.code}>
-                    {r.label}
+                    {r.flag} {r.city}
                   </option>
                 ))}
               </select>
@@ -251,10 +248,8 @@ export default function CreateInstancePage() {
       {/* Passo 1 — Tamanho */}
       {step === 1 && (
         <div className="rounded-xl border border-border bg-surface p-6">
-          <h2 className="mb-1 text-sm font-semibold">Quanto poder?</h2>
-          <p className="mb-4 text-xs text-fg-3">
-            Define CPU, memória e disco do container.
-          </p>
+          <h2 className="mb-1 text-sm font-semibold">{t("size.title")}</h2>
+          <p className="mb-4 text-xs text-fg-3">{t("size.subtitle")}</p>
           <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
             {SIZES.map((s) => {
               const on = sizeId === s.id;
@@ -270,7 +265,7 @@ export default function CreateInstancePage() {
                   <div className={cn("text-[13px] font-semibold", on ? "text-brand" : "text-foreground")}>
                     {s.label}
                   </div>
-                  <div className="text-[11.5px] text-fg-3">{s.desc}</div>
+                  <div className="text-[11.5px] text-fg-3">{t(`sizes.${s.id}`)}</div>
                   <div className="mt-3 font-mono text-[11.5px] leading-relaxed text-fg-3">
                     <div>
                       {s.cpu} vCPU · {s.memory_mb / 1024} GB RAM
@@ -287,25 +282,30 @@ export default function CreateInstancePage() {
       {/* Passo 2 — Revisar */}
       {step === 2 && (
         <div className="rounded-xl border border-border bg-surface p-6">
-          <h2 className="mb-1 text-sm font-semibold">Revise antes de criar</h2>
-          <p className="mb-5 text-xs text-fg-3">Quase lá.</p>
+          <h2 className="mb-1 text-sm font-semibold">{t("review.title")}</h2>
+          <p className="mb-5 text-xs text-fg-3">{t("review.subtitle")}</p>
           <div className="grid grid-cols-2 gap-4">
-            <Review label="Nome" value={name || "—"} mono />
-            <Review label="Versão" value={`PostgreSQL ${version}`} />
-            <Review label="Recursos" value={`${size.cpu} vCPU · ${size.memory_mb / 1024} GB RAM`} />
-            <Review label="Disco" value={`${size.storage_gb} GB`} />
+            <Review label={t("review.name")} value={name || tc("none")} mono />
+            <Review label={t("review.version")} value={`PostgreSQL ${version}`} />
             <Review
-              label="Ambiente"
-              value={ENVIRONMENTS.find((e) => e.value === environment)?.label ?? "—"}
+              label={t("review.resources")}
+              value={`${size.cpu} vCPU · ${size.memory_mb / 1024} GB RAM`}
+            />
+            <Review label={t("review.disk")} value={`${size.storage_gb} GB`} />
+            <Review
+              label={t("environment")}
+              value={environment ? tEnv(environment) : tc("none")}
             />
             <Review
-              label="Região"
-              value={REGIONS.find((r) => r.code === region)?.label ?? "—"}
+              label={t("region")}
+              value={(() => {
+                const r = REGIONS.find((x) => x.code === region);
+                return r ? `${r.flag} ${r.city}` : tc("none");
+              })()}
             />
           </div>
           <div className="mt-5 rounded-md border border-info/25 bg-info/10 px-3 py-2.5 text-[12.5px] text-fg-2">
-            Após criar, a string de conexão fica disponível no detalhe da instância — a senha é
-            cifrada e guardada com segurança (nunca é devolvida pela API).
+            {t("review.note")}
           </div>
         </div>
       )}
@@ -316,7 +316,7 @@ export default function CreateInstancePage() {
           onClick={() => (step > 0 ? setStep(step - 1) : router.push("/instances"))}
           className={BTN_DEFAULT}
         >
-          <ChevronLeft size={13} /> {step > 0 ? "Voltar" : "Cancelar"}
+          <ChevronLeft size={13} /> {step > 0 ? t("back") : tc("cancel")}
         </button>
         {step < 2 ? (
           <button
@@ -324,11 +324,11 @@ export default function CreateInstancePage() {
             disabled={!canNext}
             className={cn(BTN_PRIMARY, !canNext && "cursor-not-allowed opacity-50")}
           >
-            Continuar <ChevronRight size={13} />
+            {t("next")} <ChevronRight size={13} />
           </button>
         ) : (
           <button onClick={handleCreate} className={BTN_PRIMARY}>
-            <Zap size={14} /> Criar instância
+            <Zap size={14} /> {t("create")}
           </button>
         )}
       </div>

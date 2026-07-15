@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useInstances } from "@/hooks/use-instances";
 import { regionInfo } from "@/lib/regions";
 
@@ -17,6 +18,7 @@ const MAX_RESULTS = 6;
 
 // Busca rápida de instâncias: filtra por nome (client-side) e navega ao detalhe.
 export function InstanceSearch() {
+  const t = useTranslations("InstanceSearch");
   const { instances } = useInstances();
   const router = useRouter();
 
@@ -100,7 +102,7 @@ export function InstanceSearch() {
         ref={inputRef}
         type="text"
         value={query}
-        placeholder="Buscar instância…"
+        placeholder={t("placeholder")}
         onChange={(e) => {
           setQuery(e.target.value);
           setActive(0);
@@ -120,7 +122,7 @@ export function InstanceSearch() {
       {showDropdown && (
         <div className="absolute right-0 top-full z-50 mt-1.5 w-72 overflow-hidden rounded-lg border border-border bg-surface shadow-lg">
           {results.length === 0 ? (
-            <p className="px-3 py-3 text-[13px] text-fg-3">Nenhuma instância encontrada.</p>
+            <p className="px-3 py-3 text-[13px] text-fg-3">{t("empty")}</p>
           ) : (
             <ul className="py-1">
               {results.map((inst, i) => {

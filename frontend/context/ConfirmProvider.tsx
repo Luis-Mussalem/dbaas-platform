@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useTranslations } from "next-intl";
 import {
   Dialog,
   DialogContent,
@@ -39,6 +40,7 @@ const ConfirmContext = createContext<ConfirmContextValue | null>(null);
 // ─── Provider ────────────────────────────────────────────────────────────────
 
 export function ConfirmProvider({ children }: { children: ReactNode }) {
+  const t = useTranslations("Common");
   const [open, setOpen] = useState(false);
   const [options, setOptions] = useState<ConfirmOptions | null>(null);
   // Guarda o `resolve` da Promise pendente para chamá-lo quando o usuário responde.
@@ -74,13 +76,13 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => settle(false)}>
-              {options?.cancelText ?? "Cancelar"}
+              {options?.cancelText ?? t("cancel")}
             </Button>
             <Button
               variant={options?.danger ? "destructive" : "default"}
               onClick={() => settle(true)}
             >
-              {options?.confirmText ?? "Confirmar"}
+              {options?.confirmText ?? t("confirm")}
             </Button>
           </DialogFooter>
         </DialogContent>

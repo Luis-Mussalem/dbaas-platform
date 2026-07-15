@@ -92,6 +92,34 @@
     },
     "valueLabel": "valor"
   },
+  "Audit": {
+    "columns": {
+      "action": "Ação",
+      "ip": "IP",
+      "resource": "Recurso",
+      "when": "Quando"
+    },
+    "empty": "Nenhum registro para os filtros atuais.",
+    "filters": {
+      "action": "Ação",
+      "allActions": "Todas",
+      "allResources": "Todos",
+      "resource": "Recurso"
+    },
+    "loadFailed": "Falha ao carregar auditoria",
+    "loadMore": "Carregar mais",
+    "loadMoreFailed": "Falha ao carregar mais",
+    "resources": {
+      "auth": "Autenticação",
+      "backup": "Backup",
+      "backup_schedule": "Agendamento",
+      "instance": "Instância",
+      "maintenance": "Manutenção",
+      "user": "Usuário"
+    },
+    "subtitle": "Trilha de ações registradas na plataforma.",
+    "title": "Logs & Auditoria"
+  },
   "Backups": {
     "columns": {
       "created": "Criado",
@@ -151,6 +179,7 @@
   },
   "Common": {
     "cancel": "Cancelar",
+    "confirm": "Confirmar",
     "create": "Criar",
     "creating": "Criando…",
     "delete": "Excluir",
@@ -160,6 +189,7 @@
     "none": "—",
     "refresh": "Atualizar",
     "requiresRunning": "requer instância rodando",
+    "saving": "Salvando…",
     "unavailableStopped": "Indisponível (instância parada)."
   },
   "Connections": {
@@ -190,6 +220,7 @@
       "uptimeCollecting": "coletando histórico",
       "uptimeSub": "últimos 30 dias"
     },
+    "loadFailed": "Falha ao carregar o painel",
     "summaryAlerts": "{count, plural, =0 {Seus bancos estão saudáveis.} one {# alerta ativo requer atenção.} other {# alertas ativos requerem atenção.}}",
     "summaryBackups": "{count, plural, one {# backup nas últimas 24h.} other {# backups nas últimas 24h.}}",
     "yourDatabases": "Seus bancos"
@@ -275,6 +306,10 @@
     "running": "Saudável",
     "stopped": "Pausado"
   },
+  "Help": {
+    "subtitle": "Em breve.",
+    "title": "Ajuda"
+  },
   "InstanceCard": {
     "cacheHit": "cache hit",
     "connections": "conexões",
@@ -328,6 +363,10 @@
       "replication": "Replicação"
     }
   },
+  "InstanceSearch": {
+    "empty": "Nenhuma instância encontrada.",
+    "placeholder": "Buscar instância…"
+  },
   "Instances": {
     "empty": {
       "noneHere": "Nenhum banco neste ambiente",
@@ -335,12 +374,24 @@
       "noneYet": "Nenhuma instância ainda",
       "noneYetSub": "Crie sua primeira instância para começar a gerenciar."
     },
+    "loadFailed": "Falha ao carregar instâncias",
     "managedCount": "{count, plural, one {# banco gerenciado} other {# bancos gerenciados}}",
     "new": "Nova instância",
     "title": "Instâncias"
   },
+  "Login": {
+    "failed": "Falha no login",
+    "footer": "Plataforma de gestão de bancos PostgreSQL",
+    "password": "Senha",
+    "signIn": "Entrar",
+    "signingIn": "Entrando…",
+    "subtitle": "Acesse o painel da sua plataforma de bancos.",
+    "title": "Bem-vindo de volta",
+    "username": "Usuário"
+  },
   "Logs": {
     "empty": "Sem logs para exibir.",
+    "loadFailed": "Falha ao carregar logs",
     "subtitle": "Últimas 200 linhas do PostgreSQL (stdout/stderr).",
     "title": "Logs do container"
   },
@@ -375,11 +426,16 @@
       "runFailed": "Falha ao executar manutenção"
     }
   },
+  "Metadata": {
+    "description": "Database-as-a-Service — gerencie instâncias PostgreSQL",
+    "title": "DBaaS Platform"
+  },
   "Metrics": {
     "cacheHit": "Cache hit ratio (%)",
     "connections": "Conexões ativas",
     "emptySeries": "Sem série suficiente nesta janela.",
     "latency": "Latência (p50 / p95 / p99)",
+    "loadFailed": "Falha ao carregar métricas",
     "tag": {
       "demo": "demonstração",
       "real": "real"
@@ -401,6 +457,54 @@
       "admin": "Administração",
       "workspace": "Workspace"
     }
+  },
+  "NewInstance": {
+    "back": "Voltar",
+    "create": "Criar instância",
+    "createFailed": "Falha ao provisionar",
+    "created": "Instância \"{name}\" provisionada.",
+    "environment": "Ambiente",
+    "identity": {
+      "nameHint": "Algo memorável. Letras, números e hífens.",
+      "nameLabel": "Nome da instância",
+      "namePlaceholder": "checkout-prod",
+      "versionLabel": "Versão do PostgreSQL"
+    },
+    "next": "Continuar",
+    "noRegion": "Sem região",
+    "optional": "(opcional)",
+    "provisioning": {
+      "note": "Subindo um container PostgreSQL {version} para <mono>{name}</mono>. Leva ~30 segundos.",
+      "title": "Provisionando…"
+    },
+    "recommended": "recomendado",
+    "region": "Região",
+    "review": {
+      "disk": "Disco",
+      "name": "Nome",
+      "note": "Após criar, a string de conexão fica disponível no detalhe da instância — a senha é cifrada e guardada com segurança (nunca é devolvida pela API).",
+      "resources": "Recursos",
+      "subtitle": "Quase lá.",
+      "title": "Revise antes de criar",
+      "version": "Versão"
+    },
+    "size": {
+      "subtitle": "Define CPU, memória e disco do container.",
+      "title": "Quanto poder?"
+    },
+    "sizes": {
+      "business": "Escala alta",
+      "hobby": "Para experimentar",
+      "pro": "Produção",
+      "starter": "Projetos pequenos"
+    },
+    "step": "Passo {current} de {total}",
+    "steps": {
+      "identity": "Identidade",
+      "review": "Revisar",
+      "size": "Tamanho"
+    },
+    "title": "Criar nova instância"
   },
   "RegionMap": {
     "aria": "Mapa-múndi com a distribuição das regiões",
@@ -448,6 +552,35 @@
       "promoteFailed": "Falha ao promover réplica",
       "promoted": "Réplica promovida a primário."
     }
+  },
+  "SchemaExplorer": {
+    "empty": "Sem tabelas de usuário.",
+    "title": "Explorador de esquemas"
+  },
+  "Settings": {
+    "email": {
+      "hint": "Usado para login e identificação.",
+      "placeholder": "voce@exemplo.com",
+      "sameAsCurrent": "Informe um email diferente do atual.",
+      "save": "Salvar email",
+      "title": "Email",
+      "updated": "Email atualizado."
+    },
+    "memberSince": "membro desde {date}",
+    "password": {
+      "confirmPlaceholder": "Confirmar nova senha",
+      "hint": "Mínimo de 12 caracteres, com maiúscula, minúscula, dígito e símbolo.",
+      "mismatch": "As senhas não coincidem.",
+      "placeholder": "Nova senha",
+      "save": "Alterar senha",
+      "title": "Senha",
+      "tooShort": "A senha deve ter ao menos 12 caracteres.",
+      "updated": "Senha alterada."
+    },
+    "saveFailed": "Falha ao salvar.",
+    "subtitle": "Sua conta de operador.",
+    "superuser": "Superusuário",
+    "title": "Configurações"
   },
   "Sql": {
     "empty": {

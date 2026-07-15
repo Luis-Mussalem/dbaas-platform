@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useTranslations } from "next-intl";
 import {
   createInstance,
   deleteInstance,
@@ -22,10 +23,11 @@ interface UseInstancesResult {
 // ─── Hook ──────────────────────────────────────────────────────────────────────
 
 export function useInstances(): UseInstancesResult {
+  const t = useTranslations("Instances");
   const fetcher = useCallback(() => listInstances(), []);
   const { data, isLoading, error, setData } = useResource(
     fetcher,
-    "Failed to load"
+    t("loadFailed")
   );
   const instances = data ?? [];
 

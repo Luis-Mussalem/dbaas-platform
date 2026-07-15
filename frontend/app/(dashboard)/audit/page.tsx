@@ -2,38 +2,22 @@
 
 import { useState } from "react";
 import { ScrollText } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useAudit } from "@/hooks/use-audit";
 import { useFormatters } from "@/hooks/use-formatters";
+import {
+  AUDIT_ACTIONS,
+  RESOURCE_TYPES,
+  isAuditAction,
+  isResourceType,
+  toneFor,
+  type Tone,
+} from "@/lib/audit";
 import { cn } from "@/lib/utils";
 import { BTN, INPUT } from "@/lib/ui";
 
-// Metadados de cada ação: rótulo legível + "tom" (cor do badge). Espelha a
-// tabela _AUDIT_ACTIONS do middleware (backend/src/core/audit_middleware.py).
-type Tone = "ok" | "info" | "warn" | "danger" | "muted";
-
-const ACTION_META: Record<string, { label: string; tone: Tone }> = {
-  register: { label: "Conta registrada", tone: "info" },
-  login: { label: "Login", tone: "muted" },
-  logout: { label: "Logout", tone: "muted" },
-  instance_created: { label: "Instância criada", tone: "ok" },
-  instance_status_changed: { label: "Status alterado", tone: "info" },
-  instance_deleted: { label: "Instância removida", tone: "danger" },
-  backup_created: { label: "Backup criado", tone: "ok" },
-  restore_initiated: { label: "Restore iniciado", tone: "warn" },
-  schedule_created: { label: "Agendamento criado", tone: "ok" },
-  schedule_deleted: { label: "Agendamento removido", tone: "danger" },
-  maintenance_run: { label: "Manutenção executada", tone: "info" },
-};
-
-const RESOURCE_LABELS: Record<string, string> = {
-  user: "Usuário",
-  auth: "Autenticação",
-  instance: "Instância",
-  backup: "Backup",
-  backup_schedule: "Agendamento",
-  maintenance: "Manutenção",
-};
-
+// Cor do badge por tom semântico. O tom e a lista de ações vêm da fonte única
+// lib/audit.ts; os rótulos, das mensagens (Actions.label.*).
 const TONE_CLS: Record<Tone, string> = {
   ok: "text-ok border-ok/25 bg-ok/10",
   info: "text-info border-info/25 bg-info/10",
@@ -47,7 +31,10 @@ function shortId(id: string): string {
 }
 
 export default function AuditPage() {
-  const { ago } = useFormatters();
+  const t = useTranslations("Audit");
+  const tc = useTranslations("Common");
+  const tAction = useTranslations("Actions.label");
+  const { ago, dateTime } = useFormatters();
   // Estado dos filtros vive AQUI (na página) e é passado ao hook como
   // parâmetro. Trocar um <select> re-renderiza a página → o hook recebe novos
   // filtros → o effect reseta para a página 0. "" significa "sem filtro".
@@ -65,10 +52,8 @@ export default function AuditPage() {
       <div className="flex items-center gap-2">
         <ScrollText size={20} className="text-fg-2" />
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Logs &amp; Auditoria</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Trilha de ações registradas na plataforma.
-          </p>
+          <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
         </div>
       </div>
 
@@ -76,27 +61,31 @@ export default function AuditPage() {
         {/* barra de filtros */}
         <div className="flex flex-wrap items-end gap-3 border-b border-border px-4 py-3">
           <label className="flex flex-col gap-1">
-            <span className="text-[11px] uppercase tracking-wide text-fg-3">Ação</span>
+            <span className="text-[11px] uppercase tracking-wide text-fg-3">
+              {t("filters.action")}
+            </span>
             <select value={action} onChange={(e) => setAction(e.target.value)} className={INPUT}>
-              <option value="">Todas</option>
-              {Object.keys(ACTION_META).map((a) => (
+              <option value="">{t("filters.allActions")}</option>
+              {AUDIT_ACTIONS.map((a) => (
                 <option key={a} value={a}>
-                  {ACTION_META[a].label}
+                  {tAction(a)}
                 </option>
               ))}
             </select>
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-[11px] uppercase tracking-wide text-fg-3">Recurso</span>
+            <span className="text-[11px] uppercase tracking-wide text-fg-3">
+              {t("filters.resource")}
+            </span>
             <select
               value={resourceType}
               onChange={(e) => setResourceType(e.target.value)}
               className={INPUT}
             >
-              <option value="">Todos</option>
-              {Object.keys(RESOURCE_LABELS).map((r) => (
+              <option value="">{t("filters.allResources")}</option>
+              {RESOURCE_TYPES.map((r) => (
                 <option key={r} value={r}>
-                  {RESOURCE_LABELS[r]}
+                  {t(`resources.${r}`)}
                 </option>
               ))}
             </select>
@@ -105,40 +94,41 @@ export default function AuditPage() {
 
         {/* tabela */}
         {isLoading ? (
-          <p className="px-4 py-8 text-center text-sm text-fg-3">Carregando…</p>
+          <p className="px-4 py-8 text-center text-sm text-fg-3">{tc("loading")}</p>
         ) : error ? (
           <p className="px-4 py-8 text-center text-sm text-danger">{error}</p>
         ) : logs.length === 0 ? (
-          <p className="px-4 py-8 text-center text-sm text-fg-3">
-            Nenhum registro para os filtros atuais.
-          </p>
+          <p className="px-4 py-8 text-center text-sm text-fg-3">{t("empty")}</p>
         ) : (
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-[11.5px] uppercase tracking-wide text-fg-3">
-                <th className="px-4 py-2 font-medium">Ação</th>
-                <th className="px-4 py-2 font-medium">Recurso</th>
-                <th className="px-4 py-2 font-medium">IP</th>
-                <th className="px-4 py-2 font-medium">Quando</th>
+                <th className="px-4 py-2 font-medium">{t("columns.action")}</th>
+                <th className="px-4 py-2 font-medium">{t("columns.resource")}</th>
+                <th className="px-4 py-2 font-medium">{t("columns.ip")}</th>
+                <th className="px-4 py-2 font-medium">{t("columns.when")}</th>
               </tr>
             </thead>
             <tbody>
               {logs.map((log) => {
-                const meta = ACTION_META[log.action];
                 return (
                   <tr key={log.id} className="border-t border-border">
                     <td className="px-4 py-2">
                       <span
                         className={cn(
                           "inline-flex items-center rounded-full border px-2 py-0.5 text-[11.5px] font-medium",
-                          TONE_CLS[meta?.tone ?? "muted"]
+                          TONE_CLS[toneFor(log.action)]
                         )}
                       >
-                        {meta?.label ?? log.action}
+                        {/* Ação/recurso desconhecidos (backend novo, frontend
+                            antigo) → mostra a chave crua em vez de quebrar. */}
+                        {isAuditAction(log.action) ? tAction(log.action) : log.action}
                       </span>
                     </td>
                     <td className="px-4 py-2 text-fg-2">
-                      {RESOURCE_LABELS[log.resource_type] ?? log.resource_type}
+                      {isResourceType(log.resource_type)
+                        ? t(`resources.${log.resource_type}`)
+                        : log.resource_type}
                       {log.resource_id && (
                         <span className="ml-1.5 font-mono text-xs text-fg-3">
                           {shortId(log.resource_id)}
@@ -146,11 +136,11 @@ export default function AuditPage() {
                       )}
                     </td>
                     <td className="px-4 py-2 font-mono text-xs text-fg-3">
-                      {log.ip_address ?? "—"}
+                      {log.ip_address ?? tc("none")}
                     </td>
                     <td
                       className="px-4 py-2 text-fg-2"
-                      title={new Date(log.timestamp).toLocaleString("pt-BR")}
+                      title={dateTime(log.timestamp, "full")}
                     >
                       {ago(log.timestamp)}
                     </td>
@@ -165,7 +155,7 @@ export default function AuditPage() {
         {hasMore && !isLoading && (
           <div className="border-t border-border px-4 py-3 text-center">
             <button onClick={loadMore} className={BTN}>
-              Carregar mais
+              {t("loadMore")}
             </button>
           </div>
         )}

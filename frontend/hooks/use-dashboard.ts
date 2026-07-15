@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useTranslations } from "next-intl";
 import { getDashboard } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
 import type { DashboardSummary } from "@/lib/types";
@@ -11,10 +12,11 @@ interface UseDashboardResult {
 }
 
 export function useDashboard(): UseDashboardResult {
+  const t = useTranslations("Dashboard");
   const fetcher = useCallback(() => getDashboard(), []);
   const { data, isLoading, error } = useResource(
     fetcher,
-    "Falha ao carregar o painel"
+    t("loadFailed")
   );
 
   return { summary: data, isLoading, error };

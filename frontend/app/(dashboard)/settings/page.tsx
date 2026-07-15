@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import { Mail, KeyRound, Check, ShieldCheck } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useAuth } from "@/context/AuthContext";
 import { updateUser } from "@/lib/api";
+import { useFormatters } from "@/hooks/use-formatters";
 import { BTN_PRIMARY, INPUT_LG } from "@/lib/ui";
 
 // Pequeno aviso de sucesso/erro reutilizado pelos dois formulários.
@@ -23,6 +25,9 @@ function Notice({ kind, text }: { kind: "ok" | "error"; text: string }) {
 }
 
 export default function SettingsPage() {
+  const t = useTranslations("Settings");
+  const tc = useTranslations("Common");
+  const { dateTime } = useFormatters();
   // `user` vem do AuthContext (estado global). `refreshUser` re-busca /auth/me
   // depois de salvar, para a Sidebar refletir o novo email na hora.
   const { user, refreshUser } = useAuth();
@@ -38,13 +43,13 @@ export default function SettingsPage() {
   const [pwdBusy, setPwdBusy] = useState(false);
   const [pwdMsg, setPwdMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
 
-  if (!user) return <p className="text-sm text-fg-3">Carregando…</p>;
+  if (!user) return <p className="text-sm text-fg-3">{tc("loading")}</p>;
 
   async function saveEmail(e: React.FormEvent) {
     e.preventDefault(); // impede o reload padrão do <form> (controlamos via fetch)
     if (!user) return;
     if (!email.trim() || email === user.email) {
-      setEmailMsg({ kind: "error", text: "Informe um email diferente do atual." });
+      setEmailMsg({ kind: "error", text: t("email.sameAsCurrent") });
       return;
     }
     setEmailBusy(true);
@@ -52,9 +57,9 @@ export default function SettingsPage() {
     try {
       await updateUser(user.id, { email: email.trim() });
       await refreshUser();
-      setEmailMsg({ kind: "ok", text: "Email atualizado." });
+      setEmailMsg({ kind: "ok", text: t("email.updated") });
     } catch (err) {
-      setEmailMsg({ kind: "error", text: err instanceof Error ? err.message : "Falha ao salvar." });
+      setEmailMsg({ kind: "error", text: err instanceof Error ? err.message : t("saveFailed") });
     } finally {
       setEmailBusy(false);
     }
@@ -64,11 +69,11 @@ export default function SettingsPage() {
     e.preventDefault();
     if (!user) return;
     if (pwd.length < 12) {
-      setPwdMsg({ kind: "error", text: "A senha deve ter ao menos 12 caracteres." });
+      setPwdMsg({ kind: "error", text: t("password.tooShort") });
       return;
     }
     if (pwd !== pwd2) {
-      setPwdMsg({ kind: "error", text: "As senhas não coincidem." });
+      setPwdMsg({ kind: "error", text: t("password.mismatch") });
       return;
     }
     setPwdBusy(true);
@@ -77,10 +82,10 @@ export default function SettingsPage() {
       await updateUser(user.id, { password: pwd });
       setPwd("");
       setPwd2("");
-      setPwdMsg({ kind: "ok", text: "Senha alterada." });
+      setPwdMsg({ kind: "ok", text: t("password.updated") });
     } catch (err) {
       // O backend valida a força da senha; mostramos a mensagem dele tal qual.
-      setPwdMsg({ kind: "error", text: err instanceof Error ? err.message : "Falha ao salvar." });
+      setPwdMsg({ kind: "error", text: err instanceof Error ? err.message : t("saveFailed") });
     } finally {
       setPwdBusy(false);
     }
@@ -89,8 +94,8 @@ export default function SettingsPage() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Configurações</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Sua conta de operador.</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
       </div>
 
       {/* ── Identidade da conta (somente leitura) ── */}
@@ -104,12 +109,10 @@ export default function SettingsPage() {
             <p className="mt-0.5 flex items-center gap-1.5 text-xs text-fg-3">
               {user.is_superuser && (
                 <span className="inline-flex items-center gap-1 text-info">
-                  <ShieldCheck size={12} /> Superusuário
+                  <ShieldCheck size={12} /> {t("superuser")}
                 </span>
               )}
-              <span>
-                membro desde {new Date(user.created_at).toLocaleDateString("pt-BR")}
-              </span>
+              <span>{t("memberSince", { date: dateTime(user.created_at, "date") })}</span>
             </p>
           </div>
         </div>
@@ -118,20 +121,20 @@ export default function SettingsPage() {
       {/* ── Trocar email ── */}
       <form onSubmit={saveEmail} className="rounded-xl border border-border bg-surface p-5">
         <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold">
-          <Mail size={15} className="text-fg-2" /> Email
+          <Mail size={15} className="text-fg-2" /> {t("email.title")}
         </h2>
-        <p className="mb-3 text-xs text-fg-3">Usado para login e identificação.</p>
+        <p className="mb-3 text-xs text-fg-3">{t("email.hint")}</p>
         <div className="flex flex-col gap-3 sm:max-w-md">
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className={INPUT_LG}
-            placeholder="voce@exemplo.com"
+            placeholder={t("email.placeholder")}
           />
           {emailMsg && <Notice kind={emailMsg.kind} text={emailMsg.text} />}
           <button type="submit" disabled={emailBusy} className={BTN_PRIMARY}>
-            {emailBusy ? "Salvando…" : "Salvar email"}
+            {emailBusy ? tc("saving") : t("email.save")}
           </button>
         </div>
       </form>
@@ -139,18 +142,16 @@ export default function SettingsPage() {
       {/* ── Trocar senha ── */}
       <form onSubmit={savePassword} className="rounded-xl border border-border bg-surface p-5">
         <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold">
-          <KeyRound size={15} className="text-fg-2" /> Senha
+          <KeyRound size={15} className="text-fg-2" /> {t("password.title")}
         </h2>
-        <p className="mb-3 text-xs text-fg-3">
-          Mínimo de 12 caracteres, com maiúscula, minúscula, dígito e símbolo.
-        </p>
+        <p className="mb-3 text-xs text-fg-3">{t("password.hint")}</p>
         <div className="flex flex-col gap-3 sm:max-w-md">
           <input
             type="password"
             value={pwd}
             onChange={(e) => setPwd(e.target.value)}
             className={INPUT_LG}
-            placeholder="Nova senha"
+            placeholder={t("password.placeholder")}
             autoComplete="new-password"
           />
           <input
@@ -158,12 +159,12 @@ export default function SettingsPage() {
             value={pwd2}
             onChange={(e) => setPwd2(e.target.value)}
             className={INPUT_LG}
-            placeholder="Confirmar nova senha"
+            placeholder={t("password.confirmPlaceholder")}
             autoComplete="new-password"
           />
           {pwdMsg && <Notice kind={pwdMsg.kind} text={pwdMsg.text} />}
           <button type="submit" disabled={pwdBusy} className={BTN_PRIMARY}>
-            {pwdBusy ? "Salvando…" : "Alterar senha"}
+            {pwdBusy ? tc("saving") : t("password.save")}
           </button>
         </div>
       </form>

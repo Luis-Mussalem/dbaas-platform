@@ -92,6 +92,34 @@
     },
     "valueLabel": "value"
   },
+  "Audit": {
+    "columns": {
+      "action": "Action",
+      "ip": "IP",
+      "resource": "Resource",
+      "when": "When"
+    },
+    "empty": "No records for the current filters.",
+    "filters": {
+      "action": "Action",
+      "allActions": "All",
+      "allResources": "All",
+      "resource": "Resource"
+    },
+    "loadFailed": "Failed to load the audit trail",
+    "loadMore": "Load more",
+    "loadMoreFailed": "Failed to load more",
+    "resources": {
+      "auth": "Authentication",
+      "backup": "Backup",
+      "backup_schedule": "Schedule",
+      "instance": "Instance",
+      "maintenance": "Maintenance",
+      "user": "User"
+    },
+    "subtitle": "Trail of actions recorded on the platform.",
+    "title": "Logs & Audit"
+  },
   "Backups": {
     "columns": {
       "created": "Created",
@@ -151,6 +179,7 @@
   },
   "Common": {
     "cancel": "Cancel",
+    "confirm": "Confirm",
     "create": "Create",
     "creating": "Creating…",
     "delete": "Delete",
@@ -160,6 +189,7 @@
     "none": "—",
     "refresh": "Refresh",
     "requiresRunning": "requires a running instance",
+    "saving": "Saving…",
     "unavailableStopped": "Unavailable (instance stopped)."
   },
   "Connections": {
@@ -190,6 +220,7 @@
       "uptimeCollecting": "collecting history",
       "uptimeSub": "last 30 days"
     },
+    "loadFailed": "Failed to load the dashboard",
     "summaryAlerts": "{count, plural, =0 {Your databases are healthy.} one {# active alert requires attention.} other {# active alerts require attention.}}",
     "summaryBackups": "{count, plural, one {# backup in the last 24h.} other {# backups in the last 24h.}}",
     "yourDatabases": "Your databases"
@@ -275,6 +306,10 @@
     "running": "Healthy",
     "stopped": "Paused"
   },
+  "Help": {
+    "subtitle": "Coming soon.",
+    "title": "Help"
+  },
   "InstanceCard": {
     "cacheHit": "cache hit",
     "connections": "connections",
@@ -328,6 +363,10 @@
       "replication": "Replication"
     }
   },
+  "InstanceSearch": {
+    "empty": "No instances found.",
+    "placeholder": "Search instance…"
+  },
   "Instances": {
     "empty": {
       "noneHere": "No databases in this environment",
@@ -335,12 +374,24 @@
       "noneYet": "No instances yet",
       "noneYetSub": "Create your first instance to start managing."
     },
+    "loadFailed": "Failed to load the instances",
     "managedCount": "{count, plural, one {# managed database} other {# managed databases}}",
     "new": "New instance",
     "title": "Instances"
   },
+  "Login": {
+    "failed": "Login failed",
+    "footer": "PostgreSQL database management platform",
+    "password": "Password",
+    "signIn": "Sign in",
+    "signingIn": "Signing in…",
+    "subtitle": "Access your database platform dashboard.",
+    "title": "Welcome back",
+    "username": "Username"
+  },
   "Logs": {
     "empty": "No logs to show.",
+    "loadFailed": "Failed to load the logs",
     "subtitle": "Last 200 lines from PostgreSQL (stdout/stderr).",
     "title": "Container logs"
   },
@@ -375,11 +426,16 @@
       "runFailed": "Failed to run the maintenance"
     }
   },
+  "Metadata": {
+    "description": "Database-as-a-Service — manage PostgreSQL instances",
+    "title": "DBaaS Platform"
+  },
   "Metrics": {
     "cacheHit": "Cache hit ratio (%)",
     "connections": "Active connections",
     "emptySeries": "Not enough data in this window.",
     "latency": "Latency (p50 / p95 / p99)",
+    "loadFailed": "Failed to load the metrics",
     "tag": {
       "demo": "demo",
       "real": "real"
@@ -401,6 +457,54 @@
       "admin": "Administration",
       "workspace": "Workspace"
     }
+  },
+  "NewInstance": {
+    "back": "Back",
+    "create": "Create instance",
+    "createFailed": "Failed to provision",
+    "created": "Instance \"{name}\" provisioned.",
+    "environment": "Environment",
+    "identity": {
+      "nameHint": "Something memorable. Letters, numbers and hyphens.",
+      "nameLabel": "Instance name",
+      "namePlaceholder": "checkout-prod",
+      "versionLabel": "PostgreSQL version"
+    },
+    "next": "Continue",
+    "noRegion": "No region",
+    "optional": "(optional)",
+    "provisioning": {
+      "note": "Spinning up a PostgreSQL {version} container for <mono>{name}</mono>. Takes ~30 seconds.",
+      "title": "Provisioning…"
+    },
+    "recommended": "recommended",
+    "region": "Region",
+    "review": {
+      "disk": "Disk",
+      "name": "Name",
+      "note": "Once created, the connection string is available on the instance detail page — the password is encrypted and stored securely (never returned by the API).",
+      "resources": "Resources",
+      "subtitle": "Almost there.",
+      "title": "Review before creating",
+      "version": "Version"
+    },
+    "size": {
+      "subtitle": "Sets the container's CPU, memory and disk.",
+      "title": "How much power?"
+    },
+    "sizes": {
+      "business": "High scale",
+      "hobby": "To try it out",
+      "pro": "Production",
+      "starter": "Small projects"
+    },
+    "step": "Step {current} of {total}",
+    "steps": {
+      "identity": "Identity",
+      "review": "Review",
+      "size": "Size"
+    },
+    "title": "Create new instance"
   },
   "RegionMap": {
     "aria": "World map with the distribution of regions",
@@ -448,6 +552,35 @@
       "promoteFailed": "Failed to promote the replica",
       "promoted": "Replica promoted to primary."
     }
+  },
+  "SchemaExplorer": {
+    "empty": "No user tables.",
+    "title": "Schema explorer"
+  },
+  "Settings": {
+    "email": {
+      "hint": "Used for sign-in and identification.",
+      "placeholder": "you@example.com",
+      "sameAsCurrent": "Enter an email different from the current one.",
+      "save": "Save email",
+      "title": "Email",
+      "updated": "Email updated."
+    },
+    "memberSince": "member since {date}",
+    "password": {
+      "confirmPlaceholder": "Confirm new password",
+      "hint": "At least 12 characters, with uppercase, lowercase, digit and symbol.",
+      "mismatch": "The passwords do not match.",
+      "placeholder": "New password",
+      "save": "Change password",
+      "title": "Password",
+      "tooShort": "The password must be at least 12 characters long.",
+      "updated": "Password changed."
+    },
+    "saveFailed": "Failed to save.",
+    "subtitle": "Your operator account.",
+    "superuser": "Superuser",
+    "title": "Settings"
   },
   "Sql": {
     "empty": {

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { getAuditLogs } from "@/lib/api";
 import type { AuditLog } from "@/lib/types";
 
@@ -24,6 +25,7 @@ interface UseAuditResult {
 // seguintes são CONCATENADAS no fim (setLogs(prev => [...prev, ...data])).
 // Mudar qualquer filtro reseta tudo para a página 0.
 export function useAudit(filters: AuditFilters): UseAuditResult {
+  const t = useTranslations("Audit");
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -54,7 +56,7 @@ export function useAudit(filters: AuditFilters): UseAuditResult {
         }
       })
       .catch((err) => {
-        if (active) setError(err instanceof Error ? err.message : "Falha ao carregar auditoria");
+        if (active) setError(err instanceof Error ? err.message : t("loadFailed"));
       })
       .finally(() => {
         if (active) setIsLoading(false);
@@ -62,7 +64,7 @@ export function useAudit(filters: AuditFilters): UseAuditResult {
     return () => {
       active = false;
     };
-  }, [filters.action, filters.resource_type]);
+  }, [filters.action, filters.resource_type, t]);
 
   const loadMore = useCallback(async () => {
     const nextOffset = offset + PAGE_SIZE;
@@ -78,9 +80,9 @@ export function useAudit(filters: AuditFilters): UseAuditResult {
       setOffset(nextOffset);
       setHasMore(data.length === PAGE_SIZE);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao carregar mais");
+      setError(err instanceof Error ? err.message : t("loadMoreFailed"));
     }
-  }, [offset, filters.action, filters.resource_type]);
+  }, [offset, filters.action, filters.resource_type, t]);
 
   return { logs, isLoading, error, hasMore, loadMore };
 }
