@@ -1,27 +1,31 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import type { QueryResult } from "@/lib/types";
+
+// Espelha MAX_ROWS de backend/src/services/query.py — o cap não vem na resposta,
+// só o booleano `truncated`.
+const MAX_ROWS = 1000;
 
 // Tabela de resultados do Console SQL. Apenas apresentação: recebe o QueryResult
 // já carregado pela página e o renderiza. Segue o padrão visual de ConnectionsTable.
 export function ResultsTable({ result }: { result: QueryResult }) {
+  const t = useTranslations("Sql.results");
   const { columns, rows, row_count, truncated } = result;
 
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-surface">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <h2 className="text-sm font-semibold">Resultado</h2>
+        <h2 className="text-sm font-semibold">{t("title")}</h2>
         <span className="text-xs text-fg-3">
-          {row_count} linha(s)
-          {truncated && " · mostrando as primeiras 1000"}
+          {t("rows", { count: row_count })}
+          {truncated && ` · ${t("truncated", { limit: MAX_ROWS })}`}
         </span>
       </div>
 
       {columns.length === 0 ? (
         // SELECT válido que não devolve colunas (raro, mas possível).
-        <p className="px-4 py-8 text-center text-sm text-fg-3">
-          Query executada — sem linhas retornadas.
-        </p>
+        <p className="px-4 py-8 text-center text-sm text-fg-3">{t("noRows")}</p>
       ) : (
         // overflow-x-auto: tabelas largas rolam na horizontal sem quebrar o layout.
         <div className="overflow-x-auto">

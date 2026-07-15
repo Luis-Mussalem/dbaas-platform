@@ -1,6 +1,7 @@
 "use client";
 
 import { History, X } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 // Histórico de queries (apresentação pura). A página é dona da lista e da
 // persistência em localStorage; aqui só listamos e avisamos cliques.
@@ -13,6 +14,8 @@ export function QueryHistory({
   onSelect: (query: string) => void;
   onClear: () => void;
 }) {
+  const t = useTranslations("Sql.history");
+
   if (items.length === 0) return null;
 
   return (
@@ -20,14 +23,14 @@ export function QueryHistory({
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <h2 className="flex items-center gap-1.5 text-sm font-semibold">
           <History size={14} className="text-fg-3" />
-          Histórico
+          {t("title")}
         </h2>
         <button
           onClick={onClear}
           className="flex items-center gap-1 text-xs text-fg-3 transition-colors hover:text-foreground"
         >
           <X size={12} />
-          Limpar
+          {t("clear")}
         </button>
       </div>
       <ul className="p-2">
@@ -36,7 +39,7 @@ export function QueryHistory({
           <li key={q}>
             <button
               onClick={() => onSelect(q)}
-              title="Carregar no editor"
+              title={t("load")}
               className="block w-full truncate rounded-md px-2 py-1.5 text-left font-mono text-xs text-fg-2 transition-colors hover:bg-surface-2 hover:text-foreground"
             >
               {q}

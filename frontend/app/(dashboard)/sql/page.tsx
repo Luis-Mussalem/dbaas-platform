@@ -2,6 +2,7 @@
 
 import { type KeyboardEvent, useMemo, useRef, useState } from "react";
 import { Loader2, Play, Workflow } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useAuth } from "@/context/AuthContext";
 import { useInstances } from "@/hooks/use-instances";
 import { runQuery, explainQuery } from "@/lib/api";
@@ -36,6 +37,8 @@ function saveHistory(companyScope: string, instanceId: string, items: string[]):
 }
 
 export default function SqlPage() {
+  const t = useTranslations("Sql");
+  const tc = useTranslations("Common");
   const { user } = useAuth();
   const { instances, isLoading, error: instancesError } = useInstances();
 
@@ -119,7 +122,7 @@ export default function SqlPage() {
       setResult(r);
       rememberQuery(query);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Falha ao executar a query");
+      setError(e instanceof Error ? e.message : t("runFailed"));
       setResult(null);
     } finally {
       setRunning(false);
@@ -135,7 +138,7 @@ export default function SqlPage() {
       const r = await explainQuery(effectiveId, query.trim());
       setPlan(r.plan);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Falha ao gerar o plano");
+      setError(e instanceof Error ? e.message : t("planFailed"));
       setPlan(null);
     } finally {
       setRunning(false);
@@ -150,7 +153,7 @@ export default function SqlPage() {
     }
   }
 
-  if (isLoading) return <p className="text-sm text-fg-3">Carregando…</p>;
+  if (isLoading) return <p className="text-sm text-fg-3">{tc("loading")}</p>;
   if (instancesError) return <p className="text-sm text-danger">{instancesError}</p>;
 
   const canSubmit = !!effectiveId && !!query.trim() && !running;
@@ -160,9 +163,11 @@ export default function SqlPage() {
       {/* Cabeçalho + seletor de instância */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Console SQL</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Execute consultas <span className="font-mono">SELECT</span> read-only nos bancos gerenciados.
+            {t.rich("subtitle", {
+              code: (chunks) => <span className="font-mono">{chunks}</span>,
+            })}
           </p>
         </div>
         {runningInstances.length > 0 && (
@@ -181,10 +186,7 @@ export default function SqlPage() {
       </div>
 
       {runningInstances.length === 0 ? (
-        <EmptyState
-          title="Nenhuma instância em execução"
-          subtitle="Inicie uma instância para abrir o console SQL."
-        />
+        <EmptyState title={t("empty.title")} subtitle={t("empty.subtitle")} />
       ) : (
         <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
           {/* Navegador de tabelas (clicável → insere no editor) */}
@@ -213,7 +215,9 @@ export default function SqlPage() {
               />
               <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-3 py-2">
                 <span className="text-[11px] text-fg-3">
-                  Somente SELECT · <span className="font-mono">Ctrl/Cmd + Enter</span> executa
+                  {t.rich("hint", {
+                    kbd: (chunks) => <span className="font-mono">{chunks}</span>,
+                  })}
                 </span>
                 <div className="flex gap-2">
                   <button
@@ -222,7 +226,7 @@ export default function SqlPage() {
                     className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-3 text-[13px] text-fg-2 transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-50"
                   >
                     <Workflow size={14} />
-                    Plano
+                    {t("plan")}
                   </button>
                   <button
                     onClick={run}
@@ -234,7 +238,7 @@ export default function SqlPage() {
                     ) : (
                       <Play size={14} />
                     )}
-                    Executar
+                    {t("run")}
                   </button>
                 </div>
               </div>
@@ -250,7 +254,7 @@ export default function SqlPage() {
             {plan && (
               <div className="overflow-hidden rounded-xl border border-border bg-surface">
                 <div className="flex items-center justify-between border-b border-border px-4 py-3">
-                  <h2 className="text-sm font-semibold">Plano de execução</h2>
+                  <h2 className="text-sm font-semibold">{t("planTitle")}</h2>
                   <span className="text-xs text-fg-3">EXPLAIN ANALYZE</span>
                 </div>
                 <pre className="overflow-x-auto px-4 py-3 font-mono text-xs text-fg-2">

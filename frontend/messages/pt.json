@@ -208,6 +208,36 @@
     "subtitle": "Distribuição dos seus bancos",
     "title": "Mapa de regiões"
   },
+  "Sql": {
+    "empty": {
+      "subtitle": "Inicie uma instância para abrir o console SQL.",
+      "title": "Nenhuma instância em execução"
+    },
+    "history": {
+      "clear": "Limpar",
+      "load": "Carregar no editor",
+      "title": "Histórico"
+    },
+    "hint": "Somente SELECT · <kbd>Ctrl/Cmd + Enter</kbd> executa",
+    "plan": "Plano",
+    "planFailed": "Falha ao gerar o plano",
+    "planTitle": "Plano de execução",
+    "results": {
+      "noRows": "Query executada — sem linhas retornadas.",
+      "rows": "{count, plural, one {# linha} other {# linhas}}",
+      "title": "Resultado",
+      "truncated": "mostrando as primeiras {limit, number}"
+    },
+    "run": "Executar",
+    "runFailed": "Falha ao executar a query",
+    "schema": {
+      "empty": "Sem tabelas de usuário.",
+      "insert": "Inserir no editor",
+      "title": "Tabelas"
+    },
+    "subtitle": "Execute consultas <code>SELECT</code> read-only nos bancos gerenciados.",
+    "title": "Console SQL"
+  },
   "Status": {
     "deleted": "Removida",
     "deleting": "Removendo",

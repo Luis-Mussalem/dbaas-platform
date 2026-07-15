@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ChevronDown, ChevronRight, Table2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { getSchema } from "@/lib/api";
 import type { Instance, SchemaGroup } from "@/lib/types";
 import { useFormatters } from "@/hooks/use-formatters";
@@ -16,6 +17,8 @@ export function SchemaBrowser({
   instance: Instance;
   onPickTable: (table: string) => void;
 }) {
+  const t = useTranslations("Sql.schema");
+  const tc = useTranslations("Common");
   const { number } = useFormatters();
   const [groups, setGroups] = useState<SchemaGroup[] | null>(null);
   const [failed, setFailed] = useState(false);
@@ -49,18 +52,16 @@ export function SchemaBrowser({
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-surface">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <h2 className="text-sm font-semibold">Tabelas</h2>
+        <h2 className="text-sm font-semibold">{t("title")}</h2>
         <span className="text-xs text-fg-3">pg_class</span>
       </div>
 
       {unavailable ? (
-        <p className="px-4 py-8 text-center text-sm text-fg-3">
-          Indisponível (instância parada).
-        </p>
+        <p className="px-4 py-8 text-center text-sm text-fg-3">{tc("unavailableStopped")}</p>
       ) : groups === null ? (
-        <p className="px-4 py-8 text-center text-sm text-fg-3">Carregando…</p>
+        <p className="px-4 py-8 text-center text-sm text-fg-3">{tc("loading")}</p>
       ) : groups.length === 0 ? (
-        <p className="px-4 py-8 text-center text-sm text-fg-3">Sem tabelas de usuário.</p>
+        <p className="px-4 py-8 text-center text-sm text-fg-3">{t("empty")}</p>
       ) : (
         <ul className="p-2">
           {groups.map((g) => {
@@ -77,17 +78,17 @@ export function SchemaBrowser({
                 </button>
                 {expanded && (
                   <ul className="ml-3 border-l border-border pl-3">
-                    {g.tables.map((t) => (
-                      <li key={t.table}>
+                    {g.tables.map((tbl) => (
+                      <li key={tbl.table}>
                         <button
-                          onClick={() => onPickTable(t.table)}
-                          title="Inserir no editor"
+                          onClick={() => onPickTable(tbl.table)}
+                          title={t("insert")}
                           className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[12.5px] text-fg-2 transition-colors hover:bg-surface-2 hover:text-foreground"
                         >
                           <Table2 size={12} className="shrink-0 text-fg-3" />
-                          <span className="flex-1 truncate font-mono">{t.table}</span>
+                          <span className="flex-1 truncate font-mono">{tbl.table}</span>
                           <span className="font-mono text-[11px] text-fg-3">
-                            {number(t.estimated_rows)}
+                            {number(tbl.estimated_rows)}
                           </span>
                         </button>
                       </li>

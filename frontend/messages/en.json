@@ -208,6 +208,36 @@
     "subtitle": "Distribution of your databases",
     "title": "Region map"
   },
+  "Sql": {
+    "empty": {
+      "subtitle": "Start an instance to open the SQL console.",
+      "title": "No running instances"
+    },
+    "history": {
+      "clear": "Clear",
+      "load": "Load into the editor",
+      "title": "History"
+    },
+    "hint": "SELECT only · <kbd>Ctrl/Cmd + Enter</kbd> runs",
+    "plan": "Plan",
+    "planFailed": "Could not generate the plan",
+    "planTitle": "Execution plan",
+    "results": {
+      "noRows": "Query ran — no rows returned.",
+      "rows": "{count, plural, one {# row} other {# rows}}",
+      "title": "Result",
+      "truncated": "showing the first {limit, number}"
+    },
+    "run": "Run",
+    "runFailed": "Could not run the query",
+    "schema": {
+      "empty": "No user tables.",
+      "insert": "Insert into the editor",
+      "title": "Tables"
+    },
+    "subtitle": "Run read-only <code>SELECT</code> queries against your managed databases.",
+    "title": "SQL Console"
+  },
   "Status": {
     "deleted": "Deleted",
     "deleting": "Deleting",
