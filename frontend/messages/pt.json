@@ -628,5 +628,12 @@
     },
     "newInstance": "Nova instância",
     "toggleTheme": "Alternar tema"
+  },
+  "WorkspaceSwitcher": {
+    "adminSubtitle": "Workspace · admin",
+    "allCompanies": "Todas as empresas",
+    "companyLabel": "Empresa",
+    "noCompany": "Sem empresa",
+    "selectCompany": "Selecionar empresa"
   }
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { ChevronDown, Check } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { listCompanies } from "@/lib/api";
@@ -17,24 +18,26 @@ const ACTIVE_KEY = "active_company_id";
 //   • comum      → rótulo fixo com a empresa dele (user.company), sem troca.
 export function WorkspaceSwitcher() {
   const { user } = useAuth();
+  const t = useTranslations("WorkspaceSwitcher");
 
   if (!user) return null;
 
   return user.is_superuser ? (
     <SuperuserSwitcher />
   ) : (
-    <FixedWorkspace name={user.company?.name ?? "Sem empresa"} />
+    <FixedWorkspace name={user.company?.name ?? t("noCompany")} />
   );
 }
 
 // ── Usuário comum: apenas exibe a empresa dele, sem interação ──
 function FixedWorkspace({ name }: { name: string }) {
+  const t = useTranslations("WorkspaceSwitcher");
   return (
     <div className="mb-3.5 flex items-center gap-2 rounded-md border border-border bg-surface px-2.5 py-2 text-left">
       <div className="h-5.5 w-5.5 shrink-0 rounded-md bg-linear-to-br from-primary to-info" />
       <div className="min-w-0 flex-1">
         <div className="truncate text-[13px] font-medium">{name}</div>
-        <div className="text-[11px] text-fg-3">Empresa</div>
+        <div className="text-[11px] text-fg-3">{t("companyLabel")}</div>
       </div>
     </div>
   );
@@ -42,6 +45,7 @@ function FixedWorkspace({ name }: { name: string }) {
 
 // ── Superuser: dropdown de troca de empresa ──
 function SuperuserSwitcher() {
+  const t = useTranslations("WorkspaceSwitcher");
   const [companies, setCompanies] = useState<Company[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -77,8 +81,8 @@ function SuperuserSwitcher() {
   }
 
   const activeName = activeId
-    ? companies.find((c) => c.id === activeId)?.name ?? "Selecionar empresa"
-    : "Todas as empresas";
+    ? companies.find((c) => c.id === activeId)?.name ?? t("selectCompany")
+    : t("allCompanies");
 
   return (
     <div className="relative mb-3.5">
@@ -89,7 +93,7 @@ function SuperuserSwitcher() {
         <div className="h-5.5 w-5.5 shrink-0 rounded-md bg-linear-to-br from-primary to-info" />
         <div className="min-w-0 flex-1">
           <div className="truncate text-[13px] font-medium">{activeName}</div>
-          <div className="text-[11px] text-fg-3">Workspace · admin</div>
+          <div className="text-[11px] text-fg-3">{t("adminSubtitle")}</div>
         </div>
         <ChevronDown size={14} className="shrink-0 text-fg-3" />
       </button>
@@ -105,7 +109,7 @@ function SuperuserSwitcher() {
                 onClick={() => select(null)}
                 className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[13px] text-fg-2 transition-colors hover:bg-surface-2 hover:text-foreground"
               >
-                <span className="flex-1 truncate">Todas as empresas</span>
+                <span className="flex-1 truncate">{t("allCompanies")}</span>
                 {activeId === null && <Check size={13} className="shrink-0 text-brand" />}
               </button>
             </li>
