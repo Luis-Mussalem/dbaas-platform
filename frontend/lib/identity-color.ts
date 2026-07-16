@@ -1,71 +1,80 @@
-// Cor de IDENTIDADE da instância — determinística, agrupada por EMPRESA.
+// Cor de IDENTIDADE da instância — determinística, agrupada por PAÍS da região.
 //
-// Regra: a MATIZ (família de cor) vem da empresa — o primeiro token do nome, ex.:
-// "jupiter-clothing-prod" → "jupiter". Assim todas as instâncias da mesma empresa
-// compartilham a mesma família (Jupiter=roxo, Saturn=azul, Neptune=laranja…), e o
-// AMBIENTE escolhe o TOM dentro da família (produção mais forte, homologação mais
-// clara) — "parecidas mas diferentes". A mesma cor alimenta o avatar e a linha do
-// sparkline do card.
+// A MATIZ vem do país (cor da bandeira): Brasil = verde, EUA = azul, Irlanda =
+// laranja, Alemanha = dourado, Singapura = vermelho. O AMBIENTE escolhe o TOM: a
+// produção usa a cor cheia da bandeira; homologação e desenvolvimento usam tons
+// mais claros (misturados em direção à superfície do tema). Instâncias do mesmo
+// país compartilham a família e o ambiente as diferencia.
 //
-// Segue o guia de dataviz: paleta categórica fixa atribuída pela entidade (empresa),
-// nunca ciclada por posição na lista; não reutiliza os tons de status (ok/warn/danger).
+// Por que por país, e não por empresa (hash do nome): ao criar uma empresa nova o
+// hash antigo podia colidir/confundir cores. Ancorar no país torna a cor
+// PREVISÍVEL — segue a região escolhida, não o nome. A mesma cor alimenta o avatar,
+// a linha do sparkline (card) e os marcadores do mapa de regiões.
+//
+// Cores mid-tone escolhidas para funcionar nos temas claro E escuro sem trocar de
+// matiz. Segue o guia de dataviz: paleta categórica fixa por entidade (país), com
+// reforço secundário pela bandeira + sigla do país (nunca só a cor).
 
 import type { Environment } from "@/lib/types";
+import { regionInfo } from "@/lib/regions";
 
-// [forte, médio, claro] por família. A ORDEM é escolhida para as empresas demo
-// caírem nas cores pedidas via o hash do token (jupiter→3, saturn→5, neptune→1).
-const FAMILIES: [string, string, string][] = [
-  ["#0f766e", "#14b8a6", "#5eead4"], // 0 teal
-  ["#c2410c", "#f97316", "#fdba74"], // 1 laranja  ← neptune
-  ["#be185d", "#ec4899", "#f9a8d4"], // 2 rosa
-  ["#6d28d9", "#8b5cf6", "#c4b5fd"], // 3 roxo     ← jupiter
-  ["#4338ca", "#6366f1", "#a5b4fc"], // 4 índigo
-  ["#1d4ed8", "#3b82f6", "#93c5fd"], // 5 azul      ← saturn
-  ["#15803d", "#22c55e", "#86efac"], // 6 verde
-  ["#b45309", "#f59e0b", "#fcd34d"], // 7 âmbar
-];
+// País (sigla) → { fill: cor base = tom preciso da bandeira (produção);
+//                  ink: cor do texto sobre essa cor }.
+const COUNTRY_COLORS: Record<string, { fill: string; ink: string }> = {
+  BR: { fill: "#007a33", ink: "#ffffff" }, // verde bandeira fechado — distinto do
+                                           // verde-tema esmeralda (#10b981), ΔE ~19
+  US: { fill: "#2563eb", ink: "#ffffff" }, // azul visível
+  IE: { fill: "#ff8200", ink: "#ffffff" }, // laranja (Pantone 151)
+  DE: { fill: "#f5c518", ink: "#1a1a1a" }, // amarelo-dourado — puxado para o amarelo
+                                           // p/ separar do laranja da Irlanda; texto escuro
+  SG: { fill: "#ee2536", ink: "#ffffff" }, // vermelho (Pantone 032)
+};
 
-function hashString(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) {
-    h = (h * 31 + s.charCodeAt(i)) | 0;
-  }
-  return Math.abs(h);
+// País desconhecido → cor da marca (mesmo espírito do fallback de regionInfo, que
+// nunca quebra a UI). Como é um token, não entra no color-mix dos tons.
+const FALLBACK = { fill: "var(--brand)", ink: "var(--brand-fg)" };
+
+function colorFor(region: string | null): { fill: string; ink: string } {
+  const info = regionInfo(region);
+  if (!info) return FALLBACK;
+  return COUNTRY_COLORS[info.country] ?? FALLBACK;
 }
 
-// Chave da empresa = primeiro token alfanumérico do nome.
-// "jupiter-clothing-prod" → "jupiter"; "neptune-payments-staging" → "neptune".
-function companyKey(name: string): string {
-  const token = name.trim().toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)[0];
-  return token || name.trim().toLowerCase();
+// Ambiente → tom: produção = cor cheia; homologação/indef = leve clareamento;
+// desenvolvimento = mais claro. A mistura é feita com CSS color-mix contra a
+// superfície do tema vigente, então clareia no claro e escurece no escuro —
+// legível nos dois sem trocar de matiz. Tokens de marca não são misturados.
+function envTone(fill: string, env: Environment | null): string {
+  if (fill.startsWith("var(") || env === "production") return fill;
+  const surfaceMix = env === "development" ? 34 : 18; // % de superfície
+  return `color-mix(in oklch, ${fill} ${100 - surfaceMix}%, var(--surface))`;
 }
 
-function family(name: string): [string, string, string] {
-  return FAMILIES[hashString(companyKey(name)) % FAMILIES.length];
+// Gradiente do avatar: do tom do ambiente para uma versão levemente mais escura
+// (profundidade). O texto usa a `ink` do país (branco, ou escuro sobre o dourado).
+export function instanceGradient(region: string | null, env: Environment | null): string {
+  const tone = envTone(colorFor(region).fill, env);
+  if (tone.startsWith("var(")) return `linear-gradient(135deg, ${tone}, ${tone})`;
+  return `linear-gradient(135deg, ${tone}, color-mix(in oklch, ${tone}, black 14%))`;
 }
 
-// Ambiente → índice do tom: produção = forte (0), homologação/indef = médio (1),
-// desenvolvimento = claro (2).
-function shadeIndex(env: Environment | null): number {
-  if (env === "production") return 0;
-  if (env === "development") return 2;
-  return 1;
+// Cor sólida da linha do sparkline — mesmo tom do avatar.
+export function instanceLineColor(region: string | null, env: Environment | null): string {
+  return envTone(colorFor(region).fill, env);
 }
 
-// Gradiente do avatar (mesma família, tom pelo ambiente). Sempre termina no tom
-// mais escuro para manter as iniciais brancas legíveis.
-export function instanceGradient(name: string, env: Environment | null): string {
-  const [deep, mid, light] = family(name);
-  const [from, to] = shadeIndex(env) === 0 ? [mid, deep] : [light, mid];
-  return `linear-gradient(135deg, ${from}, ${to})`;
+// Cor do texto das iniciais sobre o avatar (branco na maioria; escuro no dourado).
+export function instanceInk(region: string | null): string {
+  return colorFor(region).ink;
 }
 
-// Cor sólida da linha do sparkline — mesma família/tom do avatar.
-export function instanceLineColor(name: string, env: Environment | null): string {
-  return family(name)[shadeIndex(env)];
+// Cor sólida do país (tom de produção) — usada pelos marcadores do mapa de regiões.
+export function countryColor(region: string | null): string {
+  return colorFor(region).fill;
 }
 
 // Até 2 iniciais a partir do nome (ex.: "checkout-prod" → "CP", "analytics" → "AN").
+// O nome continua definindo as INICIAIS; só a COR passou a vir do país.
 export function instanceInitials(name: string): string {
   const parts = name.replace(/[^a-zA-Z0-9]+/g, " ").trim().split(" ").filter(Boolean);
   const letters =

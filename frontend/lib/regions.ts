@@ -18,7 +18,6 @@ export interface RegionInfo {
 const REGIONS: Record<string, RegionInfo> = {
   "sa-east-1": { code: "sa-east-1", flag: "🇧🇷", city: "São Paulo", country: "BR", lat: -23.5, lon: -46.6 },
   "us-east-1": { code: "us-east-1", flag: "🇺🇸", city: "N. Virginia", country: "US", lat: 39.0, lon: -77.5 },
-  "us-west-2": { code: "us-west-2", flag: "🇺🇸", city: "Oregon", country: "US", lat: 45.9, lon: -119.7 },
   "eu-west-1": { code: "eu-west-1", flag: "🇮🇪", city: "Ireland", country: "IE", lat: 53.3, lon: -6.3 },
   "eu-central-1": { code: "eu-central-1", flag: "🇩🇪", city: "Frankfurt", country: "DE", lat: 50.1, lon: 8.7 },
   "ap-southeast-1": { code: "ap-southeast-1", flag: "🇸🇬", city: "Singapore", country: "SG", lat: 1.35, lon: 103.8 },

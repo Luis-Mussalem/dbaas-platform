@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import type { Instance } from "@/lib/types";
 import { regionInfo, project, type RegionInfo } from "@/lib/regions";
+import { countryColor } from "@/lib/identity-color";
 import { WORLD_LAND_PATH } from "@/lib/world-geo";
 
 // Painel "Mapa de regiões": agrega as instâncias por região e marca cada uma
@@ -50,14 +51,15 @@ export function RegionMap({ instances }: { instances: Instance[] }) {
             vectorEffect="non-scaling-stroke"
           />
 
-          {/* Marcadores das regiões com instâncias (anel + ponto) */}
+          {/* Marcadores das regiões com instâncias (anel + ponto), na cor do país */}
           {rows.map(({ info, count }) => {
             const p = project(info.lat, info.lon);
+            const color = countryColor(info.code);
             return (
               <g key={info.code}>
                 <title>{`${info.city} · ${count}`}</title>
-                <circle cx={p.x} cy={p.y} r={6} fill="var(--brand)" opacity={0.18} />
-                <circle cx={p.x} cy={p.y} r={2.6} fill="var(--brand)" />
+                <circle cx={p.x} cy={p.y} r={6} fill={color} opacity={0.18} />
+                <circle cx={p.x} cy={p.y} r={2.6} fill={color} />
               </g>
             );
           })}
@@ -70,6 +72,11 @@ export function RegionMap({ instances }: { instances: Instance[] }) {
         <ul className="flex flex-col gap-1">
           {rows.map(({ info, count }) => (
             <li key={info.code} className="flex items-center gap-2 text-[12.5px]">
+              <span
+                aria-hidden
+                className="h-2 w-2 shrink-0 rounded-full"
+                style={{ backgroundColor: countryColor(info.code) }}
+              />
               <span className="w-6 text-fg-3">{info.country}</span>
               <span className="flex-1 text-fg-2">{info.city}</span>
               <span className="font-mono tabular-nums text-foreground">{count}</span>
