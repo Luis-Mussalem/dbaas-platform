@@ -40,7 +40,7 @@ export default function LoginPage() {
       {/* Brilho de marca sutil ao fundo (decorativo). */}
       <div
         aria-hidden
-        className="pointer-events-none absolute -top-32 left-1/2 h-80 w-[36rem] -translate-x-1/2 rounded-full bg-brand opacity-[0.07] blur-3xl"
+        className="pointer-events-none absolute -top-32 left-1/2 h-80 w-xl -translate-x-1/2 rounded-full bg-brand opacity-[0.07] blur-3xl"
       />
 
       <div className="relative w-full max-w-sm">
