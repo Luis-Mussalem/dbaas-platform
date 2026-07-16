@@ -66,6 +66,22 @@ The goal is not only to build APIs, but to design systems that simulate operatio
 | **Background automation** | 6 concurrent loops — status, metrics, alerts, backups, maintenance, replication lag |
 | **Delivery** | 3-job CI pipeline + one-command full-stack Docker Compose |
 
+## Demo Login
+
+A ready-to-use demo account lets you explore the whole platform hands-on — browse
+the fleet across all tenants, provision new instances, stop and delete them, run
+the SQL console, inspect metrics, backups and replication. It is a full-access
+account so recruiters can try every feature end to end.
+
+| | |
+|---|---|
+| **Email** | `dev-test@local.dev` |
+| **Password** | `dev-test-2026` |
+
+The account is seeded automatically by the database migrations. Since the project
+runs locally with fictional seed data, each person works against their own copy —
+so exploring freely (including destructive actions) is safe and expected.
+
 ## Table of Contents
 
 - [Screenshots](#screenshots)
