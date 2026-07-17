@@ -133,17 +133,44 @@ the `dev-test@local.dev` superuser above sees and switches between all:
 > datasets — the only exception is the per-query latency chart, labelled *demo*
 > in the UI itself (the backend collects fleet-wide P95, not per-execution latency).
 
-![Fleet dashboard](docs/images/dashboard.png)
+<img src="docs/images/dashboard.png" alt="Fleet dashboard" width="100%">
 
 **Fleet dashboard** — real-time fleet KPIs (queries/s, P95 latency, 30-day uptime),
 a region map of where the databases run, per-company health cards and a live
 activity feed of who did what.
 
-| | |
-|---|---|
-| ![Instances](docs/images/instances.png) **Instances** — the managed fleet with production / staging / development filters; each card shows region, engine version, health, connections, cache-hit ratio, size and storage. | ![Instance overview](docs/images/instance-view.png) **Instance overview** — connection string (password encrypted, never exposed by the API), health tiles, live connections (`pg_stat_activity`), schema explorer (`pg_class`) and slow queries (`pg_stat_statements`). |
-| ![Instance metrics](docs/images/instance-detail.png) **Instance metrics** — time-series for active connections and cache-hit ratio (live) plus p50 / p95 / p99 latency (demo), with a 15m / 1h / 6h / 24h window selector. | ![SQL console](docs/images/sql-console.png) **SQL console** — read-only SELECT runner against a managed database, with a schema browser, results grid and `EXPLAIN` plans (Ctrl/Cmd + Enter to run). |
-| ![Logs & audit](docs/images/logs.png) **Logs & audit** — an immutable, filterable trail of platform actions (logins, instance created / deleted / status changed) with resource, source IP and time. | ![Multi-tenancy & RBAC](docs/images/admin-users.png) **Multi-tenancy & RBAC** — the employee directory with a role capability matrix (Member / Company Admin / Superuser) and per-company user management. |
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/images/instances.png" alt="Instances" width="100%"><br>
+      <b>Instances</b> — the managed fleet with production / staging / development filters; each card shows region, engine version, health, connections, cache-hit ratio, size and storage.
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/images/instance-view.png" alt="Instance overview" width="100%"><br>
+      <b>Instance overview</b> — connection string (password encrypted, never exposed by the API), health tiles, live connections (<code>pg_stat_activity</code>), schema explorer (<code>pg_class</code>) and slow queries (<code>pg_stat_statements</code>).
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/images/instance-detail.png" alt="Instance metrics" width="100%"><br>
+      <b>Instance metrics</b> — time-series for active connections and cache-hit ratio (live) plus p50 / p95 / p99 latency (demo), with a 15m / 1h / 6h / 24h window selector.
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/images/sql-console.png" alt="SQL console" width="100%"><br>
+      <b>SQL console</b> — read-only SELECT runner against a managed database, with a schema browser, results grid and <code>EXPLAIN</code> plans (Ctrl/Cmd + Enter to run).
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/images/logs.png" alt="Logs and audit" width="100%"><br>
+      <b>Logs &amp; audit</b> — an immutable, filterable trail of platform actions (logins, instance created / deleted / status changed) with resource, source IP and time.
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/images/admin-users.png" alt="Multi-tenancy and RBAC" width="100%"><br>
+      <b>Multi-tenancy &amp; RBAC</b> — the employee directory with a role capability matrix (Member / Company Admin / Superuser) and per-company user management.
+    </td>
+  </tr>
+</table>
 
 ---
 
