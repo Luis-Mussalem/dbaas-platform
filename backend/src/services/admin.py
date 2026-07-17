@@ -10,6 +10,7 @@ from src.models.backup import Backup, BackupStatus
 from src.models.database_instance import DatabaseInstance, InstanceStatus
 from src.models.maintenance import MaintenanceTask, TaskStatus
 from src.models.metric import Metric
+from src.models.user import User
 from src.schemas.admin import DashboardResponse
 from src.services import status_history
 
@@ -215,7 +216,10 @@ def list_audit_logs(
     user_id: uuid.UUID | None = None,
     company_id: uuid.UUID | None = None,
 ) -> list[AuditLog]:
-    query = db.query(AuditLog)
+    # LEFT JOIN em users para trazer o email do ator junto (AuditLog só guarda o
+    # user_id). outerjoin: ações sem usuário (login, background) e usuários já
+    # deletados mantêm a linha, com email = None.
+    query = db.query(AuditLog, User.email).outerjoin(User, User.id == AuditLog.user_id)
     if company_id is not None:
         query = query.filter(AuditLog.company_id == company_id)
     if action:
@@ -224,9 +228,15 @@ def list_audit_logs(
         query = query.filter(AuditLog.resource_type == resource_type)
     if user_id:
         query = query.filter(AuditLog.user_id == user_id)
-    return (
+    rows = (
         query.order_by(AuditLog.timestamp.desc())
         .limit(limit)
         .offset(offset)
         .all()
     )
+    # Anexa o email como atributo transiente para o AuditLogRead (from_attributes).
+    logs: list[AuditLog] = []
+    for log, email in rows:
+        log.user_email = email
+        logs.append(log)
+    return logs

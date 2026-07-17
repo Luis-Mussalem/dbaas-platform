@@ -6,7 +6,7 @@ import { Activity, Cpu } from "lucide-react";
 import { getAuditLogs } from "@/lib/api";
 import type { AuditLog } from "@/lib/types";
 import { useFormatters } from "@/hooks/use-formatters";
-import { isAuditAction, toneFor, type Tone } from "@/lib/audit";
+import { actorLabel, isAuditAction, toneFor, type Tone } from "@/lib/audit";
 
 // Cor do avatar por tom semântico. O tom vem da fonte única lib/audit.ts —
 // antes era derivado aqui por substring da ação, e discordava da tela de
@@ -50,6 +50,9 @@ export function ActivityFeed() {
         <ul className="flex flex-col">
           {logs.map((log) => {
             const isSystem = !log.user_id;
+            // Nome real do ator (nome@empresa); cai em "operator" se o usuário
+            // foi deletado (user_id presente, mas sem email no join).
+            const actor = isSystem ? t("system") : actorLabel(log.user_email) ?? t("operator");
             return (
               <li
                 key={log.id}
@@ -63,9 +66,7 @@ export function ActivityFeed() {
                   {isSystem ? <Cpu size={13} /> : <Activity size={13} />}
                 </div>
                 <p className="flex-1 text-[12.5px] leading-snug text-fg-2">
-                  <span className="font-medium text-foreground">
-                    {isSystem ? t("system") : t("operator")}
-                  </span>{" "}
+                  <span className="font-medium text-foreground">{actor}</span>{" "}
                   {/* Ação desconhecida (backend novo) → mostra a chave crua. */}
                   {isAuditAction(log.action) ? tAction(log.action) : log.action}
                   {log.resource_id && (

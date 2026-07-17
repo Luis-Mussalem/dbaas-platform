@@ -61,3 +61,17 @@ export type ResourceType = (typeof RESOURCE_TYPES)[number];
 export function isResourceType(value: string): value is ResourceType {
   return (RESOURCE_TYPES as readonly string[]).includes(value);
 }
+
+// Rótulo curto do ator a partir do email, no formato `nome@empresa`:
+//   ana@jupiter.example  -> ana@jupiter   (local + 1ª parte do domínio)
+//   admin@local.dev      -> admin@dev     (contas internas: domínio vira "dev",
+//   dev-test@local.dev   -> test@dev       e o prefixo "dev-" do nome some)
+// Retorna null quando não há email (ação de sistema ou usuário já deletado) —
+// o chamador cai no rótulo genérico.
+export function actorLabel(email: string | null | undefined): string | null {
+  if (!email) return null;
+  const [local, domain] = email.split("@");
+  if (!domain) return email;
+  if (domain === "local.dev") return `${local.replace(/^dev-/, "")}@dev`;
+  return `${local}@${domain.split(".")[0]}`;
+}

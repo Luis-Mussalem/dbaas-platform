@@ -318,6 +318,7 @@ export interface AlertEvent {
 export interface AuditLog {
   id: string;
   user_id: string | null;
+  user_email: string | null;
   action: string;
   resource_type: string;
   resource_id: string | null;
