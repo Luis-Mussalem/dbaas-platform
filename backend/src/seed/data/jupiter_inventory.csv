@@ -1,0 +1,101 @@
+id,sku,product_name,category,size,color,price,stock_quantity,supplier
+1,JUP-ACC-0001,Cinto de couro,accessory,U,marinho,90.97,15,Malharia Aurora
+2,JUP-DRESS-0002,Vestido midi,dress,G,cinza,193.11,77,Importadora Andes
+3,JUP-PANTS-0003,Legging,pants,M,preto,221.96,170,Confecções Bela Vista
+4,JUP-SHIRT-0004,Camiseta estampada,shirt,PP,bege,71.16,190,Fios & Cia
+5,JUP-SHOES-0005,Tênis casual,shoes,41,vinho,361.98,94,Confecções Bela Vista
+6,JUP-ACC-0006,Carteira,accessory,U,azul,85.35,26,Confecções Bela Vista
+7,JUP-JACK-0007,Jaqueta corta-vento,jacket,M,marinho,155.13,176,Importadora Andes
+8,JUP-JACK-0008,Blazer,jacket,PP,verde,178.57,59,Confecções Bela Vista
+9,JUP-ACC-0009,Carteira,accessory,U,vermelho,44.82,40,Malharia Aurora
+10,JUP-SHIRT-0010,Camiseta estampada,shirt,PP,marinho,131.76,139,Têxtil Sul Ltda
+11,JUP-DRESS-0011,Vestido midi,dress,GG,vinho,194.08,46,Malharia Aurora
+12,JUP-SHOES-0012,Sandália,shoes,38,preto,258.35,178,Malharia Aurora
+13,JUP-ACC-0013,Cachecol,accessory,U,verde,102.66,119,Malharia Aurora
+14,JUP-JACK-0014,Moletom com capuz,jacket,M,vermelho,229.22,151,Importadora Andes
+15,JUP-PANTS-0015,Bermuda,pants,M,marinho,174.84,46,Malharia Aurora
+16,JUP-SHOES-0016,Bota,shoes,38,preto,352.78,100,Fios & Cia
+17,JUP-ACC-0017,Cachecol,accessory,U,branco,51.26,200,Malharia Aurora
+18,JUP-SHIRT-0018,Camisa social,shirt,GG,bege,49.99,61,Importadora Andes
+19,JUP-SHOES-0019,Sandália,shoes,36,preto,252.45,100,Malharia Aurora
+20,JUP-PANTS-0020,Calça moletom,pants,PP,vermelho,84.97,30,Confecções Bela Vista
+21,JUP-SHOES-0021,Tênis casual,shoes,38,verde,466.03,125,Malharia Aurora
+22,JUP-DRESS-0022,Saia plissada,dress,G,vinho,101.21,25,Têxtil Sul Ltda
+23,JUP-SHIRT-0023,Camiseta estampada,shirt,P,vinho,97.95,33,Confecções Bela Vista
+24,JUP-SHIRT-0024,Camiseta básica,shirt,PP,vermelho,86.08,164,Importadora Andes
+25,JUP-SHIRT-0025,Camiseta estampada,shirt,G,marinho,41.71,136,Fios & Cia
+26,JUP-SHIRT-0026,Polo,shirt,P,bege,40.07,95,Malharia Aurora
+27,JUP-JACK-0027,Jaqueta jeans,jacket,P,marinho,393.06,22,Fios & Cia
+28,JUP-JACK-0028,Colete,jacket,GG,preto,235.32,125,Têxtil Sul Ltda
+29,JUP-JACK-0029,Blazer,jacket,M,preto,226.32,22,Confecções Bela Vista
+30,JUP-SHIRT-0030,Camiseta estampada,shirt,PP,cinza,54.58,95,Fios & Cia
+31,JUP-PANTS-0031,Bermuda,pants,P,rosa,193.61,39,Têxtil Sul Ltda
+32,JUP-DRESS-0032,Vestido floral,dress,G,verde,150.30,56,Têxtil Sul Ltda
+33,JUP-PANTS-0033,Legging,pants,M,bege,257.94,144,Importadora Andes
+34,JUP-SHIRT-0034,Polo,shirt,P,cinza,134.74,17,Confecções Bela Vista
+35,JUP-SHIRT-0035,Regata,shirt,M,bege,121.66,103,Confecções Bela Vista
+36,JUP-ACC-0036,Carteira,accessory,U,rosa,60.31,137,Confecções Bela Vista
+37,JUP-SHOES-0037,Tênis casual,shoes,42,bege,336.91,51,Fios & Cia
+38,JUP-PANTS-0038,Calça jeans,pants,PP,cinza,198.87,83,Importadora Andes
+39,JUP-JACK-0039,Jaqueta corta-vento,jacket,G,rosa,224.82,15,Confecções Bela Vista
+40,JUP-JACK-0040,Blazer,jacket,G,preto,150.16,168,Importadora Andes
+41,JUP-PANTS-0041,Calça jeans,pants,P,azul,232.66,178,Importadora Andes
+42,JUP-SHIRT-0042,Camisa social,shirt,PP,cinza,79.74,150,Têxtil Sul Ltda
+43,JUP-JACK-0043,Blazer,jacket,G,cinza,249.76,24,Fios & Cia
+44,JUP-SHIRT-0044,Regata,shirt,M,cinza,111.35,68,Têxtil Sul Ltda
+45,JUP-SHIRT-0045,Regata,shirt,P,marinho,82.47,148,Têxtil Sul Ltda
+46,JUP-SHIRT-0046,Regata,shirt,M,vermelho,149.50,78,Importadora Andes
+47,JUP-SHIRT-0047,Camiseta básica,shirt,P,rosa,58.89,187,Importadora Andes
+48,JUP-ACC-0048,Meia (par),accessory,U,cinza,97.95,145,Fios & Cia
+49,JUP-PANTS-0049,Calça chino,pants,M,azul,222.77,135,Malharia Aurora
+50,JUP-SHIRT-0050,Camisa social,shirt,P,vermelho,126.84,11,Confecções Bela Vista
+51,JUP-JACK-0051,Moletom com capuz,jacket,M,marinho,164.94,27,Têxtil Sul Ltda
+52,JUP-PANTS-0052,Legging,pants,G,bege,218.35,152,Têxtil Sul Ltda
+53,JUP-SHIRT-0053,Camiseta básica,shirt,M,rosa,91.14,137,Confecções Bela Vista
+54,JUP-SHIRT-0054,Camiseta estampada,shirt,GG,azul,124.36,38,Importadora Andes
+55,JUP-JACK-0055,Jaqueta jeans,jacket,PP,marinho,171.21,47,Malharia Aurora
+56,JUP-PANTS-0056,Calça moletom,pants,P,marinho,240.99,25,Confecções Bela Vista
+57,JUP-SHIRT-0057,Polo,shirt,GG,azul,108.65,162,Fios & Cia
+58,JUP-SHIRT-0058,Camiseta estampada,shirt,P,vinho,56.86,173,Fios & Cia
+59,JUP-DRESS-0059,Vestido longo,dress,GG,vinho,110.20,12,Têxtil Sul Ltda
+60,JUP-SHIRT-0060,Polo,shirt,GG,vermelho,124.27,111,Fios & Cia
+61,JUP-JACK-0061,Colete,jacket,G,verde,303.21,82,Importadora Andes
+62,JUP-SHIRT-0062,Polo,shirt,G,rosa,47.93,20,Malharia Aurora
+63,JUP-PANTS-0063,Bermuda,pants,G,vermelho,141.13,41,Confecções Bela Vista
+64,JUP-SHOES-0064,Bota,shoes,41,bege,143.51,99,Fios & Cia
+65,JUP-JACK-0065,Jaqueta corta-vento,jacket,M,rosa,162.98,120,Malharia Aurora
+66,JUP-SHIRT-0066,Polo,shirt,PP,bege,134.96,112,Malharia Aurora
+67,JUP-ACC-0067,Boné,accessory,U,cinza,122.61,189,Confecções Bela Vista
+68,JUP-SHIRT-0068,Regata,shirt,P,marinho,91.25,83,Importadora Andes
+69,JUP-SHIRT-0069,Camiseta estampada,shirt,G,rosa,146.24,60,Fios & Cia
+70,JUP-PANTS-0070,Calça moletom,pants,PP,rosa,187.45,172,Importadora Andes
+71,JUP-PANTS-0071,Calça jeans,pants,PP,bege,104.01,72,Confecções Bela Vista
+72,JUP-SHOES-0072,Tênis casual,shoes,41,bege,110.87,148,Malharia Aurora
+73,JUP-PANTS-0073,Calça jeans,pants,M,bege,170.67,200,Fios & Cia
+74,JUP-SHIRT-0074,Camiseta estampada,shirt,GG,branco,54.05,29,Importadora Andes
+75,JUP-PANTS-0075,Legging,pants,M,cinza,215.79,55,Fios & Cia
+76,JUP-JACK-0076,Jaqueta jeans,jacket,GG,preto,140.41,187,Confecções Bela Vista
+77,JUP-SHOES-0077,Sandália,shoes,44,azul,338.47,136,Malharia Aurora
+78,JUP-PANTS-0078,Calça moletom,pants,GG,azul,150.63,162,Confecções Bela Vista
+79,JUP-JACK-0079,Colete,jacket,GG,marinho,262.16,149,Confecções Bela Vista
+80,JUP-PANTS-0080,Calça moletom,pants,PP,cinza,201.19,111,Fios & Cia
+81,JUP-PANTS-0081,Legging,pants,PP,rosa,127.70,172,Fios & Cia
+82,JUP-JACK-0082,Colete,jacket,PP,rosa,175.94,166,Fios & Cia
+83,JUP-SHOES-0083,Sapatênis,shoes,42,vermelho,102.84,184,Têxtil Sul Ltda
+84,JUP-SHIRT-0084,Polo,shirt,G,bege,56.56,181,Malharia Aurora
+85,JUP-PANTS-0085,Bermuda,pants,GG,preto,206.94,137,Malharia Aurora
+86,JUP-JACK-0086,Colete,jacket,G,bege,214.61,49,Importadora Andes
+87,JUP-ACC-0087,Meia (par),accessory,U,marinho,58.87,189,Confecções Bela Vista
+88,JUP-JACK-0088,Jaqueta corta-vento,jacket,P,verde,280.58,62,Confecções Bela Vista
+89,JUP-SHOES-0089,Sandália,shoes,39,cinza,286.62,148,Confecções Bela Vista
+90,JUP-PANTS-0090,Legging,pants,GG,bege,241.14,106,Confecções Bela Vista
+91,JUP-ACC-0091,Boné,accessory,U,verde,24.53,187,Têxtil Sul Ltda
+92,JUP-PANTS-0092,Calça moletom,pants,G,rosa,118.42,142,Confecções Bela Vista
+93,JUP-ACC-0093,Meia (par),accessory,U,azul,31.91,194,Fios & Cia
+94,JUP-SHIRT-0094,Camiseta estampada,shirt,PP,vermelho,110.07,18,Têxtil Sul Ltda
+95,JUP-PANTS-0095,Calça jeans,pants,G,azul,80.83,145,Malharia Aurora
+96,JUP-PANTS-0096,Bermuda,pants,G,vermelho,215.96,78,Confecções Bela Vista
+97,JUP-PANTS-0097,Calça jeans,pants,PP,vinho,121.70,194,Têxtil Sul Ltda
+98,JUP-ACC-0098,Boné,accessory,U,bege,116.95,50,Têxtil Sul Ltda
+99,JUP-ACC-0099,Carteira,accessory,U,rosa,40.39,196,Confecções Bela Vista
+100,JUP-SHOES-0100,Bota,shoes,36,vinho,337.04,90,Confecções Bela Vista

@@ -1,0 +1,101 @@
+id,transaction_ref,customer_name,merchant,amount,currency,method,status,fee,created_at
+1,TXN-2026-000001,Isabela Martins,TechShop BR,134.80,BRL,credit_card,approved,3.91,2026-06-02 16:08:38
+2,TXN-2026-000002,Ana Souza,Jupiter Clothing,2115.39,BRL,pix,approved,10.58,2026-03-31 11:02:02
+3,TXN-2026-000003,Walter Fonseca,Padaria do Bairro,3582.94,BRL,credit_card,approved,103.91,2026-04-02 01:52:17
+4,TXN-2026-000004,Zeca Andrade,Mercado Central,42.43,EUR,debit_card,approved,0.81,2026-05-12 06:20:21
+5,TXN-2026-000005,Diego Santos,Jupiter Clothing,3819.84,BRL,pix,approved,19.10,2026-05-02 14:01:09
+6,TXN-2026-000006,Olivia Nascimento,Padaria do Bairro,226.82,BRL,pix,chargeback,1.13,2026-04-29 09:07:52
+7,TXN-2026-000007,Thiago Moraes,Livraria Beta,4148.73,USD,credit_card,approved,120.31,2026-06-08 10:19:54
+8,TXN-2026-000008,Carla Mendes,TechShop BR,3867.61,BRL,credit_card,approved,112.16,2026-04-18 12:51:20
+9,TXN-2026-000009,Lucas Carvalho,TechShop BR,821.64,EUR,debit_card,approved,15.61,2026-03-20 12:24:21
+10,TXN-2026-000010,Rafael Gomes,TechShop BR,3178.54,BRL,pix,approved,15.89,2026-05-12 12:41:54
+11,TXN-2026-000011,Karen Oliveira,Saturn Music Store,1105.88,BRL,credit_card,declined,32.07,2026-05-06 21:23:39
+12,TXN-2026-000012,Sofia Azevedo,Livraria Beta,1062.80,BRL,pix,approved,5.31,2026-04-26 12:35:41
+13,TXN-2026-000013,Henrique Alves,Padaria do Bairro,1331.75,USD,credit_card,approved,38.62,2026-04-02 20:24:05
+14,TXN-2026-000014,Henrique Alves,Mercado Central,2003.01,USD,boleto,approved,24.04,2026-06-10 08:00:29
+15,TXN-2026-000015,Vinícius Teixeira,Posto Ipê,808.31,USD,pix,approved,4.04,2026-04-28 14:18:16
+16,TXN-2026-000016,Rafael Gomes,Saturn Music Store,2650.28,EUR,wire,declined,10.60,2026-03-20 16:26:59
+17,TXN-2026-000017,Karen Oliveira,Jupiter Clothing,3845.31,BRL,debit_card,approved,73.06,2026-04-19 11:52:55
+18,TXN-2026-000018,Isabela Martins,Padaria do Bairro,4380.51,BRL,wire,approved,17.52,2026-06-02 13:14:01
+19,TXN-2026-000019,Thiago Moraes,TechShop BR,3198.36,BRL,pix,approved,15.99,2026-05-26 16:21:43
+20,TXN-2026-000020,Eduardo Pires,Saturn Music Store,4612.95,USD,wire,approved,18.45,2026-06-14 07:55:38
+21,TXN-2026-000021,Beatriz Nunes,Cafeteria Aurora,4394.82,BRL,boleto,approved,52.74,2026-04-05 09:07:58
+22,TXN-2026-000022,Carla Mendes,Padaria do Bairro,2435.09,BRL,pix,approved,12.18,2026-04-16 15:58:57
+23,TXN-2026-000023,Thiago Moraes,Posto Ipê,2643.09,BRL,pix,refunded,13.22,2026-03-20 04:40:35
+24,TXN-2026-000024,Vinícius Teixeira,Livraria Beta,2000.97,BRL,debit_card,pending,38.02,2026-04-20 07:35:40
+25,TXN-2026-000025,Ana Souza,Streaming NovaTV,329.49,USD,pix,approved,1.65,2026-05-19 11:44:18
+26,TXN-2026-000026,Henrique Alves,Jupiter Clothing,3159.20,BRL,pix,pending,15.80,2026-06-06 17:16:49
+27,TXN-2026-000027,Gabriela Rocha,Padaria do Bairro,3348.20,BRL,pix,declined,16.74,2026-04-03 15:01:15
+28,TXN-2026-000028,Zeca Andrade,Posto Ipê,3925.25,BRL,credit_card,approved,113.83,2026-03-23 20:18:22
+29,TXN-2026-000029,Caio Ramos,Saturn Music Store,2061.40,EUR,pix,approved,10.31,2026-03-26 08:25:01
+30,TXN-2026-000030,Zeca Andrade,Jupiter Clothing,3643.79,BRL,pix,approved,18.22,2026-04-08 19:40:00
+31,TXN-2026-000031,Olivia Nascimento,TechShop BR,925.61,BRL,pix,approved,4.63,2026-04-07 08:26:07
+32,TXN-2026-000032,Beatriz Nunes,Saturn Music Store,4996.42,BRL,pix,refunded,24.98,2026-05-17 05:56:42
+33,TXN-2026-000033,Caio Ramos,Posto Ipê,2411.98,BRL,credit_card,approved,69.95,2026-06-15 21:47:07
+34,TXN-2026-000034,Olivia Nascimento,Cafeteria Aurora,3922.51,BRL,pix,approved,19.61,2026-04-05 18:16:52
+35,TXN-2026-000035,Bruno Lima,Streaming NovaTV,1490.57,EUR,pix,approved,7.45,2026-05-07 09:55:08
+36,TXN-2026-000036,Eduardo Pires,Padaria do Bairro,2389.17,BRL,pix,approved,11.95,2026-04-12 09:05:00
+37,TXN-2026-000037,Carla Mendes,TechShop BR,351.92,BRL,boleto,approved,4.22,2026-04-05 03:02:09
+38,TXN-2026-000038,Carla Mendes,Posto Ipê,208.31,EUR,credit_card,approved,6.04,2026-04-11 00:28:53
+39,TXN-2026-000039,Walter Fonseca,Livraria Beta,1029.25,BRL,boleto,approved,12.35,2026-05-30 12:29:53
+40,TXN-2026-000040,Yara Cardoso,Jupiter Clothing,1587.72,BRL,pix,approved,7.94,2026-04-05 08:21:36
+41,TXN-2026-000041,Isabela Martins,Mercado Central,1073.64,BRL,pix,pending,5.37,2026-05-15 22:32:46
+42,TXN-2026-000042,Rafael Gomes,Cafeteria Aurora,2196.54,USD,pix,chargeback,10.98,2026-03-24 16:44:31
+43,TXN-2026-000043,João Pereira,Jupiter Clothing,4087.35,BRL,pix,approved,20.44,2026-06-02 15:51:28
+44,TXN-2026-000044,Gabriela Rocha,Livraria Beta,1415.96,BRL,pix,approved,7.08,2026-05-13 17:35:56
+45,TXN-2026-000045,Caio Ramos,Saturn Music Store,4527.63,BRL,credit_card,approved,131.30,2026-05-12 10:23:42
+46,TXN-2026-000046,Ursula Pinto,Cafeteria Aurora,3857.88,BRL,pix,declined,19.29,2026-04-06 20:25:43
+47,TXN-2026-000047,Daniela Castro,Mercado Central,568.25,USD,credit_card,approved,16.48,2026-04-29 14:47:30
+48,TXN-2026-000048,Bruno Lima,Cafeteria Aurora,2154.64,BRL,credit_card,pending,62.48,2026-06-10 22:58:22
+49,TXN-2026-000049,Diego Santos,Livraria Beta,1255.15,USD,pix,pending,6.28,2026-04-24 13:24:09
+50,TXN-2026-000050,Henrique Alves,Mercado Central,4629.56,BRL,debit_card,pending,87.96,2026-06-13 05:28:11
+51,TXN-2026-000051,Eduardo Pires,Posto Ipê,1667.61,EUR,debit_card,pending,31.68,2026-05-16 02:17:10
+52,TXN-2026-000052,Mariana Vieira,Saturn Music Store,3509.38,BRL,pix,approved,17.55,2026-04-18 23:16:10
+53,TXN-2026-000053,Henrique Alves,TechShop BR,3978.77,BRL,pix,approved,19.89,2026-04-26 00:02:55
+54,TXN-2026-000054,Yara Cardoso,Cafeteria Aurora,356.41,BRL,pix,approved,1.78,2026-04-25 16:28:38
+55,TXN-2026-000055,Daniela Castro,Cafeteria Aurora,147.73,BRL,pix,approved,0.74,2026-05-14 10:36:26
+56,TXN-2026-000056,Ximena Lopes,Livraria Beta,2178.47,BRL,pix,approved,10.89,2026-04-12 07:47:23
+57,TXN-2026-000057,Isabela Martins,Saturn Music Store,2887.17,EUR,pix,approved,14.44,2026-04-10 16:23:45
+58,TXN-2026-000058,Ximena Lopes,TechShop BR,4701.91,BRL,credit_card,approved,136.36,2026-03-22 23:58:41
+59,TXN-2026-000059,Diego Santos,Cafeteria Aurora,3320.30,USD,credit_card,approved,96.29,2026-04-25 00:07:27
+60,TXN-2026-000060,Elena Ferreira,TechShop BR,1485.32,BRL,credit_card,approved,43.07,2026-04-29 05:39:50
+61,TXN-2026-000061,Rafael Gomes,Saturn Music Store,1511.74,BRL,credit_card,approved,43.84,2026-04-21 14:53:01
+62,TXN-2026-000062,Olivia Nascimento,Farmácia Vida,1618.02,EUR,credit_card,approved,46.92,2026-04-17 05:49:19
+63,TXN-2026-000063,Vinícius Teixeira,Streaming NovaTV,1426.09,BRL,credit_card,approved,41.36,2026-05-17 00:41:53
+64,TXN-2026-000064,Ana Souza,Saturn Music Store,1003.66,BRL,pix,chargeback,5.02,2026-03-30 09:20:55
+65,TXN-2026-000065,Sofia Azevedo,TechShop BR,4431.82,EUR,credit_card,approved,128.52,2026-04-13 21:26:57
+66,TXN-2026-000066,Ana Souza,Jupiter Clothing,3283.73,BRL,pix,approved,16.42,2026-03-18 17:08:31
+67,TXN-2026-000067,Eduardo Pires,Jupiter Clothing,2791.45,BRL,credit_card,approved,80.95,2026-04-17 16:39:44
+68,TXN-2026-000068,Yara Cardoso,Farmácia Vida,2981.31,USD,wire,declined,11.93,2026-04-12 20:27:47
+69,TXN-2026-000069,Daniela Castro,Mercado Central,2743.88,EUR,debit_card,pending,52.13,2026-04-20 02:33:48
+70,TXN-2026-000070,Isabela Martins,Padaria do Bairro,4200.92,BRL,debit_card,approved,79.82,2026-05-11 19:59:06
+71,TXN-2026-000071,Isabela Martins,Livraria Beta,1435.78,BRL,pix,pending,7.18,2026-06-06 06:57:44
+72,TXN-2026-000072,Elena Ferreira,TechShop BR,1921.35,BRL,pix,approved,9.61,2026-05-04 16:14:39
+73,TXN-2026-000073,Beatriz Nunes,Posto Ipê,320.71,BRL,credit_card,pending,9.30,2026-04-03 11:17:20
+74,TXN-2026-000074,Mariana Vieira,Farmácia Vida,3830.32,BRL,boleto,refunded,45.96,2026-05-08 21:48:04
+75,TXN-2026-000075,Nicolas Barbosa,Padaria do Bairro,4767.62,EUR,boleto,declined,57.21,2026-03-31 03:58:14
+76,TXN-2026-000076,Paulo Ribeiro,Saturn Music Store,1371.95,BRL,credit_card,approved,39.79,2026-03-21 21:16:46
+77,TXN-2026-000077,Eduardo Pires,Mercado Central,4204.12,USD,debit_card,approved,79.88,2026-04-26 14:27:00
+78,TXN-2026-000078,Ursula Pinto,Posto Ipê,145.24,BRL,credit_card,pending,4.21,2026-05-24 10:10:10
+79,TXN-2026-000079,Olivia Nascimento,Livraria Beta,1643.49,BRL,pix,declined,8.22,2026-04-29 01:52:09
+80,TXN-2026-000080,Isabela Martins,Jupiter Clothing,4161.30,BRL,debit_card,approved,79.06,2026-04-08 10:06:14
+81,TXN-2026-000081,Ursula Pinto,Jupiter Clothing,1756.30,EUR,wire,approved,7.03,2026-06-13 02:59:49
+82,TXN-2026-000082,Elena Ferreira,TechShop BR,111.70,BRL,pix,approved,0.56,2026-06-01 15:28:00
+83,TXN-2026-000083,Isabela Martins,Livraria Beta,2330.52,BRL,boleto,approved,27.97,2026-06-02 06:02:15
+84,TXN-2026-000084,Ana Souza,Cafeteria Aurora,549.41,USD,wire,approved,2.20,2026-04-28 21:33:30
+85,TXN-2026-000085,Sofia Azevedo,TechShop BR,999.67,BRL,boleto,approved,12.00,2026-05-08 14:08:23
+86,TXN-2026-000086,Sofia Azevedo,Saturn Music Store,3983.17,BRL,debit_card,approved,75.68,2026-03-23 22:30:29
+87,TXN-2026-000087,Ana Souza,Posto Ipê,3241.24,BRL,pix,approved,16.21,2026-04-30 12:51:33
+88,TXN-2026-000088,Elena Ferreira,Posto Ipê,2304.10,BRL,boleto,declined,27.65,2026-03-25 02:10:00
+89,TXN-2026-000089,Yara Cardoso,Farmácia Vida,4598.89,BRL,credit_card,approved,133.37,2026-04-02 02:13:41
+90,TXN-2026-000090,Eduardo Pires,Jupiter Clothing,1235.02,BRL,pix,pending,6.18,2026-05-15 19:04:50
+91,TXN-2026-000091,Karen Oliveira,Saturn Music Store,3344.26,BRL,credit_card,pending,96.98,2026-05-23 18:14:56
+92,TXN-2026-000092,Karen Oliveira,Cafeteria Aurora,3991.18,USD,pix,approved,19.96,2026-05-11 15:45:52
+93,TXN-2026-000093,Carla Mendes,TechShop BR,4740.83,EUR,pix,approved,23.70,2026-04-06 03:15:01
+94,TXN-2026-000094,Paulo Ribeiro,Farmácia Vida,3233.06,BRL,credit_card,approved,93.76,2026-05-18 21:16:35
+95,TXN-2026-000095,Sofia Azevedo,Livraria Beta,1537.97,BRL,credit_card,approved,44.60,2026-05-02 20:30:29
+96,TXN-2026-000096,Lucas Carvalho,Farmácia Vida,2756.44,BRL,wire,approved,11.03,2026-05-18 07:36:26
+97,TXN-2026-000097,Ximena Lopes,Padaria do Bairro,1584.58,EUR,debit_card,approved,30.11,2026-05-19 18:22:16
+98,TXN-2026-000098,Yara Cardoso,Padaria do Bairro,2952.04,USD,pix,approved,14.76,2026-06-04 04:55:57
+99,TXN-2026-000099,João Pereira,Saturn Music Store,1810.80,EUR,pix,approved,9.05,2026-05-12 10:20:35
+100,TXN-2026-000100,Walter Fonseca,Mercado Central,2771.26,EUR,wire,pending,11.09,2026-04-15 08:15:54

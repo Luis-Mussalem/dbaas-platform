@@ -51,13 +51,29 @@ services:
       POSTGRES_HOST: localhost
       BACKUP_DIR: ${PWD}/data/backups
     network_mode: host
+    # Roda com o UID/GID do usuário do host (dono do ./data montado abaixo), para
+    # que o provisionador consiga criar as subpastas de backup/WAL. HOST_UID/HOST_GID
+    # vêm do .env (`id -u` / `id -g`); default 1000:1000 cobre o caso single-user.
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    # group_add dá acesso ao socket do Docker (necessário para provisionar
+    # containers-irmãos). DOCKER_GID = gid do grupo `docker` no host
+    # (`getent group docker`); varia por máquina, então fica no .env.
+    group_add:
+      - "${DOCKER_GID:-999}"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${PWD}/data:${PWD}/data
     depends_on:
       postgres:
         condition: service_healthy
-    command: sh -c "alembic upgrade head && uvicorn src.main:app --host 0.0.0.0 --port 8001"
+    # Após as migrations, semeia a frota de demonstração (3 empresas × prod/staging)
+    # em background — provisiona containers reais quando há Docker, senão cai para
+    # dados-apenas. É idempotente, então religar o stack não recria nada. A API sobe
+    # imediatamente; a frota aparece no dashboard em ~1-2 min no primeiro boot.
+    command: >
+      sh -c "alembic upgrade head &&
+             { (python -m src.seed.demo || true) &
+               uvicorn src.main:app --host 0.0.0.0 --port 8001; }"
 
   # Dashboard Next.js (build standalone). NEXT_PUBLIC_API_URL é baked no build —
   # o navegador (no host) fala com o backend em localhost:8001.

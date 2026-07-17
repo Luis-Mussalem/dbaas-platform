@@ -82,6 +82,30 @@ The account is seeded automatically by the database migrations. Since the projec
 runs locally with fictional seed data, each person works against their own copy —
 so exploring freely (including destructive actions) is safe and expected.
 
+### A demo fleet is already there
+
+On the first `docker compose up`, the backend also seeds a fictional multi-tenant
+**fleet** so the dashboard is populated from the start — 3 companies, each with a
+`prod` and a `staging` instance across three regions, plus ~100 rows of mock data
+in each production database. When Docker is available these are **real PostgreSQL
+containers**, so the SQL console, live logs and metrics work end to end; on
+Docker Desktop for macOS/Windows the seed falls back to data-only records (the
+dashboard still fills in). The seed is idempotent — restarting the stack never
+duplicates it — and it populates in the background, so it may take a minute to
+appear on a fresh boot.
+
+To explore the per-company view and RBAC, log in as any seeded company user
+(each company has 1 admin + 4 members) — they see only their own company, while
+the `dev-test@local.dev` superuser above sees and switches between all:
+
+| Company | Users | Password |
+|---|---|---|
+| Neptune Payments | `admin@neptune.example`, `ana@neptune.example`, … | `DemoPass123!` |
+| Saturn Music Store | `admin@saturn.example`, `ana@saturn.example`, … | `DemoPass123!` |
+| Jupiter Clothing | `admin@jupiter.example`, `ana@jupiter.example`, … | `DemoPass123!` |
+
+(Members: `ana`, `bruno`, `carla`, `diego` at each company's domain.)
+
 ## Table of Contents
 
 - [Screenshots](#screenshots)
@@ -617,6 +641,17 @@ This approach was intentionally adopted to reinforce deep technical understandin
 
 # Running the Project
 
+## Prerequisites
+
+- **Docker Engine + Docker Compose v2** — the whole stack runs in containers.
+- **A Linux host** is recommended for full provisioning: the backend uses
+  `network_mode: host` and the Docker socket to create and reach sibling
+  database containers on the host loopback (see the platform note below).
+- Run all commands **from the repo root** (the compose file bind-mounts the
+  repo's `data/` directory by absolute path).
+
+---
+
 ## Clone the repository
 
 ```bash
@@ -628,20 +663,28 @@ cd dbaas-platform
 
 ## Create environment variables
 
-Create a `.env` file based on the provided `.env.example`:
+Copy the template — it ships with working **dev-only** values, so the stack runs
+out of the box:
 
 ```bash
 cp .env.example .env
 ```
 
-The example file already contains all required configuration variables for:
+The example covers PostgreSQL, JWT, the Fernet encryption key, Docker
+provisioning, pgAdmin and CORS. The bundled secrets protect only fictional local
+data — **regenerate them before hosting this anywhere** (each field in
+`.env.example` has a one-liner).
 
-- PostgreSQL
-- JWT authentication
-- Encryption keys
-- Docker provisioning
-- pgAdmin
-- CORS configuration
+One host-specific value: **`DOCKER_GID`**. The backend container needs to belong
+to the host's `docker` group to reach `/var/run/docker.sock`. Find your gid and
+set it in `.env` (only needed for Option A):
+
+```bash
+getent group docker      # e.g. "docker:x:999:you" → DOCKER_GID=999
+```
+
+If the backend restarts with a `PermissionError` on the Docker socket, this is
+almost always the cause.
 
 ---
 
@@ -660,6 +703,13 @@ The backend runs in `network_mode: host` so the provisioner can reach the
 sibling database containers it creates on the host loopback, and mounts the
 Docker socket + the repo's `data/` directory (see the comments in
 [`docker-compose.yaml`](docker-compose.yaml)). Run the command from the repo root.
+
+> **Platform note.** Full provisioning relies on Linux host networking plus the
+> Docker socket, so it works best on a **Linux host**. On Docker Desktop for
+> macOS/Windows the dashboard and API run fine, but provisioning managed
+> instances on the host loopback is unreliable — use Option B there to explore
+> the app, or a Linux VM for the full flow. Option B also sidesteps `DOCKER_GID`
+> entirely, since `uvicorn` runs as your host user.
 
 ---
 
