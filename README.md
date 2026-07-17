@@ -133,11 +133,17 @@ the `dev-test@local.dev` superuser above sees and switches between all:
 > datasets — the only exception is the per-query latency chart, labelled *demo*
 > in the UI itself (the backend collects fleet-wide P95, not per-execution latency).
 
+![Fleet dashboard](docs/images/dashboard.png)
+
+**Fleet dashboard** — real-time fleet KPIs (queries/s, P95 latency, 30-day uptime),
+a region map of where the databases run, per-company health cards and a live
+activity feed of who did what.
+
 | | |
 |---|---|
-| ![Fleet dashboard](docs/images/dashboard.png) **Fleet dashboard** — real-time KPIs (queries/s, P95 latency, 30-day uptime), region map and per-instance health. | ![Instance overview](docs/images/instance-vision.png) **Instance overview** — connections, cache hit, size and status at a glance, with live connections, schema explorer and slow queries (`pg_stat_statements`). |
-| ![Instance metrics](docs/images/instance-detail.png) **Instance metrics** — time-series charts for active connections and cache hit ratio, with a 15m/1h/6h/24h window selector. | ![SQL console](docs/images/sql-console.png) **SQL console** — read-only SELECT runner with schema browser, results grid and `EXPLAIN` plans. |
-| ![Multi-tenant RBAC](docs/images/admin-users.png) **Multi-tenancy** — company workspaces, employee management and the capability/permission matrix. | |
+| ![Instances](docs/images/instances.png) **Instances** — the managed fleet with production / staging / development filters; each card shows region, engine version, health, connections, cache-hit ratio, size and storage. | ![Instance overview](docs/images/instance-view.png) **Instance overview** — connection string (password encrypted, never exposed by the API), health tiles, live connections (`pg_stat_activity`), schema explorer (`pg_class`) and slow queries (`pg_stat_statements`). |
+| ![Instance metrics](docs/images/instance-detail.png) **Instance metrics** — time-series for active connections and cache-hit ratio (live) plus p50 / p95 / p99 latency (demo), with a 15m / 1h / 6h / 24h window selector. | ![SQL console](docs/images/sql-console.png) **SQL console** — read-only SELECT runner against a managed database, with a schema browser, results grid and `EXPLAIN` plans (Ctrl/Cmd + Enter to run). |
+| ![Logs & audit](docs/images/logs.png) **Logs & audit** — an immutable, filterable trail of platform actions (logins, instance created / deleted / status changed) with resource, source IP and time. | ![Multi-tenancy & RBAC](docs/images/admin-users.png) **Multi-tenancy & RBAC** — the employee directory with a role capability matrix (Member / Company Admin / Superuser) and per-company user management. |
 
 ---
 

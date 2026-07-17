@@ -4,16 +4,17 @@ Drop the captured PNGs here with these exact names (referenced by the root `READ
 
 | File | Screen | How to reach it |
 |------|--------|-----------------|
-| `dashboard.png` | Fleet dashboard (Painel) | `/` — the KPI row + region map + instance cards |
-| `instance-vision.png` | Instance overview, "Visão geral" tab | `/instances/{id}` — stat cards, connections, schema explorer, slow queries |
-| `instance-detail.png` | Instance metrics, "Métricas" tab | `/instances/{id}` → "Métricas" — pick a window (1h/6h) with a populated curve |
+| `dashboard.png` | Fleet dashboard (hero, full-width) | `/` — KPI row + region map + instance cards + activity feed |
+| `instances.png` | Instances list | `/instances` — the fleet cards with the environment filter |
+| `instance-view.png` | Instance overview, "Overview" tab | `/instances/{id}` — stat tiles, connections, schema explorer, slow queries |
+| `instance-detail.png` | Instance metrics, "Metrics" tab | `/instances/{id}` → "Metrics" — pick a window (1h/6h) with a populated curve |
 | `sql-console.png` | SQL console | `/sql` — run a `SELECT` so the results grid is populated |
-| `logs.png` | Container logs tab | `/instances/{id}` → "Logs" |
+| `logs.png` | Logs & Audit trail | `/audit` — the filterable action log |
 | `admin-users.png` | Employees / RBAC matrix | `/admin/users` (log in as the superuser) |
 
-> `logs.png` is **not currently referenced by the root README**: the captured file
-> predates the WAL-archive fix and shows the `Permission denied` wall that the
-> README's case study describes as resolved. Re-link it once recaptured.
+> Capture the UI in **English** (the language toggle is in the top bar) — the whole
+> set must be consistent. The instance-metrics latency chart is labelled *demo* in
+> the UI; that is expected (the backend collects fleet-wide P95, not per-execution).
 
 > The Replication tab is intentionally **not** in the README: with no standby
 > provisioned it renders empty, and a screenshot of an empty state undersells the
