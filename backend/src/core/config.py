@@ -75,6 +75,19 @@ class Settings(BaseSettings):
                 "FERNET_KEY must be changed from the default placeholder. "
                 'Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
             )
+        # Falha cedo, no startup, se a FERNET_KEY não for uma chave Fernet válida
+        # (ex.: o placeholder do .env.example antigo). Sem isso, o erro só apareceria
+        # no primeiro encrypt/decrypt — ao provisionar/ler uma instância.
+        from cryptography.fernet import Fernet
+
+        try:
+            Fernet(self.FERNET_KEY.encode())
+        except Exception as exc:
+            raise ValueError(
+                "FERNET_KEY is not a valid Fernet key (must be 32 url-safe "
+                "base64-encoded bytes). Generate with: "
+                'python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
+            ) from exc
         if "change-me" in self.POSTGRES_PASSWORD:
             raise ValueError(
                 "POSTGRES_PASSWORD must be changed from the default placeholder. "
