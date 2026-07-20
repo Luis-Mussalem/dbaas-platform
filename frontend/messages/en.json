@@ -177,6 +177,27 @@
     "subtitle": "what each role can do",
     "title": "Permission matrix"
   },
+  "CommandPalette": {
+    "placeholder": "Type a command or search…",
+    "empty": "No results.",
+    "openLabel": "Command menu",
+    "group": {
+      "navigation": "Navigation",
+      "instances": "Instances",
+      "actions": "Actions"
+    },
+    "action": {
+      "newInstance": "New instance",
+      "toggleTheme": "Toggle theme",
+      "switchLanguage": "Switch language",
+      "signOut": "Sign out"
+    },
+    "hint": {
+      "navigate": "navigate",
+      "select": "select",
+      "close": "close"
+    }
+  },
   "Common": {
     "cancel": "Cancel",
     "confirm": "Confirm",
@@ -363,10 +384,6 @@
       "replication": "Replication"
     }
   },
-  "InstanceSearch": {
-    "empty": "No instances found.",
-    "placeholder": "Search instance…"
-  },
   "Instances": {
     "empty": {
       "noneHere": "No databases in this environment",
@@ -378,6 +395,10 @@
     "managedCount": "{count, plural, one {# managed database} other {# managed databases}}",
     "new": "New instance",
     "title": "Instances"
+  },
+  "InstanceSearch": {
+    "empty": "No instances found.",
+    "placeholder": "Search instance…"
   },
   "Login": {
     "failed": "Login failed",

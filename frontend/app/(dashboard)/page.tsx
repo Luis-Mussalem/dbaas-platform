@@ -10,6 +10,7 @@ import { RegionMap } from "@/components/RegionMap";
 import { EmptyState } from "@/components/EmptyState";
 import { EnvFilterBar } from "@/components/EnvFilterBar";
 import { FleetKpiRow } from "@/components/FleetKpiRow";
+import { FleetSkeleton } from "@/components/FleetSkeleton";
 import { estimateMonthlyCost } from "@/lib/cost";
 import { periodForHour, type Period } from "@/lib/greeting";
 import { filterByEnvironment, type EnvFilter } from "@/lib/environment";
@@ -20,7 +21,6 @@ const subscribeToNothing = () => () => {};
 
 export default function PainelPage() {
   const t = useTranslations("Dashboard");
-  const tc = useTranslations("Common");
   const locale = useLocale();
   // O Painel compõe TRÊS fontes de dados reais:
   //  - useDashboard(): agregados de GET /admin/dashboard
@@ -55,7 +55,7 @@ export default function PainelPage() {
   );
 
   if (isLoading) {
-    return <p className="text-sm text-fg-3">{tc("loading")}</p>;
+    return <FleetSkeleton />;
   }
 
   const alerts = summary?.active_alerts ?? 0;

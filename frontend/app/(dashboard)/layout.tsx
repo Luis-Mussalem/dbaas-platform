@@ -1,5 +1,6 @@
 import { Sidebar } from "@/components/Sidebar";
 import { Topbar } from "@/components/Topbar";
+import { CommandPalette } from "@/components/CommandPalette";
 
 // Layout aninhado: tudo dentro de app/(dashboard)/ é renderizado como {children}
 // aqui dentro, ganhando Sidebar + Topbar. O "(dashboard)" não aparece na URL.
@@ -15,6 +16,7 @@ export default function DashboardLayout({
         <Topbar />
         <div className="flex-1 overflow-y-auto p-6 md:px-7">{children}</div>
       </div>
+      <CommandPalette />
     </div>
   );
 }

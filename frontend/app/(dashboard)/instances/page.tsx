@@ -10,13 +10,13 @@ import { InstanceCard } from "@/components/InstanceCard";
 import { EmptyState } from "@/components/EmptyState";
 import { EnvFilterBar } from "@/components/EnvFilterBar";
 import { FleetKpiRow } from "@/components/FleetKpiRow";
+import { FleetSkeleton } from "@/components/FleetSkeleton";
 import { estimateMonthlyCost } from "@/lib/cost";
 import { filterByEnvironment, type EnvFilter } from "@/lib/environment";
 import { CURRENCY } from "@/i18n/config";
 
 export default function InstancesPage() {
   const t = useTranslations("Instances");
-  const tc = useTranslations("Common");
   const locale = useLocale();
   // Reaproveita o mesmo hook e o mesmo card do Painel; ganha o filtro de
   // ambiente e a linha de KPIs (via useDashboard) para ficar como no design.
@@ -33,7 +33,7 @@ export default function InstancesPage() {
     [instances, locale]
   );
 
-  if (isLoading) return <p className="text-sm text-fg-3">{tc("loading")}</p>;
+  if (isLoading) return <FleetSkeleton />;
   if (error) return <p className="text-sm text-danger">{error}</p>;
 
   return (

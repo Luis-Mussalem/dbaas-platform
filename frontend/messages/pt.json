@@ -177,6 +177,27 @@
     "subtitle": "o que cada papel pode fazer",
     "title": "Matriz de permissões"
   },
+  "CommandPalette": {
+    "placeholder": "Digite um comando ou busque…",
+    "empty": "Nenhum resultado.",
+    "openLabel": "Menu de comandos",
+    "group": {
+      "navigation": "Navegação",
+      "instances": "Instâncias",
+      "actions": "Ações"
+    },
+    "action": {
+      "newInstance": "Nova instância",
+      "toggleTheme": "Alternar tema",
+      "switchLanguage": "Trocar idioma",
+      "signOut": "Sair"
+    },
+    "hint": {
+      "navigate": "navegar",
+      "select": "selecionar",
+      "close": "fechar"
+    }
+  },
   "Common": {
     "cancel": "Cancelar",
     "confirm": "Confirmar",
@@ -363,10 +384,6 @@
       "replication": "Replicação"
     }
   },
-  "InstanceSearch": {
-    "empty": "Nenhuma instância encontrada.",
-    "placeholder": "Buscar instância…"
-  },
   "Instances": {
     "empty": {
       "noneHere": "Nenhum banco neste ambiente",
@@ -378,6 +395,10 @@
     "managedCount": "{count, plural, one {# banco gerenciado} other {# bancos gerenciados}}",
     "new": "Nova instância",
     "title": "Instâncias"
+  },
+  "InstanceSearch": {
+    "empty": "Nenhuma instância encontrada.",
+    "placeholder": "Buscar instância…"
   },
   "Login": {
     "failed": "Falha no login",

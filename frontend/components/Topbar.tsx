@@ -4,10 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { Plus, Sun, Moon } from "lucide-react";
+import { Plus, Sun, Moon, Files } from "lucide-react";
 import { useTheme } from "@/context/ThemeProvider";
 import { Segmented } from "@/components/Segmented";
 import { InstanceSearch } from "@/components/InstanceSearch";
+import { OPEN_EVENT } from "@/components/CommandPalette";
 import { navKeyFor } from "@/lib/nav";
 import { setLocale } from "@/i18n/locale-action";
 import type { Locale } from "@/i18n/config";
@@ -31,6 +32,7 @@ export function Topbar() {
   const pathname = usePathname();
   const crumbs = useCrumbs(pathname);
   const t = useTranslations("Topbar");
+  const tCmd = useTranslations("CommandPalette");
   const { theme, toggleTheme } = useTheme();
 
   // O locale é a verdade do cookie, servida pelo provider — sem estado local
@@ -56,6 +58,19 @@ export function Topbar() {
 
       {/* Busca rápida de instâncias (atalho "/") */}
       <InstanceSearch />
+
+      {/* Abre o command palette (Ctrl+K) — mesmo evento do atalho global */}
+      <button
+        onClick={() => window.dispatchEvent(new CustomEvent(OPEN_EVENT))}
+        title={tCmd("openLabel")}
+        aria-label={tCmd("openLabel")}
+        className="flex h-7.5 items-center gap-1.5 rounded-md border border-border bg-surface pl-2 pr-2.5 text-fg-2 transition-colors hover:bg-surface-2 hover:text-foreground"
+      >
+        <Files size={14} className="shrink-0" />
+        <kbd className="hidden text-[11px] font-medium tracking-wide text-fg-3 sm:block">
+          Ctrl&nbsp;K
+        </kbd>
+      </button>
 
       {/* Idioma — grava o cookie via Server Action e revalida o layout */}
       <div className={`hidden sm:block ${isPending ? "pointer-events-none opacity-60" : ""}`}>
