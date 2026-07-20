@@ -9,6 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useTranslations } from "next-intl";
 import { CheckCircle2, AlertCircle, Info, X } from "lucide-react";
 
 // ─── Tipos ──────────────────────────────────────────────────────────────────
@@ -48,6 +49,7 @@ const TONE: Record<Variant, { icon: typeof Info; className: string }> = {
 // ─── Provider ────────────────────────────────────────────────────────────────
 
 export function ToastProvider({ children }: { children: ReactNode }) {
+  const tc = useTranslations("Common");
   const [toasts, setToasts] = useState<Toast[]>([]);
   // Contador de ids estável entre renders (não precisa causar re-render).
   const nextId = useRef(0);
@@ -94,7 +96,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               <button
                 onClick={() => remove(t.id)}
                 className="shrink-0 text-fg-faint transition-colors hover:text-foreground"
-                aria-label="Fechar"
+                aria-label={tc("close")}
               >
                 <X size={14} />
               </button>

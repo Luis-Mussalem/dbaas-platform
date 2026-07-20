@@ -200,6 +200,7 @@
   },
   "Common": {
     "cancel": "Cancelar",
+    "close": "Fechar",
     "confirm": "Confirmar",
     "create": "Criar",
     "creating": "Criando…",

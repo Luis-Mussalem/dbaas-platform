@@ -200,6 +200,7 @@
   },
   "Common": {
     "cancel": "Cancel",
+    "close": "Close",
     "confirm": "Confirm",
     "create": "Create",
     "creating": "Creating…",
