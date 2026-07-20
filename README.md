@@ -58,11 +58,11 @@ The goal is not only to build APIs, but to design systems that simulate operatio
 
 | | |
 |---|---|
-| **API surface** | 60 REST endpoints across 14 domain routers (`/api/v1`) |
-| **Codebase** | ~22,000 lines — 9,200 backend (Python) · 5,000 tests · 7,500 frontend (TypeScript) |
-| **Test suite** | 272 automated tests, 82% backend coverage, running in CI on every push |
-| **Data layer** | 15 Alembic migrations, 14 SQLAlchemy models |
-| **Frontend** | 10 routes, 33 reusable React components, fully typed API client |
+| **API surface** | 60 REST endpoints across 12 domain routers (`/api/v1`) |
+| **Codebase** | ~24,000 lines — 10,100 backend (Python) · 5,000 tests · 9,000 frontend (TypeScript) |
+| **Test suite** | 272 backend tests (82% coverage) + 9 Playwright E2E smoke tests |
+| **Data layer** | 16 Alembic migrations, 14 SQLAlchemy models |
+| **Frontend** | 10 routes, 37 reusable React components, fully typed API client |
 | **Background automation** | 6 concurrent loops — status, metrics, alerts, backups, maintenance, replication lag |
 | **Delivery** | 3-job CI pipeline + one-command full-stack Docker Compose |
 
@@ -404,6 +404,10 @@ would need the backend to return structured codes, which is a project of its own
 
 The project is organized as a monorepo separating backend, frontend, and data layers.
 
+> 📐 **Deep dive:** [`ARCHITECTURE.md`](ARCHITECTURE.md) documents the layered
+> design, request lifecycle, the six background workers, the provisioning engine
+> and the key design decisions — with diagrams.
+
 ```text
 dbaas-platform/
 │
@@ -430,7 +434,7 @@ dbaas-platform/
 │   │   │   ├── admin/users/  #   Employee management & RBAC matrix
 │   │   │   └── audit/        #   Audit trail
 │   │   └── login/            # Login page
-│   ├── components/           # 33 reusable UI components
+│   ├── components/           # 37 reusable UI components (+ command palette, skeletons)
 │   ├── context/              # React Context (auth, theme, toasts, confirmations)
 │   ├── hooks/                # Data hooks — one per API resource
 │   ├── i18n/                 # next-intl setup + en/pt parity checker
@@ -568,7 +572,7 @@ This mirrors backup strategies used in real PostgreSQL production environments.
 Quality is enforced automatically on every push and pull request.
 
 ## Automated Test Suite
-- **272 tests** with **82% backend coverage** (`pytest` + `pytest-cov`)
+- **272 backend tests** with **82% coverage** (`pytest` + `pytest-cov`)
 - Isolated PostgreSQL test database (`dbaas_test`, created by the test suite) —
   never touches development data
 - External dependencies are faked, not invoked: Docker SDK, `subprocess`
@@ -578,6 +582,14 @@ Quality is enforced automatically on every push and pull request.
 - Coverage spans the business-critical layers: instance state machine, alert
   evaluation engine, backup orchestration, maintenance executors, the
   provisioner, and all background pollers/schedulers
+
+## End-to-End Tests
+- **9 Playwright smoke tests** over the critical path a recruiter actually clicks:
+  login → dashboard → sidebar navigation → **⌘K/Ctrl+K command palette** →
+  instance detail
+- Read-only (no create/delete), run against the live stack; a `storageState`
+  setup logs in once and the specs reuse the session — see
+  [`frontend/e2e`](frontend/e2e)
 
 ## Continuous Integration
 GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs three jobs in parallel:
@@ -708,16 +720,18 @@ provisioning, pgAdmin and CORS. The bundled secrets protect only fictional local
 data — **regenerate them before hosting this anywhere** (each field in
 `.env.example` has a one-liner).
 
-One host-specific value: **`DOCKER_GID`**. The backend container needs to belong
-to the host's `docker` group to reach `/var/run/docker.sock`. Find your gid and
-set it in `.env` (only needed for Option A):
+Two host-specific values matter for **Option A** (Docker Compose). Their defaults
+(`DOCKER_GID=999`, `HOST_UID=1000`, `HOST_GID=1000`) already cover the common
+single-user Linux setup — adjust only if yours differs:
 
-```bash
-getent group docker      # e.g. "docker:x:999:you" → DOCKER_GID=999
-```
+- **`DOCKER_GID`** — the backend container joins the host's `docker` group to reach
+  `/var/run/docker.sock` (needed to provision sibling containers). Find it with
+  `getent group docker` (e.g. `docker:x:999:you` → `DOCKER_GID=999`). A
+  `PermissionError` on the Docker socket at startup is almost always this.
+- **`HOST_UID` / `HOST_GID`** — the backend runs as your host user so it can write
+  backup/WAL files into the bind-mounted `./data`. Find them with `id -u` / `id -g`.
 
-If the backend restarts with a `PermissionError` on the Docker socket, this is
-almost always the cause.
+Option B (manual `uvicorn`) needs neither — it already runs as your host user.
 
 ---
 
@@ -792,14 +806,32 @@ http://localhost:8001/health
 
 ## Run the tests
 
+**Backend** — the suite mocks the Docker SDK (no managed containers are created),
+but it does need a PostgreSQL to hold its isolated `dbaas_test` database. Start the
+compose Postgres first, then run pytest:
+
 ```bash
+docker compose up -d postgres     # metadata DB for the tests
 cd backend
 pip install -r requirements-dev.txt
-ruff check src/ tests/      # lint
-pytest --cov=src            # tests + coverage
+ruff check src/ tests/            # lint
+pytest --cov=src                  # 272 tests + coverage
 ```
 
-The suite runs against an isolated `dbaas_test` database and requires no Docker.
+**Frontend** — the same gates CI runs (from `frontend/`):
+
+```bash
+npm install
+npm run lint && npm run typecheck && npm run i18n:check && npm run build
+```
+
+**End-to-end** — Playwright, against the running stack (`docker compose up -d`):
+
+```bash
+cd frontend
+npx playwright install --with-deps chromium   # first run only (downloads the browser)
+npm run test:e2e
+```
 
 ---
 
@@ -851,8 +883,13 @@ docker build -t dbaas-backend backend/
 
 ## Planned Future Phases
 
-- Cloud deployment (managed hosting, TLS, domain)
-- Observability stack integration (Prometheus / Grafana)
+- Observability stack integration (Prometheus / Grafana / OpenTelemetry)
+- End-to-end tests wired into a dedicated CI job
+
+> **On deployment.** The platform is intentionally **run locally**. It provisions
+> real database containers through the host Docker socket — a powerful capability
+> that is deliberately *not* exposed to a public deployment, for security reasons.
+> Cloning and running it locally (below) is the intended way to explore it.
 
 ---
 

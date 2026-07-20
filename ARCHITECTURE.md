@@ -259,12 +259,13 @@ Next.js App Router with a small, single-responsibility component style:
 ## 12. Testing & CI
 
 - **Backend** — pytest against a **real PostgreSQL** (service container in CI, not
-  mocks), ~250 tests at 82% coverage, plus ruff lint.
+  mocks), 272 tests at 82% coverage, plus ruff lint.
 - **Frontend** — ESLint + `tsc` typecheck + production build, plus the i18n parity
   check, all in CI.
 - **End-to-end** — Playwright smoke tests over the critical path (login → dashboard
   → navigation → command palette → instance detail); see [`frontend/e2e`](frontend/e2e).
-- **CI** runs backend and frontend jobs in parallel on every push/PR.
+- **CI** runs three jobs in parallel on every push/PR: backend, frontend, and a
+  backend Docker image build.
 
 ---
 
