@@ -25,19 +25,20 @@ não recria nada. Também roda à mão, a partir de backend/ com a venv ativa:
 import asyncio
 import logging
 import sys
-from datetime import datetime, timedelta, timezone
-from math import sin
 from pathlib import Path
 
 import psycopg
 
 from src.core.database import SessionLocal
 from src.core.encryption import decrypt_value
+from src.models.audit_log import AuditLog
+from src.models.backup import Backup, BackupSchedule
 from src.models.company import Company
 from src.models.database_instance import DatabaseInstance, Environment, InstanceStatus
 from src.models.metric import Metric
 from src.models.user import User, UserRole
 from src.schemas.instance import InstanceCreate
+from src.seed import history
 from src.services.instance import create_instance
 
 logger = logging.getLogger(__name__)
@@ -250,9 +251,9 @@ def _seed_real(db, company: Company, admin: User, cfg: dict) -> None:
 
 
 def _seed_data_only(db, company: Company, cfg: dict) -> None:
-    """Insere registros STOPPED com métricas sintéticas (sem Docker)."""
-    now = datetime.now(timezone.utc)
-    for idx, (name, env, cpu, mem, storage) in enumerate(cfg["instances"]):
+    """Insere registros STOPPED (sem Docker). O histórico — métricas inclusas —
+    é semeado depois por history.enrich_fleet(), igual ao caminho real."""
+    for name, env, cpu, mem, storage in cfg["instances"]:
         if _existing_instance(db, name, company.id) is not None:
             continue
         inst = DatabaseInstance(
@@ -275,30 +276,6 @@ def _seed_data_only(db, company: Company, cfg: dict) -> None:
         db.add(inst)
         db.commit()
         db.refresh(inst)
-
-        # Série de 24h (288 pontos, um a cada 5 min) para o sparkline do card ficar
-        # populado por um dia inteiro. Soma de senoides → linha suave e orgânica.
-        capacity = storage * 1024 ** 3
-        base = 40 + idx * 30
-        cache_base = 96 + idx * 0.7
-        used = 0.35 + idx * 0.15
-        n_points = 288
-        rows: list[Metric] = []
-        for k in range(n_points):
-            ts = now - timedelta(minutes=(n_points - 1 - k) * 5)
-            conns = max(0, base + 16 * sin(k / 30.0) + 7 * sin(k / 12.5) + 3 * sin(k / 5.5))
-            cache = min(99.9, max(90.0, cache_base + 0.8 * sin(k / 22.0) + 0.4 * sin(k / 9.0)))
-            size = used * capacity * (0.97 + 0.0001 * k)
-            rows.append(Metric(instance_id=inst.id, metric_name="connections_active",
-                               value=float(round(conns)), collected_at=ts))
-            rows.append(Metric(instance_id=inst.id, metric_name="cache_hit_ratio",
-                               value=round(cache, 2), collected_at=ts))
-            rows.append(Metric(instance_id=inst.id, metric_name="db_size_bytes",
-                               value=float(int(size)), collected_at=ts))
-        rows.append(Metric(instance_id=inst.id, metric_name="connections_max",
-                           value=100.0, collected_at=now))
-        db.add_all(rows)
-        db.commit()
         logger.info("Seed demo: %s (dados-apenas, %s, %s)", name, cfg["region"], env.value)
 
 
@@ -315,6 +292,9 @@ def seed(db) -> None:
             _seed_real(db, company, admin, cfg)
         else:
             _seed_data_only(db, company, cfg)
+    # Enriquece a frota com histórico (métricas, uptime, alertas, backups,
+    # manutenção, audit) — idempotente, roda nos dois modos.
+    history.enrich_fleet(db)
     logger.info("Seed demo: concluído. Login: qualquer usuário @{neptune,saturn,jupiter}.example / %s", DEMO_PASSWORD)
 
 
@@ -336,6 +316,11 @@ def clear(db) -> int:
                 except Exception as exc:
                     logger.warning("Seed demo: delete do container %s falhou: %s", inst.name, exc)
             db.query(Metric).filter(Metric.instance_id == inst.id).delete(synchronize_session=False)
+            # Backups e schedules referenciam instance_id sem FK — não caem no
+            # cascade do DELETE da instância (alertas, manutenção e status_history
+            # caem, pois têm FK ON DELETE CASCADE). Removê-los à mão.
+            db.query(Backup).filter(Backup.instance_id == inst.id).delete(synchronize_session=False)
+            db.query(BackupSchedule).filter(BackupSchedule.instance_id == inst.id).delete(synchronize_session=False)
             db.delete(inst)
             removed += 1
         db.commit()
@@ -343,6 +328,9 @@ def clear(db) -> int:
         company = db.query(Company).filter(Company.name == company_name).first()
         if company is None:
             continue
+        # Audit logs têm FK SET NULL para company — apagá-los explicitamente
+        # (senão sobrariam órfãos com company_id nulo após o delete da empresa).
+        db.query(AuditLog).filter(AuditLog.company_id == company.id).delete(synchronize_session=False)
         db.query(User).filter(User.company_id == company.id).delete(synchronize_session=False)
         db.delete(company)
     db.commit()
