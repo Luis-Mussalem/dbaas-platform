@@ -290,6 +290,15 @@ derived on read:
 
 Metrics have a 30-day retention sweep to bound table growth.
 
+
+**Chart resolution is server-side.** `GET /instances/{id}/metrics/history`
+resamples the window into at most `points` buckets (default 120) and returns the
+**average per bucket**. Collection cadence varies — 60s normally, 5s while a demo
+simulation runs — so without this the same 24h chart would render smooth one
+moment and as a saw blade the next, and a 24h window at 5s would ship ~17k points
+to draw a 250px sparkline. The card sparklines ask for 48 buckets; full-page
+charts use the default.
+
 ---
 
 ## 9. Backup & recovery

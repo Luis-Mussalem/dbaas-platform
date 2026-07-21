@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import type { Instance } from "@/lib/types";
 import { useMetrics } from "@/hooks/use-metrics";
 import { useMetricHistory } from "@/hooks/use-metric-history";
+import { useSimulation } from "@/context/SimulationProvider";
 import { useFormatters } from "@/hooks/use-formatters";
 import { instanceGradient, instanceInitials, instanceLineColor, instanceInk } from "@/lib/identity-color";
 import { HealthBadge } from "@/components/StatusBadge";
@@ -23,7 +24,17 @@ export function InstanceCard({ instance }: { instance: Instance }) {
 
   // Sparkline REAL: histórico de conexões nas últimas 24h (vem do endpoint de
   // histórico que lê a tabela metrics). Vazio → o Sparkline mostra uma linha-base.
-  const connHistory = useMetricHistory(instance.id, "connections_active", "24h");
+  const { dataPollMs } = useSimulation();
+  // 48 baldes de 30 min para 24h: um sparkline de ~250px não mostra mais que
+  // isso, e a média por balde é o que mantém a linha suave independentemente da
+  // cadência de coleta (que acelera durante a simulação de uso).
+  const connHistory = useMetricHistory(
+    instance.id,
+    "connections_active",
+    "24h",
+    dataPollMs,
+    48
+  );
 
   const connActive = m.connections_active;
   const connMax = m.connections_max;

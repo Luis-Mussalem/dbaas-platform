@@ -9,23 +9,35 @@ import type { MetricWindow } from "@/lib/types";
 export function useMetricHistory(
   instanceId: string,
   metric: string,
-  window: MetricWindow = "1h"
+  window: MetricWindow = "1h",
+  pollMs?: number,
+  points?: number
 ): number[] {
   const [values, setValues] = useState<number[]>([]);
 
   useEffect(() => {
     let active = true;
-    getMetricHistory(instanceId, metric, window)
-      .then((res) => {
-        if (active) setValues(res.points.map((p) => p.value));
-      })
-      .catch(() => {
-        if (active) setValues([]);
-      });
+
+    function load() {
+      getMetricHistory(instanceId, metric, window, points)
+        .then((res) => {
+          if (active) setValues(res.points.map((p) => p.value));
+        })
+        .catch(() => {
+          if (active) setValues([]);
+        });
+    }
+
+    load();
+    // Durante a simulação de uso a série cresce a cada poucos segundos; fora
+    // dela não há o que repetir e o intervalo fica ausente.
+    const intervalId = pollMs ? setInterval(load, pollMs) : undefined;
+
     return () => {
       active = false;
+      if (intervalId) clearInterval(intervalId);
     };
-  }, [instanceId, metric, window]);
+  }, [instanceId, metric, window, pollMs, points]);
 
   return values;
 }

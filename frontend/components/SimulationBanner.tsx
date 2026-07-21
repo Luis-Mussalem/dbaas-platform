@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { FlaskConical } from "lucide-react";
-import { useSimulation } from "@/hooks/use-simulation";
+import { useSimulation } from "@/context/SimulationProvider";
 import { BTN_GHOST } from "@/lib/ui";
 
 // Aviso honesto, sempre visível enquanto houver dado simulado na frota.
@@ -45,6 +45,14 @@ export function SimulationBanner() {
             ? t("banner.complete")
             : t("banner.finished")}
       </span>
+
+      {inScript && (
+        // Expectativa de duração: sem ela, um visitante que clicou não sabe se
+        // espera 10 segundos ou cinco minutos.
+        <span className="hidden shrink-0 text-warn/70 lg:inline">
+          · {t("banner.eta")}
+        </span>
+      )}
 
       {inScript && (
         // Progresso do ROTEIRO, não da etapa: a barra por etapa zerava a cada

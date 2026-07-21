@@ -614,6 +614,7 @@
     "banner": {
       "complete": "Roteiro concluído — a frota segue atendendo tráfego.",
       "details": "Detalhes",
+      "eta": "leva cerca de 90 segundos",
       "finished": "A frota ainda contém dados produzidos por uma simulação.",
       "label": "Uso simulado",
       "running": "{phase} · etapa {index} de {count}"
@@ -674,6 +675,7 @@
       "title": "Limpar os dados simulados?"
     },
     "script": {
+      "eta": "A execução inteira leva cerca de 90 segundos",
       "speed": "O tempo corre {factor}× mais rápido durante a execução",
       "title": "O roteiro"
     },

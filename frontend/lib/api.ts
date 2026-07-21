@@ -296,9 +296,13 @@ export async function getHealth(instanceId: string): Promise<HealthCheck> {
 export async function getMetricHistory(
   instanceId: string,
   metric: string,
-  window: MetricWindow = "1h"
+  window: MetricWindow = "1h",
+  // Resolução pedida ao backend: a série vem reamostrada em até N baldes.
+  // Um sparkline de card pede menos que um gráfico de página inteira.
+  points?: number
 ): Promise<MetricHistoryResponse> {
   const qs = new URLSearchParams({ metric, window });
+  if (points) qs.set("points", String(points));
   return request<MetricHistoryResponse>(
     `/instances/${instanceId}/metrics/history?${qs.toString()}`
   );

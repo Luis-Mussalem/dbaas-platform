@@ -96,3 +96,34 @@ def test_history_invalid_window_422(client, auth_headers, instance):
     headers, _ = auth_headers()
     resp = client.get(f"{_url(instance.id)}?metric=cache_hit_ratio&window=99y", headers=headers)
     assert resp.status_code == 422
+
+
+def test_history_is_downsampled_to_a_stable_number_of_points(client, auth_headers, instance, db):
+    """
+    Uma janela de 24h com coleta a cada 5s (o que a simulação de uso faz) traz
+    dezenas de milhares de amostras. O endpoint reamostra em baldes para o
+    sparkline ter sempre a mesma resolução — e não virar uma serra.
+    """
+    headers, _ = auth_headers()
+    now = datetime.now(timezone.utc)
+    db.add_all([
+        Metric(
+            instance_id=instance.id,
+            metric_name="connections_active",
+            value=float(10 + (i % 2)),  # alterna 10/11: o ruído a suavizar
+            collected_at=now - timedelta(seconds=5 * i),
+        )
+        for i in range(2000)  # ~2.7h de coleta a 5s
+    ])
+    db.commit()
+
+    points = client.get(
+        f"{_url(instance.id)}?metric=connections_active&window=24h", headers=headers
+    ).json()["points"]
+
+    assert 0 < len(points) <= 120, f"esperava série reamostrada, veio {len(points)}"
+    # A média dentro do balde fica entre os extremos — a curva perde a serrilha,
+    # não a escala.
+    assert all(10.0 <= p["value"] <= 11.0 for p in points)
+    # Ordem cronológica preservada.
+    assert [p["collected_at"] for p in points] == sorted(p["collected_at"] for p in points)

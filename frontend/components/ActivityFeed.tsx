@@ -6,6 +6,7 @@ import { Activity, Cpu } from "lucide-react";
 import { getAuditLogs } from "@/lib/api";
 import type { AuditLog } from "@/lib/types";
 import { useFormatters } from "@/hooks/use-formatters";
+import { useSimulation } from "@/context/SimulationProvider";
 import { actorLabel, isAuditAction, toneFor, type Tone } from "@/lib/audit";
 
 // Cor do avatar por tom semântico. O tom vem da fonte única lib/audit.ts —
@@ -30,13 +31,27 @@ export function ActivityFeed() {
   const { ago } = useFormatters();
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  // A simulação de uso gera ações auditadas (backup, manutenção): enquanto ela
+  // roda, a atividade recente se atualiza sozinha em vez de exigir F5.
+  const { dataPollMs } = useSimulation();
 
   useEffect(() => {
-    getAuditLogs({ limit: 8 })
-      .then(setLogs)
-      .catch(() => setLogs([]))
-      .finally(() => setIsLoading(false));
-  }, []);
+    let active = true;
+
+    function load() {
+      getAuditLogs({ limit: 8 })
+        .then((data) => active && setLogs(data))
+        .catch(() => active && setLogs([]))
+        .finally(() => active && setIsLoading(false));
+    }
+
+    load();
+    const intervalId = dataPollMs ? setInterval(load, dataPollMs) : undefined;
+    return () => {
+      active = false;
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [dataPollMs]);
 
   return (
     <div className="rounded-lg border border-border bg-surface p-3.5">

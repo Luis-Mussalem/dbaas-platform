@@ -4,6 +4,7 @@ import { useMemo, useState, useSyncExternalStore } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useInstances } from "@/hooks/use-instances";
 import { useDashboard } from "@/hooks/use-dashboard";
+import { useSimulation } from "@/context/SimulationProvider";
 import { InstanceCard } from "@/components/InstanceCard";
 import { ActivityFeed } from "@/components/ActivityFeed";
 import { RegionMap } from "@/components/RegionMap";
@@ -26,8 +27,11 @@ export default function PainelPage() {
   //  - useDashboard(): agregados de GET /admin/dashboard
   //  - useInstances(): lista de instâncias
   //  - ActivityFeed:  audit log (busca própria, dentro do componente)
-  const { instances, isLoading: loadingInstances } = useInstances();
-  const { summary, isLoading: loadingSummary } = useDashboard();
+  // Enquanto a simulação de uso mexe na frota, tudo aqui se refresca sozinho —
+  // antes o painel só mostrava o resultado depois de um F5.
+  const { dataPollMs } = useSimulation();
+  const { instances, isLoading: loadingInstances } = useInstances(dataPollMs);
+  const { summary, isLoading: loadingSummary } = useDashboard(dataPollMs);
   const [envFilter, setEnvFilter] = useState<EnvFilter>("all");
 
   const isLoading = loadingInstances || loadingSummary;

@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { FlaskConical, Square } from "lucide-react";
-import { useSimulation } from "@/hooks/use-simulation";
+import { useSimulation } from "@/context/SimulationProvider";
 
 // Atalho da simulação na topbar, ao lado de "Nova instância" — sem ele, quem
 // nunca abrisse a rota /demo jamais descobriria o principal recurso da demo.

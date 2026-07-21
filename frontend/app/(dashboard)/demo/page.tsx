@@ -12,7 +12,7 @@ import {
   RotateCcw,
   Square,
 } from "lucide-react";
-import { useSimulation } from "@/hooks/use-simulation";
+import { useSimulation } from "@/context/SimulationProvider";
 import { useConfirm } from "@/context/ConfirmProvider";
 import { useFormatters } from "@/hooks/use-formatters";
 import { EmptyState } from "@/components/EmptyState";
@@ -123,7 +123,7 @@ export default function DemoPage() {
         <div className="flex items-baseline justify-between">
           <h2 className="text-sm font-semibold">{t("script.title")}</h2>
           <span className="text-xs text-muted-foreground">
-            {t("script.speed", { factor: Math.round(status.speed_factor) })}
+            {t("script.eta")} · {t("script.speed", { factor: Math.round(status.speed_factor) })}
           </span>
         </div>
 

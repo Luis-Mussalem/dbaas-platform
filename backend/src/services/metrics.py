@@ -137,32 +137,54 @@ def get_latest_metrics(
     return {name: value for name, value in rows}
 
 
+# Pontos devolvidos por get_metric_history. A série é reamostrada para este
+# teto: um sparkline de ~500px não representa mais que isso, e o gráfico fica
+# refém da cadência de coleta — que varia (60s normal, 5s durante a simulação
+# de uso). Com bucket fixo, a MESMA janela desenha a mesma forma sempre.
+_HISTORY_MAX_POINTS = 120
+
+
 def get_metric_history(
     db: Session,
     instance_id: uuid.UUID,
     metric_name: str,
     minutes: int,
+    max_points: int = _HISTORY_MAX_POINTS,
 ) -> list[tuple[datetime, float]]:
     """
-    Retorna a série temporal de UMA métrica na janela [agora - minutes, agora].
+    Retorna a série temporal de UMA métrica na janela [agora - minutes, agora],
+    reamostrada em até _HISTORY_MAX_POINTS baldes com a MÉDIA de cada um.
 
     Lê da tabela metrics (banco da plataforma) — não conecta ao banco monitorado.
-    O poller persiste um ponto a cada ciclo (~60s), então a janela controla o
-    volume: 15m ≈ 15 pontos, 1h ≈ 60, 24h ≈ 1440. Ordenado por tempo crescente
-    para alimentar sparklines/gráficos diretamente.
+    A média por balde é o que dá a curva suave: sem ela, uma janela de 24h com
+    coleta de 5s traria ~17 mil pontos e o sparkline viraria uma serra (foi
+    exatamente o que aconteceu quando a simulação acelerou o poller). Agregar no
+    banco também evita trafegar milhares de pontos para desenhar 500 pixels.
+
+    O balde é derivado da janela (24h ÷ 120 = 12 min), então a resolução é
+    estável independentemente de quantas amostras existirem dentro dele.
     """
     since = datetime.now(timezone.utc) - timedelta(minutes=minutes)
+    bucket_seconds = max(1, (minutes * 60) // max(1, max_points))
+
+    # floor(epoch / bucket) * bucket → início do balde; média dentro dele.
+    bucket_start = func.to_timestamp(
+        func.floor(func.extract("epoch", Metric.collected_at) / bucket_seconds)
+        * bucket_seconds
+    ).label("bucket_start")
+
     rows = (
-        db.query(Metric.collected_at, Metric.value)
+        db.query(bucket_start, func.avg(Metric.value).label("value"))
         .filter(
             Metric.instance_id == instance_id,
             Metric.metric_name == metric_name,
             Metric.collected_at >= since,
         )
-        .order_by(Metric.collected_at.asc())
+        .group_by(bucket_start)
+        .order_by(bucket_start.asc())
         .all()
     )
-    return [(row.collected_at, row.value) for row in rows]
+    return [(row.bucket_start, float(row.value)) for row in rows]
 
 
 def check_health(instance: DatabaseInstance) -> dict:

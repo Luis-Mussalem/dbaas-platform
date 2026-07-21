@@ -97,6 +97,10 @@ def get_metrics_history(
     instance_id: uuid.UUID,
     metric: str = Query(..., min_length=1, max_length=100, description="metric_name coletado pelo poller"),
     window: Literal["15m", "1h", "6h", "24h"] = "1h",
+    points: int = Query(
+        120, ge=10, le=500,
+        description="Resolução: a série é reamostrada em até N baldes (média por balde)",
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> MetricHistoryResponse:
@@ -106,16 +110,21 @@ def get_metrics_history(
     Lê da tabela metrics (banco da plataforma) — funciona mesmo com a instância
     STOPPED, exibindo o histórico já coletado. Retorna lista vazia se a métrica
     não foi coletada ainda.
+
+    A série é reamostrada em até `points` baldes (média por balde): a cadência
+    de coleta varia (60s normalmente, 5s durante a simulação de uso) e sem isso
+    o mesmo gráfico apareceria liso ou serrilhado conforme o momento. Um
+    sparkline de card pede menos pontos que um gráfico de página inteira.
     """
     get_instance_or_404(instance_id, db, current_user)
-    points = metrics_service.get_metric_history(
-        db, instance_id, metric, _WINDOW_MINUTES[window]
+    series = metrics_service.get_metric_history(
+        db, instance_id, metric, _WINDOW_MINUTES[window], max_points=points
     )
     return MetricHistoryResponse(
         instance_id=instance_id,
         metric_name=metric,
         window=window,
-        points=[MetricHistoryPoint(collected_at=ts, value=v) for ts, v in points],
+        points=[MetricHistoryPoint(collected_at=ts, value=v) for ts, v in series],
     )
 
 

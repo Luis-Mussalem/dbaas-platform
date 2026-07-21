@@ -22,12 +22,15 @@ interface UseInstancesResult {
 
 // ─── Hook ──────────────────────────────────────────────────────────────────────
 
-export function useInstances(): UseInstancesResult {
+// `pollMs` mantém a lista fresca durante a simulação de uso (ver
+// SimulationProvider.dataPollMs); sem ele, a busca é só no mount.
+export function useInstances(pollMs?: number): UseInstancesResult {
   const t = useTranslations("Instances");
   const fetcher = useCallback(() => listInstances(), []);
   const { data, isLoading, error, setData } = useResource(
     fetcher,
-    t("loadFailed")
+    t("loadFailed"),
+    pollMs
   );
   const instances = data ?? [];
 

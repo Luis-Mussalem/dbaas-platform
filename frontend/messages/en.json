@@ -614,6 +614,7 @@
     "banner": {
       "complete": "Run complete — the fleet keeps serving traffic.",
       "details": "Details",
+      "eta": "takes about 90 seconds",
       "finished": "The fleet still holds data produced by a simulation.",
       "label": "Simulated usage",
       "running": "{phase} · step {index} of {count}"
@@ -674,6 +675,7 @@
       "title": "Clear the simulated data?"
     },
     "script": {
+      "eta": "The whole run takes about 90 seconds",
       "speed": "Time runs {factor}× faster during the run",
       "title": "The script"
     },
