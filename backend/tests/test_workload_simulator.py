@@ -256,3 +256,55 @@ def test_shutdown_closes_every_connection(db, fake_connect, simulation_running):
 
     assert ws._pools == {}
     assert all(c.closed for c in conns)
+
+
+# --------------------------------------------------------------------------- #
+# Mix de queries — a "query pesada"
+# --------------------------------------------------------------------------- #
+class _ScriptedRandom:
+    """RNG dublê: devolve um roll fixo, para escolher um ramo do mix."""
+
+    def __init__(self, roll: float):
+        self._roll = roll
+
+    def random(self) -> float:
+        return self._roll
+
+    def randint(self, a: int, b: int) -> int:
+        return a
+
+
+def _pool_with_ballast(has_ballast: bool) -> ws._InstancePool:
+    pool = ws._InstancePool("demo-prod")
+    pool.dataset_table = "transactions"
+    pool.has_ballast = has_ballast
+    pool.prepared = True
+    return pool
+
+
+def test_heavy_query_scans_the_ballast_table_with_a_bounded_slice():
+    """
+    A query pesada tem que ser CARA e LIMITADA.
+
+    Antes ela era um self-join sobre o dataset de ~100 linhas: terminava em
+    microssegundos e a tela de queries lentas não tinha o que investigar.
+    """
+    pool = _pool_with_ballast(True)
+    conn = _FakeConnection()
+
+    ws._run_query(pool, conn, _ScriptedRandom(0.99))
+
+    query = conn.queries[-1]
+    assert ws.BALLAST_TABLE in query
+    assert "LIMIT" in query.upper()
+
+
+def test_heavy_query_falls_back_to_the_dataset_without_ballast():
+    """Instância sem lastro (criada pelo usuário) continua com o self-join."""
+    pool = _pool_with_ballast(False)
+    conn = _FakeConnection()
+
+    ws._run_query(pool, conn, _ScriptedRandom(0.99))
+
+    assert ws.BALLAST_TABLE not in conn.queries[-1]
+    assert "transactions" in conn.queries[-1]

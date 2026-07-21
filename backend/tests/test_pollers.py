@@ -419,3 +419,33 @@ def test_maintenance_scheduling_loop_one_cycle():
 def test_alert_evaluation_loop_one_cycle():
     calls = _run_one_loop_cycle(alert_evaluator, "alert_evaluation_loop", "evaluate_once")
     assert calls == ["evaluate_once"]
+
+
+def test_metrics_cleanup_is_time_based_not_cycle_based(db, monkeypatch):
+    """
+    A limpeza de retenção roda uma vez por dia de RELÓGIO.
+
+    Contando ciclos, a periodicidade dependia do intervalo de coleta: durante
+    uma simulação de uso ele cai para 5s e a limpeza passava a varrer a tabela
+    a cada ~2h, sem nada a apagar.
+    """
+    from src.services import metrics_poller
+
+    monkeypatch.setattr(metrics_poller, "_last_metrics_cleanup", None)
+
+    metrics_poller.poll_metrics_once()
+    first = metrics_poller._last_metrics_cleanup
+    assert first is not None, "a primeira passagem deve limpar"
+
+    for _ in range(5):
+        metrics_poller.poll_metrics_once()
+    assert metrics_poller._last_metrics_cleanup == first
+
+    # Passado um dia, limpa de novo.
+    monkeypatch.setattr(
+        metrics_poller,
+        "_last_metrics_cleanup",
+        first - metrics_poller._METRICS_CLEANUP_INTERVAL,
+    )
+    metrics_poller.poll_metrics_once()
+    assert metrics_poller._last_metrics_cleanup > first

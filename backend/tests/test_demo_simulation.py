@@ -405,3 +405,100 @@ def test_progress_is_full_in_steady_and_zero_while_idle(db, demo_instance):
     db.commit()
     sim.invalidate_state_cache()
     assert sim.status(db)["progress"] == 1.0
+
+
+# --------------------------------------------------------------------------- #
+# Variedade do alerta, geração da execução e escopo do reset
+# --------------------------------------------------------------------------- #
+def _prod_instance(db, name: str) -> DatabaseInstance:
+    inst = DatabaseInstance(
+        name=name,
+        status=InstanceStatus.RUNNING,
+        environment=Environment.PRODUCTION,
+        notes=DEMO_MARKER,
+        storage_gb=1,
+    )
+    db.add(inst)
+    db.commit()
+    db.refresh(inst)
+    # A fase ALERT precisa de uma leitura de conexões para calcular o limiar.
+    db.add_all([
+        Metric(instance_id=inst.id, metric_name="connections_active", value=40.0),
+        Metric(instance_id=inst.id, metric_name="connections_max", value=100.0),
+    ])
+    db.commit()
+    return inst
+
+
+def test_alert_phase_does_not_always_pick_the_same_instance(db):
+    """
+    A demo contava sempre a mesma história no mesmo card, porque a fase pegava
+    a primeira instância de produção em ordem alfabética.
+    """
+    for name in ("demo-a-prod", "demo-b-prod", "demo-c-prod"):
+        _prod_instance(db, name)
+
+    watched = set()
+    for _ in range(25):
+        sim._phase_alert(db)
+        watched |= {
+            r.instance_id for r in db.query(AlertRule)
+            .filter(AlertRule.name == "Connection pool under load").all()
+        }
+        db.query(AlertRule).delete(synchronize_session=False)
+        db.commit()
+
+    assert len(watched) > 1, "a fase ALERT continua determinística"
+
+
+def test_action_from_a_stopped_run_is_discarded(db, demo_instance, monkeypatch):
+    """
+    Uma ação lenta despachada antes do stop não pode gravar depois dele — nem,
+    pior, no meio da execução seguinte.
+    """
+    executed: list[str] = []
+    monkeypatch.setitem(
+        sim._PHASE_ACTIONS, SimulationPhase.WARMUP, lambda _db: executed.append("ran")
+    )
+
+    generation = sim._current_generation()
+    sim._next_generation()  # simula um stop/start entre o despacho e a execução
+
+    sim._execute_action(SimulationPhase.WARMUP, generation)
+
+    assert executed == []
+
+
+def test_action_from_the_current_run_still_executes(db, demo_instance, monkeypatch):
+    executed: list[str] = []
+    monkeypatch.setitem(
+        sim._PHASE_ACTIONS, SimulationPhase.WARMUP, lambda _db: executed.append("ran")
+    )
+
+    sim._execute_action(SimulationPhase.WARMUP, sim._current_generation())
+
+    assert executed == ["ran"]
+
+
+def test_reset_keeps_audit_the_visitor_generated(db, demo_instance, make_company):
+    """
+    O reset apaga o que a SIMULAÇÃO escreveu, não tudo da empresa: os logins e
+    ações do próprio visitante são reais e continuam na trilha.
+    """
+    from src.models.audit_log import AuditLog
+
+    company = make_company("Demo Co")
+    demo_instance.company_id = company.id
+    db.add(demo_instance)
+    db.add_all([
+        AuditLog(company_id=company.id, action="login", resource_type="auth",
+                 details={"method": "POST", "path": "/api/v1/auth/login"}),
+        AuditLog(company_id=company.id, action="backup_created", resource_type="backup",
+                 details={"instance": demo_instance.name, "simulated": True}),
+    ])
+    db.commit()
+
+    sim.reset(db)
+
+    remaining = [a.action for a in db.query(AuditLog).all()]
+    assert remaining == ["login"]

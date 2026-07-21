@@ -54,6 +54,11 @@ APPLICATION_NAME = "dbaas-demo-workload"
 # Tabela de escrita do simulador (criada na primeira passagem por instância).
 WORKLOAD_TABLE = "workload_events"
 
+# Tabela de lastro de armazenamento, gravada pelo seed (ver seed/demo.py).
+# A constante vive aqui, e não no seed, porque quem a consulta a cada ciclo é
+# este módulo — importá-la do seed no caminho quente exigiria import tardio.
+BALLAST_TABLE = "storage_ballast"
+
 # Linhas mantidas na tabela de escrita: o insert contínuo faria o banco crescer
 # sem limite, e o gráfico de tamanho viraria uma rampa infinita.
 _WORKLOAD_TABLE_MAX_ROWS = 2_000
@@ -72,6 +77,13 @@ _WEEKEND_FACTOR = 0.55
 # Com o ciclo acelerado (5s) da simulação, 4 conexões por passo levam o pool ao
 # alvo dentro dos 18s da fase WARMUP sem virar um salto instantâneo.
 _MAX_POOL_STEP = 4
+
+# Linhas varridas pela query pesada do mix. ~20k × 640 B = ~13 MB hasheados,
+# medidos em ~170 ms contra ~2 ms de uma leitura pontual: cauda suficiente para
+# aparecer no p95 e no pg_stat_statements, e ainda 60× abaixo do
+# statement_timeout. Sai em ~1 a cada 10s por instância (5% do mix), então é uma
+# demonstração de query cara — não um teste de carga.
+_HEAVY_QUERY_ROWS = 20_000
 
 
 def _now() -> datetime:
@@ -148,6 +160,9 @@ class _InstancePool:
         # Tabela do dataset semeado, descoberta na primeira conexão (staging
         # não tem dataset — lá o mix roda só sobre workload_events).
         self.dataset_table: str | None = None
+        # A tabela de lastro do seed existe? É a única grande o bastante para a
+        # query pesada custar tempo mensurável (ver _run_query).
+        self.has_ballast = False
         self.prepared = False
 
     def close_all(self) -> None:
@@ -181,8 +196,6 @@ def _connect(uri: str) -> psycopg.Connection:
 
 def _prepare(pool: _InstancePool, conn: psycopg.Connection) -> None:
     """Cria a tabela de escrita e descobre a tabela do dataset (uma vez)."""
-    from src.seed.demo import BALLAST_TABLE  # lazy: evita import circular
-
     conn.execute(
         psql.SQL(
             "CREATE TABLE IF NOT EXISTS {} ("
@@ -202,6 +215,9 @@ def _prepare(pool: _InstancePool, conn: psycopg.Connection) -> None:
         ([WORKLOAD_TABLE, BALLAST_TABLE],),
     ).fetchone()
     pool.dataset_table = row[0] if row else None
+    pool.has_ballast = bool(
+        conn.execute("SELECT to_regclass(%s) IS NOT NULL", (BALLAST_TABLE,)).fetchone()[0]
+    )
     pool.prepared = True
 
 
@@ -258,7 +274,22 @@ def _run_query(pool: _InstancePool, conn: psycopg.Connection, rng: random.Random
                 ).format(t=psql.Identifier(WORKLOAD_TABLE)),
                 (_WORKLOAD_TABLE_MAX_ROWS,),
             )
-    elif table:  # query pesada: self-join sem índice útil
+    elif pool.has_ballast:  # query pesada: agregação sobre uma fatia grande
+        # O dataset semeado tem ~100 linhas: um self-join sobre ele terminava em
+        # microssegundos e a tela de queries lentas não tinha nada para
+        # investigar. A tabela de lastro tem centenas de milhares de linhas —
+        # hashear uma fatia dela custa dezenas de ms e produz uma cauda de p95
+        # de verdade. A fatia é LIMITADA de propósito: uma query pesada numa
+        # demo tem que ser cara, não perigosa.
+        conn.execute(
+            psql.SQL(
+                "SELECT count(DISTINCT md5(blob)) FROM ("
+                "  SELECT blob FROM {} ORDER BY id OFFSET %s LIMIT %s"
+                ") s"
+            ).format(psql.Identifier(BALLAST_TABLE)),
+            (rng.randint(0, 20_000), _HEAVY_QUERY_ROWS),
+        ).fetchone()
+    elif table:  # sem lastro (instância criada pelo usuário): self-join no dataset
         conn.execute(
             psql.SQL(
                 "SELECT count(*) FROM {t} a JOIN {t} b ON a.id <> b.id "

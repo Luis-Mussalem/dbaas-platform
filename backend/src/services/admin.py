@@ -170,8 +170,13 @@ def list_audit_logs(
         query = query.filter(AuditLog.resource_type == resource_type)
     if user_id:
         query = query.filter(AuditLog.user_id == user_id)
+    # Desempate por id: com LIMIT/OFFSET, uma ordenação só por timestamp não é
+    # determinística quando duas entradas caem no mesmo instante — o Postgres
+    # pode devolvê-las em ordens diferentes entre páginas, e aí uma linha
+    # aparece duas vezes enquanto outra some. O id não tem significado temporal;
+    # serve só para tornar a ordem estável.
     rows = (
-        query.order_by(AuditLog.timestamp.desc())
+        query.order_by(AuditLog.timestamp.desc(), AuditLog.id.desc())
         .limit(limit)
         .offset(offset)
         .all()

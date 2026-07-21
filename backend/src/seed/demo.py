@@ -45,6 +45,7 @@ from src.models.metric import Metric
 from src.models.user import User, UserRole
 from src.schemas.instance import InstanceCreate
 from src.services.instance import create_instance
+from src.services.workload_simulator import BALLAST_TABLE
 
 logger = logging.getLogger(__name__)
 
@@ -56,9 +57,6 @@ DEMO_MARKER = "__demo_fleet__"  # marca as instâncias deste seed (idempotência
 DEMO_PASSWORD = "DemoPass123!"
 
 MEMBER_NAMES = ["ana", "bruno", "carla", "diego"]
-
-# Tabela de lastro de armazenamento (ver _fill_storage).
-BALLAST_TABLE = "storage_ballast"
 
 # Ocupação alvo por ambiente, contra o plano de 1 GB declarado em COMPANIES:
 # ~25% em produção, ~10% em staging. Números escolhidos para a barra de storage
@@ -288,6 +286,26 @@ def _fill_storage(inst: DatabaseInstance) -> None:
             )
 
 
+def _reset_query_stats(inst: DatabaseInstance) -> None:
+    """
+    Zera o pg_stat_statements depois de semear.
+
+    As queries de PROVISIONAMENTO — o COPY do dataset e os INSERTs do lastro —
+    levam centenas de milissegundos e ficam gravadas para sempre na view, que
+    agrega por fingerprint desde o último reset. Com elas dentro, o p99 da
+    instância fica cravado em ~900ms: um número real, mas que descreve o seed,
+    não o serviço. Zerando aqui, os percentis passam a medir só o tráfego que a
+    instância de fato atende.
+    """
+    if not inst.connection_uri:
+        return
+    try:
+        with psycopg.connect(decrypt_value(inst.connection_uri), autocommit=True) as conn:
+            conn.execute("SELECT pg_stat_statements_reset()")
+    except Exception as exc:  # noqa: BLE001 — sem a extensão, não há o que zerar
+        logger.debug("Seed demo: pg_stat_statements_reset em %s: %s", inst.name, exc)
+
+
 def _seed_real(db, company: Company, admin: User, cfg: dict) -> None:
     """Provisiona containers reais e carrega o dataset na instância de produção."""
     prod = None
@@ -328,6 +346,13 @@ def _seed_real(db, company: Company, admin: User, cfg: dict) -> None:
         if not exists:
             n = _load_dataset(prod, table, cfg["ddl"], cfg["csv"])
             logger.info("Seed demo: %s — %d linhas em '%s' (prod)", company.name, n, table)
+
+    # Por último, com o dataset e o lastro já gravados: as estatísticas de query
+    # começam do zero, medindo serviço em vez de provisionamento.
+    for name, _env, *_ in cfg["instances"]:
+        inst = _existing_instance(db, name, company.id)
+        if inst is not None and inst.status == InstanceStatus.RUNNING:
+            _reset_query_stats(inst)
 
 
 def _seed_data_only(db, company: Company, cfg: dict) -> None:

@@ -34,6 +34,7 @@ Escopo: só instâncias da frota demo (`notes == DEMO_MARKER`). Com
 """
 import asyncio
 import logging
+import random
 import threading
 import time
 import uuid
@@ -137,6 +138,28 @@ _MAX_EVENTS = 40
 # (um pg_dump e um VACUUM concorrentes na mesma instância seriam um teste de
 # carga, não uma demonstração).
 _ACTION_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="demo-sim")
+
+# Geração da execução: incrementada por start e stop. Uma ação carrega a geração
+# em que foi despachada e desiste se ela não é mais a corrente.
+#
+# Sem isso, uma ação lenta (pg_dump de três instâncias, VACUUM) despachada antes
+# do usuário parar continuava na fila do executor e escrevia backups/tarefas
+# DEPOIS do stop — ou, se ele reiniciasse, no meio da execução seguinte.
+_run_generation = 0
+_generation_lock = threading.Lock()
+
+
+def _next_generation() -> int:
+    global _run_generation
+    with _generation_lock:
+        _run_generation += 1
+        return _run_generation
+
+
+def _current_generation() -> int:
+    with _generation_lock:
+        return _run_generation
+
 
 # Referência MONOTÔNICA do início da fase e do roteiro (chave → time.monotonic()).
 #
@@ -475,14 +498,14 @@ def _phase_alert(db: Session) -> None:
     """
     from src.models.alert import AlertCondition, AlertSeverity
 
-    target = next(
-        (i for i in _demo_instances(db)
-         if i.environment == Environment.PRODUCTION and i.status == InstanceStatus.RUNNING),
-        None,
-    )
-    if target is None:
+    # Sorteia entre as instâncias de produção em vez de pegar sempre a primeira:
+    # com `next(...)` a demo contava exatamente a mesma história, no mesmo card,
+    # em toda execução — e quem assiste duas vezes percebe o roteiro.
+    candidates = _production_instances(db)
+    if not candidates:
         log_event_atomic(SimulationPhase.ALERT, "No running production instance to watch")
         return
+    target = random.choice(candidates)
 
     # Coleta na hora, em vez de confiar na última amostra do poller: a fase dura
     # ~20s e uma amostra de antes da carga subir daria um limiar ridículo (1%),
@@ -641,12 +664,13 @@ def start(db: Session) -> DemoSimulation:
 
     _mark_monotonic(_RUN_KEY)
     _mark_monotonic(_PHASE_KEY)
+    _next_generation()
     invalidate_state_cache()
     _dispatch_action(state.phase)
     return state
 
 
-def stop(db: Session) -> DemoSimulation:
+def stop(db: Session, collect: bool = True) -> DemoSimulation:
     """
     Para o tráfego e o roteiro, PRESERVANDO os dados gerados — o visitante pode
     continuar navegando pelo que a simulação produziu. `has_simulated_data`
@@ -660,11 +684,23 @@ def stop(db: Session) -> DemoSimulation:
     state.phase_started_at = None
     db.commit()
     _MONOTONIC_REFS.clear()
+    # Invalida a geração: o que ainda estiver na fila do executor não roda.
+    _next_generation()
     invalidate_state_cache()
 
     from src.services import workload_simulator
 
     workload_simulator.shutdown_pools()
+    # Com os pools fechados, a frota voltou ao repouso AGORA — mas a última
+    # amostra guardada ainda é a do pico de carga, e o poller só passa de novo
+    # até 60s depois. Sem esta coleta, o dashboard seguia anunciando dezenas de
+    # conexões numa frota que já estava parada: o número certo, do instante
+    # errado. Mesmo motivo da coleta no reset.
+    #
+    # `collect=False` vem do reset, que apaga as métricas logo em seguida e faz
+    # a sua própria coleta — medir duas vezes só gastaria um segundo à toa.
+    if collect:
+        _collect_now(db)
     return state
 
 
@@ -677,7 +713,7 @@ def reset(db: Session) -> DemoSimulation:
     """
     from src.services import backup as backup_service
 
-    state = stop(db)
+    state = stop(db, collect=False)
     instances = _demo_instances(db)
     restore = state.restore_points or {}
 
@@ -705,19 +741,51 @@ def reset(db: Session) -> DemoSimulation:
         if original:
             inst.created_at = datetime.fromisoformat(original)
 
+    # Audit: só o que a simulação escreveu (marcado com simulated=true), não
+    # tudo da empresa. Antes o reset levava junto os registros das ações que o
+    # próprio visitante fez na UI — os logins dele, os backups que ele pediu —
+    # que são reais e não têm por que sumir.
     company_ids = {i.company_id for i in instances if i.company_id}
     if company_ids:
-        db.query(AuditLog).filter(AuditLog.company_id.in_(company_ids)).delete(
-            synchronize_session=False
-        )
+        db.query(AuditLog).filter(
+            AuditLog.company_id.in_(company_ids),
+            AuditLog.details["simulated"].astext == "true",
+        ).delete(synchronize_session=False)
 
     state.has_simulated_data = False
     state.restore_points = {}
     state.events = []
     state.started_at = None
     db.commit()
+
+    _collect_now(db)
     logger.info("Simulação: frota demo devolvida ao estado real.")
     return state
+
+
+def _collect_now(db: Session) -> None:
+    """
+    Coleta imediata das instâncias demo no ar, logo após o reset.
+
+    O reset apaga TODAS as métricas, e o poller só passa de novo até 60s depois:
+    nesse intervalo o dashboard ficava literalmente vazio — conexões, cache hit
+    e tamanho em "—", sparklines em branco — como se a frota tivesse sumido, e
+    não como se ela tivesse acabado de ser zerada. Uma coleta aqui custa ~1s e
+    devolve a tela preenchida com medição real no mesmo clique.
+
+    Best-effort: instância que não responde fica sem amostra até o próximo ciclo
+    do poller, o que é exatamente o comportamento normal.
+    """
+    from src.services.metrics import collect_and_store
+
+    for inst in _demo_instances(db):
+        if inst.status != InstanceStatus.RUNNING or not inst.connection_uri:
+            continue
+        try:
+            collect_and_store(db, inst)
+        except Exception as exc:  # noqa: BLE001 — o reset não pode falhar por isto
+            db.rollback()
+            logger.warning("Reset: coleta imediata em %s falhou: %s", inst.name, exc)
 
 
 def status(db: Session) -> dict[str, Any]:
@@ -773,11 +841,18 @@ def status(db: Session) -> dict[str, Any]:
 # --------------------------------------------------------------------------- #
 # Diretor
 # --------------------------------------------------------------------------- #
-def _execute_action(phase: SimulationPhase) -> None:
+def _execute_action(phase: SimulationPhase, generation: int | None = None) -> None:
     """
     Roda a ação de uma fase numa sessão própria. Falha vira evento no log e o
     roteiro segue — uma demo nunca deve travar.
+
+    `generation` é a execução em que a ação foi despachada: se a simulação foi
+    parada (ou reiniciada) enquanto ela esperava na fila, a ação é descartada em
+    vez de gravar backups e tarefas fora do seu tempo.
     """
+    if generation is not None and generation != _current_generation():
+        logger.info("Simulação: ação de %s descartada (execução encerrada).", phase.value)
+        return
     action = _PHASE_ACTIONS.get(phase)
     if action is None:
         return
@@ -803,7 +878,12 @@ def _dispatch_action(phase: SimulationPhase) -> None:
     dedicada, as fases avançam no horário e as ações continuam serializadas
     entre si.
     """
-    _ACTION_EXECUTOR.submit(_execute_action, phase)
+    _ACTION_EXECUTOR.submit(_execute_action, phase, _current_generation())
+
+
+def shutdown_action_executor() -> None:
+    """Espera a ação em curso terminar — chamado no shutdown do app."""
+    _ACTION_EXECUTOR.shutdown(wait=True)
 
 
 def advance_once() -> None:

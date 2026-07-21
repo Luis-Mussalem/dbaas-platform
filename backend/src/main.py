@@ -125,6 +125,12 @@ async def lifespan(app: FastAPI):
     await replication_poller_task
     for task in demo_tasks:
         await task
+    if demo_tasks:
+        # A thread das ações do roteiro é um executor próprio, fora do event
+        # loop: sem este join, um pg_dump em curso é abandonado no meio.
+        from src.services.demo_simulation import shutdown_action_executor
+
+        shutdown_action_executor()
     logger.info("Encerramento concluído.")
 
 

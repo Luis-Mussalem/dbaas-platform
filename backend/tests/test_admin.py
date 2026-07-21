@@ -12,6 +12,7 @@ Sem Docker: nada aqui toca em containers — só lógica de agregação SQL.
 from datetime import datetime, timedelta, timezone
 
 from src.models.alert import AlertEvent, AlertRule, AlertCondition, AlertSeverity
+from src.models.audit_log import AuditLog
 from src.models.backup import Backup, BackupStatus
 from src.models.database_instance import DatabaseInstance, InstanceStatus
 from src.models.instance_status_history import InstanceStatusHistory
@@ -237,8 +238,17 @@ def test_audit_log_requires_auth(client):
 def test_audit_log_lists_recent_first(client, auth_headers, db):
     # Superuser sem header vê todas as entradas (incl. NULL-company).
     headers, _ = auth_headers(is_superuser=True)
-    admin_service.write_audit_log(db, action="login", resource_type="auth")
-    admin_service.write_audit_log(db, action="instance_created", resource_type="instance")
+    # Timestamps EXPLÍCITOS e distintos: escrever as duas entradas em sequência
+    # deixava a ordem à mercê da resolução do relógio do banco, e o teste falhava
+    # de vez em quando. A ordenação é o que está sendo verificado — o empate, não.
+    now = datetime.now(timezone.utc)
+    db.add_all([
+        AuditLog(action="login", resource_type="auth",
+                 timestamp=now - timedelta(minutes=5)),
+        AuditLog(action="instance_created", resource_type="instance",
+                 timestamp=now),
+    ])
+    db.commit()
 
     resp = client.get(AUDIT, headers=headers)
     assert resp.status_code == 200
