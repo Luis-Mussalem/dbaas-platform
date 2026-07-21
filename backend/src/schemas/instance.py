@@ -4,6 +4,8 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.models.alert import AlertSeverity
+from src.models.backup import BackupStatus
 from src.models.database_instance import Environment, InstanceStatus
 
 
@@ -50,3 +52,29 @@ class InstanceRead(InstanceBase):
     created_at: datetime
     updated_at: datetime
     deleted_at: Optional[datetime] = None
+
+
+class InstanceSummary(BaseModel):
+    """
+    Estado agregado de uma instância para o card da frota.
+
+    Todo campo é opcional porque uma instância recém-criada (ou parada) ainda
+    não tem coleta, alerta nem backup: o card mostra "—" em vez de zero, que
+    seria uma afirmação falsa sobre a instância.
+    """
+
+    instance_id: uuid.UUID
+    queries_per_second: Optional[float] = None
+    p95_latency_ms: Optional[float] = None
+    db_size_bytes: Optional[float] = None
+    # Crescimento nas últimas 24h; pode ser negativo (após VACUUM FULL/DROP).
+    size_delta_24h_bytes: Optional[float] = None
+    open_alerts: int = 0
+    max_alert_severity: Optional[AlertSeverity] = None
+    last_backup_at: Optional[datetime] = None
+    last_backup_status: Optional[BackupStatus] = None
+    uptime_30d_pct: Optional[float] = None
+
+
+class FleetSummaryResponse(BaseModel):
+    instances: list[InstanceSummary]

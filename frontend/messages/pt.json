@@ -333,10 +333,18 @@
     "title": "Ajuda"
   },
   "InstanceCard": {
-    "cacheHit": "cache hit",
+    "backupAgo": "Backup {ago}",
+    "backupFailed": "Backup falhou",
+    "backupNone": "Sem backup ainda",
+    "capacity": "{used} / {total}",
     "connections": "conexões",
-    "size": "tamanho",
-    "storage": "Armazenamento"
+    "growth24h": "{direction, select, up {+{size} em 24h} down {-{size} em 24h} other {estável em 24h}}",
+    "milliseconds": "{value} ms",
+    "openAlerts": "{count, plural, one {# alerta} other {# alertas}}",
+    "p95": "latência p95",
+    "storage": "Armazenamento",
+    "throughput": "consultas/s",
+    "uptime30d": "{pct}% no ar · 30d"
   },
   "InstanceDetail": {
     "activeFor": "ativo há {days}d",

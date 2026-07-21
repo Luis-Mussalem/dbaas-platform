@@ -4,6 +4,7 @@ import type {
   TokenResponse,
   Instance,
   InstanceCreate,
+  FleetSummary,
   Backup,
   BackupSchedule,
   MetricsSnapshot,
@@ -204,6 +205,13 @@ export async function listCompanies(): Promise<Company[]> {
 
 export async function listInstances(): Promise<Instance[]> {
   return request<Instance[]>("/instances");
+}
+
+// Estado agregado de TODAS as instâncias do escopo numa chamada. Existe para
+// o grid de cards: sem ela, cada card puxaria alertas, backups, uptime e
+// métricas por conta própria (N instâncias × 4 requests a cada poll).
+export async function getFleetSummary(): Promise<FleetSummary> {
+  return request<FleetSummary>("/instances/fleet-summary");
 }
 
 export async function getInstance(id: string): Promise<Instance> {

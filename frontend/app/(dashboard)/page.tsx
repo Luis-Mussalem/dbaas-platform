@@ -4,6 +4,7 @@ import { useMemo, useState, useSyncExternalStore } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useInstances } from "@/hooks/use-instances";
 import { useDashboard } from "@/hooks/use-dashboard";
+import { useFleetSummary } from "@/hooks/use-fleet-summary";
 import { useSimulation } from "@/context/SimulationProvider";
 import { InstanceCard } from "@/components/InstanceCard";
 import { ActivityFeed } from "@/components/ActivityFeed";
@@ -32,6 +33,9 @@ export default function PainelPage() {
   const { dataPollMs } = useSimulation();
   const { instances, isLoading: loadingInstances } = useInstances(dataPollMs);
   const { summary, isLoading: loadingSummary } = useDashboard(dataPollMs);
+  // Agregado por instância (alertas, backup, uptime, throughput) para os cards,
+  // numa requisição só em vez de quatro por card.
+  const { summaries } = useFleetSummary(dataPollMs);
   const [envFilter, setEnvFilter] = useState<EnvFilter>("all");
 
   const isLoading = loadingInstances || loadingSummary;
@@ -102,7 +106,11 @@ export default function PainelPage() {
           ) : (
             <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
               {visibleInstances.map((instance) => (
-                <InstanceCard key={instance.id} instance={instance} />
+                <InstanceCard
+                  key={instance.id}
+                  instance={instance}
+                  summary={summaries.get(instance.id)}
+                />
               ))}
             </div>
           )}

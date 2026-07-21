@@ -57,6 +57,22 @@ DEMO_PASSWORD = "DemoPass123!"
 
 MEMBER_NAMES = ["ana", "bruno", "carla", "diego"]
 
+# Tabela de lastro de armazenamento (ver _fill_storage).
+BALLAST_TABLE = "storage_ballast"
+
+# Ocupação alvo por ambiente, contra o plano de 1 GB declarado em COMPANIES:
+# ~25% em produção, ~10% em staging. Números escolhidos para a barra de storage
+# do card ter o que mostrar sem o seed gravar gigabytes na máquina de quem clona.
+_BALLAST_TARGET_BYTES = {
+    Environment.PRODUCTION: 250 * 1024 ** 2,
+    Environment.STAGING: 100 * 1024 ** 2,
+}
+
+# Linhas por lote. ~640 bytes por linha → ~32 MB por lote; o teto de lotes é a
+# proteção contra um loop infinito se pg_database_size não subir como esperado.
+_BALLAST_BATCH_ROWS = 50_000
+_BALLAST_MAX_BATCHES = 40
+
 # Configuração por empresa: região, admin, dataset (csv/tabela/DDL) e as 2
 # instâncias (nome, ambiente, cpu, memória MB, storage GB). A ordem das colunas
 # no DDL bate com o cabeçalho do CSV (necessário para o COPY).
@@ -81,8 +97,8 @@ COMPANIES: dict[str, dict] = {
             )
         """,
         "instances": [
-            ("neptune-payments-prod", Environment.PRODUCTION, 2, 2048, 50),
-            ("neptune-payments-staging", Environment.STAGING, 1, 1024, 20),
+            ("neptune-payments-prod", Environment.PRODUCTION, 2, 2048, 1),
+            ("neptune-payments-staging", Environment.STAGING, 1, 1024, 1),
         ],
     },
     "Saturn Music Store": {
@@ -104,8 +120,8 @@ COMPANIES: dict[str, dict] = {
             )
         """,
         "instances": [
-            ("saturn-store-prod", Environment.PRODUCTION, 2, 2048, 50),
-            ("saturn-store-staging", Environment.STAGING, 1, 1024, 20),
+            ("saturn-store-prod", Environment.PRODUCTION, 2, 2048, 1),
+            ("saturn-store-staging", Environment.STAGING, 1, 1024, 1),
         ],
     },
     "Jupiter Clothing": {
@@ -127,8 +143,8 @@ COMPANIES: dict[str, dict] = {
             )
         """,
         "instances": [
-            ("jupiter-clothing-prod", Environment.PRODUCTION, 2, 2048, 50),
-            ("jupiter-clothing-staging", Environment.STAGING, 1, 1024, 20),
+            ("jupiter-clothing-prod", Environment.PRODUCTION, 2, 2048, 1),
+            ("jupiter-clothing-staging", Environment.STAGING, 1, 1024, 1),
         ],
     },
 }
@@ -221,6 +237,57 @@ def _load_dataset(prod: DatabaseInstance, table: str, ddl: str, csv_name: str) -
     return count
 
 
+def _fill_storage(inst: DatabaseInstance) -> None:
+    """
+    Levar o banco até a ocupação alvo do seu ambiente, gravando dados REAIS.
+
+    Um PostgreSQL recém-provisionado ocupa ~8 MB. Contra qualquer plano de
+    armazenamento plausível isso arredonda para 0%, e a barra do card fica
+    morta — a instância parece vazia mesmo depois da simulação de uso.
+
+    A alternativa seria multiplicar `db_size_bytes` na exibição, mas isso é
+    inventar número: o resto da plataforma (crescimento em 24h, tela de schema,
+    tamanho do backup) passaria a mentir junto. Aqui as linhas existem de
+    verdade, `pg_database_size` mede o que está no disco e o backup as carrega.
+
+    O payload é hex aleatório (~640 B/linha): fica abaixo do limite de TOAST,
+    então é gravado inline e não é comprimido — bytes lógicos ≈ bytes em disco.
+
+    Idempotente: relê o tamanho a cada lote e para ao alcançar o alvo, então
+    reexecutar o seed não engorda o banco.
+    """
+    target = _BALLAST_TARGET_BYTES.get(inst.environment)
+    if target is None or not inst.connection_uri:
+        return
+
+    with psycopg.connect(decrypt_value(inst.connection_uri), autocommit=True) as conn:
+        conn.execute(
+            f"CREATE TABLE IF NOT EXISTS {BALLAST_TABLE} ("
+            "  id   BIGSERIAL PRIMARY KEY,"
+            "  blob TEXT NOT NULL"
+            ")"
+        )
+        for _ in range(_BALLAST_MAX_BATCHES):
+            size = conn.execute(
+                "SELECT pg_database_size(current_database())"
+            ).fetchone()[0]
+            if size >= target:
+                break
+            conn.execute(
+                f"INSERT INTO {BALLAST_TABLE} (blob) "
+                "SELECT (SELECT string_agg(md5(random()::text), '') "
+                "        FROM generate_series(1, 20)) "
+                "FROM generate_series(1, %s)",
+                (_BALLAST_BATCH_ROWS,),
+            )
+        else:
+            logger.warning(
+                "Seed demo: %s parou no teto de lotes sem atingir %d bytes",
+                inst.name,
+                target,
+            )
+
+
 def _seed_real(db, company: Company, admin: User, cfg: dict) -> None:
     """Provisiona containers reais e carrega o dataset na instância de produção."""
     prod = None
@@ -240,6 +307,14 @@ def _seed_real(db, company: Company, admin: User, cfg: dict) -> None:
             logger.info("Seed demo: provisionando %s ...", name)
             inst = asyncio.run(create_instance(db, data, admin))
             logger.info("Seed demo:   -> %s em %s:%s", inst.status.value, inst.host, inst.port)
+        elif inst.storage_gb != storage:
+            # Instância de um seed anterior, com o plano antigo: reconcilia. Sem
+            # isto a barra de storage do card continuaria calculada sobre uma
+            # capacidade que o seed não declara mais.
+            inst.storage_gb = storage
+            db.commit()
+        if inst.status == InstanceStatus.RUNNING:
+            _fill_storage(inst)
         if env == Environment.PRODUCTION:
             prod = inst
 

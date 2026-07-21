@@ -113,6 +113,26 @@ export interface Instance {
   deleted_at: string | null;
 }
 
+// Estado agregado por instância, para os cards da frota. Todo campo é opcional:
+// instância nova ou parada ainda não tem coleta/alerta/backup, e o card mostra
+// "—" em vez de zero (que seria uma afirmação falsa).
+export interface InstanceSummary {
+  instance_id: string;
+  queries_per_second: number | null;
+  p95_latency_ms: number | null;
+  db_size_bytes: number | null;
+  size_delta_24h_bytes: number | null;
+  open_alerts: number;
+  max_alert_severity: AlertSeverity | null;
+  last_backup_at: string | null;
+  last_backup_status: BackupStatus | null;
+  uptime_30d_pct: number | null;
+}
+
+export interface FleetSummary {
+  instances: InstanceSummary[];
+}
+
 export interface InstanceCreate {
   name: string;
   engine_version?: "14" | "15" | "16" | "17";

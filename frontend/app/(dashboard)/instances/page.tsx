@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useInstances } from "@/hooks/use-instances";
 import { useDashboard } from "@/hooks/use-dashboard";
+import { useFleetSummary } from "@/hooks/use-fleet-summary";
 import { InstanceCard } from "@/components/InstanceCard";
 import { EmptyState } from "@/components/EmptyState";
 import { EnvFilterBar } from "@/components/EnvFilterBar";
@@ -22,6 +23,7 @@ export default function InstancesPage() {
   // ambiente e a linha de KPIs (via useDashboard) para ficar como no design.
   const { instances, isLoading, error } = useInstances();
   const { summary } = useDashboard();
+  const { summaries } = useFleetSummary();
   const [envFilter, setEnvFilter] = useState<EnvFilter>("all");
 
   const visibleInstances = useMemo(
@@ -82,7 +84,11 @@ export default function InstancesPage() {
       ) : (
         <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
           {visibleInstances.map((instance) => (
-            <InstanceCard key={instance.id} instance={instance} />
+            <InstanceCard
+              key={instance.id}
+              instance={instance}
+              summary={summaries.get(instance.id)}
+            />
           ))}
         </div>
       )}

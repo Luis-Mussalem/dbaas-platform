@@ -29,7 +29,12 @@ only their own company; the admin superuser sees and switches between all.
   button (`/demo`) runs a scripted ~6 min demo — traffic, a real alert, `pg_dump`,
   VACUUM/ANALYZE — with a warning banner while simulated data exists and a reset that
   restores the real state (`services/demo_simulation.py` + `workload_simulator.py`,
-  off via `DEMO_MODE=false`). 312 tests, 82% backend coverage. Full phase detail and dependency map in [ROADMAP.md](ROADMAP.md).
+  off via `DEMO_MODE=false`). Fleet cards (2026-07-21) show operational state instead of
+  flat gauges — throughput, P95, storage used/plan with 24h growth, open alerts, last
+  backup and 30-day uptime — all from one `GET /instances/fleet-summary`
+  (`services/fleet_summary.py`); the seed writes real ballast rows (~250 MB prod /
+  ~100 MB staging against a 1 GB plan) so the storage bar reports measured bytes.
+  328 tests, 82% backend coverage. Full phase detail and dependency map in [ROADMAP.md](ROADMAP.md).
 - **i18n** — the UI is bilingual (EN default, PT via the top-bar toggle), using next-intl
   with the locale in a `NEXT_LOCALE` cookie (no `/[locale]/` in the URLs). ~460 keys in
   `messages/{en,pt}.json`; parity is enforced in CI by `npm run i18n:check`. Everything

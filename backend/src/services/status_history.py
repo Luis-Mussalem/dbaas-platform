@@ -91,28 +91,23 @@ def get_instance_uptime_pct(
     return _uptime_from_rows(rows, instance.created_at, datetime.now(timezone.utc))
 
 
-def get_fleet_uptime_pct(
-    db: Session, company_id: uuid.UUID | None = None
-) -> float | None:
+def get_uptime_pct_by_instance(
+    db: Session, instances: list[DatabaseInstance]
+) -> dict[uuid.UUID, float]:
     """
-    Uptime médio da frota: média simples do uptime por instância (não deletada),
-    escopada por empresa. None se nenhuma instância tem histórico ainda.
+    Uptime de 30 dias de várias instâncias de uma vez.
 
-    Uma única query traz todos os registros das instâncias no escopo; o
-    agrupamento por instância e o cálculo por instância acontecem em Python
-    (escala de portfólio — poucas instâncias; sem necessidade de view/cache).
+    Uma única query traz o histórico de todas; o agrupamento e o cálculo por
+    instância acontecem em Python (escala de portfólio — poucas instâncias; sem
+    necessidade de view/cache). Instância sem histórico fica FORA do dict, para
+    o chamador exibir "—" em vez de fabricar 0/100%.
     """
-    inst_q = db.query(DatabaseInstance).filter(DatabaseInstance.deleted_at.is_(None))
-    if company_id is not None:
-        inst_q = inst_q.filter(DatabaseInstance.company_id == company_id)
-    instances = inst_q.all()
     if not instances:
-        return None
+        return {}
 
-    instance_ids = [inst.id for inst in instances]
     rows = (
         db.query(InstanceStatusHistory)
-        .filter(InstanceStatusHistory.instance_id.in_(instance_ids))
+        .filter(InstanceStatusHistory.instance_id.in_([i.id for i in instances]))
         .order_by(InstanceStatusHistory.changed_at.asc())
         .all()
     )
@@ -122,14 +117,29 @@ def get_fleet_uptime_pct(
         by_instance.setdefault(row.instance_id, []).append(row)
 
     now = datetime.now(timezone.utc)
-    pcts = [
-        pct
+    return {
+        inst.id: pct
         for inst in instances
         if (
             pct := _uptime_from_rows(by_instance.get(inst.id, []), inst.created_at, now)
         )
         is not None
-    ]
+    }
+
+
+def get_fleet_uptime_pct(
+    db: Session, company_id: uuid.UUID | None = None
+) -> float | None:
+    """
+    Uptime médio da frota: média simples do uptime por instância (não deletada),
+    escopada por empresa. None se nenhuma instância tem histórico ainda.
+    """
+    inst_q = db.query(DatabaseInstance).filter(DatabaseInstance.deleted_at.is_(None))
+    if company_id is not None:
+        inst_q = inst_q.filter(DatabaseInstance.company_id == company_id)
+    instances = inst_q.all()
+
+    pcts = list(get_uptime_pct_by_instance(db, instances).values())
     if not pcts:
         return None
     return round(sum(pcts) / len(pcts), 2)

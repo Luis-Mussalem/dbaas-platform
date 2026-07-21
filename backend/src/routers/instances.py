@@ -11,7 +11,13 @@ from src.core.database import get_db
 from src.core.dependencies import get_current_user, get_instance_or_404
 from src.models.database_instance import InstanceStatus
 from src.models.user import User
-from src.schemas.instance import InstanceCreate, InstanceRead, InstanceUpdate
+from src.schemas.instance import (
+    FleetSummaryResponse,
+    InstanceCreate,
+    InstanceRead,
+    InstanceUpdate,
+)
+from src.services.fleet_summary import get_fleet_summary
 from src.services.instance import (
     create_instance,
     get_instance_by_id,
@@ -56,6 +62,23 @@ def list_all(
     current_user: User = Depends(get_current_user),
 ):
     return list_instances(db, current_user)
+
+
+# ATENÇÃO: precisa vir ANTES de /{instance_id}, senão "fleet-summary" é lido
+# como um UUID de instância e a rota devolve 422.
+@router.get("/fleet-summary", response_model=FleetSummaryResponse)
+def fleet_summary(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Estado agregado de todas as instâncias no escopo do usuário, numa chamada.
+
+    Existe para o grid de cards: sem ela, cada card puxaria alertas, backups,
+    uptime e métricas por conta própria (N instâncias × 4 requests a cada poll).
+    """
+    instances = list_instances(db, current_user)
+    return FleetSummaryResponse(instances=get_fleet_summary(db, instances))
 
 
 @router.get("/{instance_id}", response_model=InstanceRead)

@@ -333,10 +333,18 @@
     "title": "Help"
   },
   "InstanceCard": {
-    "cacheHit": "cache hit",
+    "backupAgo": "Backup {ago}",
+    "backupFailed": "Backup failed",
+    "backupNone": "No backup yet",
+    "capacity": "{used} / {total}",
     "connections": "connections",
-    "size": "size",
-    "storage": "Storage"
+    "growth24h": "{direction, select, up {+{size} in 24h} down {-{size} in 24h} other {flat in 24h}}",
+    "milliseconds": "{value} ms",
+    "openAlerts": "{count, plural, one {# alert} other {# alerts}}",
+    "p95": "p95 latency",
+    "storage": "Storage",
+    "throughput": "queries/s",
+    "uptime30d": "{pct}% uptime · 30d"
   },
   "InstanceDetail": {
     "activeFor": "active for {days}d",

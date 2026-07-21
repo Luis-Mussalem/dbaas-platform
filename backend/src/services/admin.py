@@ -9,10 +9,9 @@ from src.models.audit_log import AuditLog
 from src.models.backup import Backup, BackupStatus
 from src.models.database_instance import DatabaseInstance, InstanceStatus
 from src.models.maintenance import MaintenanceTask, TaskStatus
-from src.models.metric import Metric
 from src.models.user import User
 from src.schemas.admin import DashboardResponse
-from src.services import status_history
+from src.services import fleet_summary, status_history
 
 
 def _running_instance_ids(
@@ -31,51 +30,10 @@ def _running_instance_ids(
 def _compute_fleet_queries_per_second(
     db: Session, company_id: uuid.UUID | None
 ) -> float:
-    """
-    Throughput real da frota: soma das taxas de commit por instância.
-
-    Deriva a taxa dos dois pontos mais recentes do contador cumulativo
-    xact_commit (coletado a cada ~60s): (Δcommits / Δsegundos). Deltas negativos
-    (reset do contador após restart do Postgres) são descartados.
-    """
+    """Throughput real da frota: soma das taxas de commit por instância RUNNING."""
     instance_ids = _running_instance_ids(db, company_id)
-    if not instance_ids:
-        return 0.0
-
-    rn = func.row_number().over(
-        partition_by=Metric.instance_id,
-        order_by=Metric.collected_at.desc(),
-    ).label("rn")
-    subq = (
-        db.query(Metric.instance_id, Metric.value, Metric.collected_at, rn)
-        .filter(
-            Metric.instance_id.in_(instance_ids),
-            Metric.metric_name == "xact_commit",
-        )
-        .subquery()
-    )
-    rows = (
-        db.query(subq.c.instance_id, subq.c.value, subq.c.collected_at)
-        .filter(subq.c.rn <= 2)
-        .order_by(subq.c.instance_id, subq.c.rn)
-        .all()
-    )
-
-    by_instance: dict[uuid.UUID, list] = {}
-    for instance_id, value, collected_at in rows:
-        by_instance.setdefault(instance_id, []).append((value, collected_at))
-
-    total_qps = 0.0
-    for samples in by_instance.values():
-        if len(samples) < 2:
-            continue
-        (new_val, new_ts), (old_val, old_ts) = samples[0], samples[1]
-        dt = (new_ts - old_ts).total_seconds()
-        delta = new_val - old_val
-        if dt <= 0 or delta < 0:
-            continue
-        total_qps += delta / dt
-    return round(total_qps, 2)
+    rates = fleet_summary.queries_per_second_by_instance(db, instance_ids)
+    return round(sum(rates.values()), 2)
 
 
 def _compute_fleet_p95_latency(
@@ -86,27 +44,11 @@ def _compute_fleet_p95_latency(
     instância RUNNING que tenha a métrica. None se nenhuma tem (exibe "—").
     """
     instance_ids = _running_instance_ids(db, company_id)
-    if not instance_ids:
-        return None
-
-    rn = func.row_number().over(
-        partition_by=Metric.instance_id,
-        order_by=Metric.collected_at.desc(),
-    ).label("rn")
-    subq = (
-        db.query(Metric.instance_id, Metric.value, rn)
-        .filter(
-            Metric.instance_id.in_(instance_ids),
-            Metric.metric_name == "p95_query_latency_ms",
-        )
-        .subquery()
+    values = list(
+        fleet_summary.latest_metric_by_instance(
+            db, instance_ids, "p95_query_latency_ms"
+        ).values()
     )
-    values = [
-        value
-        for _, value in db.query(subq.c.instance_id, subq.c.value)
-        .filter(subq.c.rn == 1)
-        .all()
-    ]
     if not values:
         return None
     return round(sum(values) / len(values), 2)

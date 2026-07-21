@@ -181,6 +181,8 @@ def _connect(uri: str) -> psycopg.Connection:
 
 def _prepare(pool: _InstancePool, conn: psycopg.Connection) -> None:
     """Cria a tabela de escrita e descobre a tabela do dataset (uma vez)."""
+    from src.seed.demo import BALLAST_TABLE  # lazy: evita import circular
+
     conn.execute(
         psql.SQL(
             "CREATE TABLE IF NOT EXISTS {} ("
@@ -191,10 +193,13 @@ def _prepare(pool: _InstancePool, conn: psycopg.Connection) -> None:
             ")"
         ).format(psql.Identifier(WORKLOAD_TABLE))
     )
+    # A tabela de lastro do seed é a maior do banco de longe, mas é volume
+    # morto: escolhê-la como dataset faria o self-join "pesado" do mix rodar
+    # sobre centenas de milhares de linhas e travar o backend.
     row = conn.execute(
         "SELECT relname FROM pg_stat_user_tables "
-        "WHERE relname <> %s ORDER BY n_live_tup DESC LIMIT 1",
-        (WORKLOAD_TABLE,),
+        "WHERE relname <> ALL(%s) ORDER BY n_live_tup DESC LIMIT 1",
+        ([WORKLOAD_TABLE, BALLAST_TABLE],),
     ).fetchone()
     pool.dataset_table = row[0] if row else None
     pool.prepared = True

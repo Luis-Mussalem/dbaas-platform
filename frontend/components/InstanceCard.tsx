@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import type { Instance } from "@/lib/types";
+import { TriangleAlert, DatabaseBackup, ShieldCheck } from "lucide-react";
+import type { Instance, InstanceSummary } from "@/lib/types";
 import { useMetrics } from "@/hooks/use-metrics";
 import { useMetricHistory } from "@/hooks/use-metric-history";
 import { useSimulation } from "@/context/SimulationProvider";
@@ -13,10 +14,22 @@ import { EnvBadge } from "@/components/EnvBadge";
 import { RegionTag } from "@/components/RegionTag";
 import { Sparkline } from "@/components/Sparkline";
 
-export function InstanceCard({ instance }: { instance: Instance }) {
+// Largura mínima da barra de storage, em %. Um banco pequeno num plano grande
+// dá uma fração de 1%: sem piso, a barra some e o card sugere "sem dados"
+// quando na verdade a leitura é boa.
+const MIN_BAR_PCT = 1.5;
+
+export function InstanceCard({
+  instance,
+  summary,
+}: {
+  instance: Instance;
+  // Ausente enquanto o agregado da frota carrega — o card renderiza sem ele.
+  summary?: InstanceSummary;
+}) {
   const t = useTranslations("InstanceCard");
   const tc = useTranslations("Common");
-  const { bytes, ratio } = useFormatters();
+  const { bytes, ratio, number, ago } = useFormatters();
   // Métricas ao vivo do banco (poll a cada 10s pelo hook). Para instâncias
   // não-RUNNING, o backend devolve a última leitura armazenada (ou vazio).
   const { metrics } = useMetrics(instance.id);
@@ -38,13 +51,17 @@ export function InstanceCard({ instance }: { instance: Instance }) {
 
   const connActive = m.connections_active;
   const connMax = m.connections_max;
-  const cacheHit = m.cache_hit_ratio;
-  const sizeBytes = m.db_size_bytes;
+  // Tamanho: o do agregado quando existe (mesma leitura, já paga na requisição
+  // da frota) e o do poll ao vivo como fallback.
+  const sizeBytes = summary?.db_size_bytes ?? m.db_size_bytes;
 
   // Barra de armazenamento: tamanho atual do banco vs capacidade contratada.
   const capacityBytes = instance.storage_gb ? instance.storage_gb * 1024 ** 3 : null;
   const storagePct =
     capacityBytes && sizeBytes ? Math.min(100, (sizeBytes / capacityBytes) * 100) : null;
+
+  const growth = summary?.size_delta_24h_bytes;
+  const growthDirection = growth == null || growth === 0 ? "flat" : growth > 0 ? "up" : "down";
 
   // A linha do sparkline usa a cor de IDENTIDADE do país (mesma do avatar),
   // exceto quando falhou — aí o vermelho de status prevalece como sinal forte.
@@ -52,6 +69,10 @@ export function InstanceCard({ instance }: { instance: Instance }) {
     instance.status === "failed"
       ? "var(--danger)"
       : instanceLineColor(instance.region, instance.environment);
+
+  const openAlerts = summary?.open_alerts ?? 0;
+  const alertColor =
+    summary?.max_alert_severity === "critical" ? "var(--danger)" : "var(--warn)";
 
   return (
     <Link
@@ -85,17 +106,24 @@ export function InstanceCard({ instance }: { instance: Instance }) {
         <HealthBadge status={instance.status} />
       </div>
 
-      {/* ambiente (tag) */}
-      {instance.environment && (
-        <div>
-          <EnvBadge environment={instance.environment} />
-        </div>
-      )}
+      {/* ambiente (tag) · alertas abertos */}
+      <div className="flex items-center justify-between gap-2">
+        {instance.environment ? <EnvBadge environment={instance.environment} /> : <span />}
+        {openAlerts > 0 && (
+          <span
+            className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11.5px] font-medium"
+            style={{ color: alertColor, backgroundColor: `color-mix(in srgb, ${alertColor} 14%, transparent)` }}
+          >
+            <TriangleAlert className="h-3 w-3" />
+            {t("openAlerts", { count: openAlerts })}
+          </span>
+        )}
+      </div>
 
-      {/* sparkline real: conexões na última hora */}
+      {/* sparkline real: conexões nas últimas 24h */}
       <Sparkline data={connHistory} color={sparkColor} className="h-12 w-full" />
 
-      {/* métricas ao vivo */}
+      {/* métricas ao vivo: as três que se movem com a carga */}
       <div className="flex items-center justify-between">
         <Metric
           label={t("connections")}
@@ -106,34 +134,75 @@ export function InstanceCard({ instance }: { instance: Instance }) {
           }
         />
         <Metric
-          label={t("cacheHit")}
-          value={cacheHit != null ? `${ratio(cacheHit)}%` : tc("none")}
+          label={t("throughput")}
+          value={
+            summary?.queries_per_second != null
+              ? number(Math.round(summary.queries_per_second))
+              : tc("none")
+          }
           align="right"
         />
-        <Metric label={t("size")} value={bytes(sizeBytes)} align="right" />
+        <Metric
+          label={t("p95")}
+          value={
+            summary?.p95_latency_ms != null
+              ? t("milliseconds", { value: ratio(summary.p95_latency_ms) })
+              : tc("none")
+          }
+          align="right"
+        />
       </div>
 
-      {/* armazenamento */}
+      {/* armazenamento: usado / plano, com o crescimento das últimas 24h */}
       <div>
         <div className="mb-1.5 flex items-center justify-between text-[11.5px] text-fg-3">
           <span>{t("storage")}</span>
           <span className="font-mono text-fg-2">
-            {storagePct != null
-              ? `${Math.round(storagePct)}%`
-              : instance.storage_gb
-                ? `${instance.storage_gb} GB`
-                : tc("none")}
+            {capacityBytes
+              ? t("capacity", { used: bytes(sizeBytes), total: bytes(capacityBytes) })
+              : bytes(sizeBytes)}
           </span>
         </div>
         <div className="h-1 overflow-hidden rounded-full bg-bg-2">
           <div
             className="h-full rounded-full transition-all"
             style={{
-              width: `${storagePct ?? 0}%`,
+              width: storagePct ? `${Math.max(storagePct, MIN_BAR_PCT)}%` : "0%",
               backgroundColor: (storagePct ?? 0) > 85 ? "var(--warn)" : "var(--brand)",
             }}
           />
         </div>
+        <div className="mt-1.5 flex items-center justify-between text-[11.5px] text-fg-3">
+          <span className="font-mono">
+            {storagePct != null ? `${ratio(storagePct)}%` : tc("none")}
+          </span>
+          {growth != null && (
+            <span>
+              {t("growth24h", {
+                direction: growthDirection,
+                size: bytes(Math.abs(growth)),
+              })}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* rodapé: sinais de operação — o que um DBA olha antes de abrir a instância */}
+      <div className="flex items-center gap-3 border-t border-border pt-2.5 text-[11.5px] text-fg-3">
+        <span className="inline-flex items-center gap-1.5">
+          <DatabaseBackup className="h-3.5 w-3.5 shrink-0" />
+          {summary?.last_backup_at
+            ? summary.last_backup_status === "failed"
+              ? t("backupFailed")
+              : t("backupAgo", { ago: ago(summary.last_backup_at) })
+            : t("backupNone")}
+        </span>
+        {summary?.uptime_30d_pct != null && (
+          <span className="ml-auto inline-flex items-center gap-1.5">
+            <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
+            {t("uptime30d", { pct: ratio(summary.uptime_30d_pct, 2) })}
+          </span>
+        )}
       </div>
     </Link>
   );
