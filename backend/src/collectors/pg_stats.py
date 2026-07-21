@@ -58,29 +58,39 @@ def collect_base_metrics(conn: psycopg.Connection) -> dict[str, float]:
         return {k: float(v) if v is not None else 0.0 for k, v in row.items()}
 
 
-def collect_p95_latency(conn: psycopg.Connection) -> float | None:
+def collect_latency_percentiles(conn: psycopg.Connection) -> dict[str, float]:
     """
-    P95 do tempo médio de execução (ms) entre as queries monitoradas.
+    P50/P95/P99 do tempo médio de execução (ms) entre as queries monitoradas.
 
-    Aproximação honesta: percentil sobre o mean_exec_time por *fingerprint* de
+    Aproximação honesta: percentis sobre o mean_exec_time por *fingerprint* de
     query — o pg_stat_statements agrega por query normalizada e não guarda
-    amostras por execução individual. Requer a extensão instalada; instâncias
-    sem ela retornam None (mesmo degrade gracioso de collect_slow_queries),
-    caso em que a métrica simplesmente não é persistida naquele ciclo.
+    amostras por execução individual. Os três percentis saem da MESMA query
+    (percentile_cont aceita um array), então medir p50 e p99 além do p95 não
+    custa nenhuma ida extra ao banco.
+
+    Requer a extensão instalada; instâncias sem ela devolvem {} (mesmo degrade
+    gracioso de collect_slow_queries), caso em que as métricas simplesmente não
+    são persistidas naquele ciclo.
     """
     try:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT percentile_cont(0.95) WITHIN GROUP (ORDER BY mean_exec_time) "
+                "SELECT percentile_cont(ARRAY[0.5, 0.95, 0.99]) "
+                "WITHIN GROUP (ORDER BY mean_exec_time) "
                 "FROM pg_stat_statements"
             )
             row = cur.fetchone()
-            if row and row[0] is not None:
-                return round(float(row[0]), 2)
-            return None
+            if not row or row[0] is None:
+                return {}
+            p50, p95, p99 = row[0]
+            return {
+                "p50_query_latency_ms": round(float(p50), 2),
+                "p95_query_latency_ms": round(float(p95), 2),
+                "p99_query_latency_ms": round(float(p99), 2),
+            }
     except Exception as exc:
-        logger.warning("p95 latency não disponível nesta instância: %s", exc)
-        return None
+        logger.warning("Percentis de latência não disponíveis nesta instância: %s", exc)
+        return {}
 
 
 def collect_slow_queries(

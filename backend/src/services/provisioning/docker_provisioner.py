@@ -250,6 +250,18 @@ class DockerProvisioner(ProvisionerBase):
                     f"GRANT pg_signal_backend TO {quoted_user}"
                 )
 
+                # Permitir zerar as estatísticas de query. pg_monitor concede só
+                # LEITURA do pg_stat_statements; sem este EXECUTE, o usuário da
+                # instância não consegue resetar a view — e as queries pesadas de
+                # provisionamento (COPY do dataset, carga inicial) ficam para
+                # sempre no p99, descrevendo o seed em vez do serviço.
+                # A assinatura é explícita porque a função tem três parâmetros
+                # com default: GRANT ... ON FUNCTION f() não casaria com ela.
+                cur.execute(
+                    f"GRANT EXECUTE ON FUNCTION "
+                    f"pg_stat_statements_reset(oid, oid, bigint) TO {quoted_user}"
+                )
+
                 # Conceder privilégio REPLICATION — necessário para pg_basebackup
                 # (backup físico) conectar a esta instância via protocolo de replicação.
                 cur.execute(

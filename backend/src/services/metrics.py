@@ -16,7 +16,7 @@ from src.collectors.pg_stats import (
     collect_explain,
     collect_index_stats,
     collect_locks,
-    collect_p95_latency,
+    collect_latency_percentiles,
     collect_schema,
     collect_slow_queries,
 )
@@ -65,12 +65,12 @@ def collect_and_store(db: Session, instance: DatabaseInstance) -> int:
 
     Retorna o número de métricas persistidas.
     """
-    # Uma única conexão coleta as métricas base E o p95 de latência (evita abrir
-    # duas conexões por ciclo). O p95 vem do pg_stat_statements e degrada para
-    # None em instâncias sem a extensão.
+    # Uma única conexão coleta as métricas base E os percentis de latência
+    # (evita abrir duas conexões por ciclo). Os percentis vêm do
+    # pg_stat_statements e degradam para {} em instâncias sem a extensão.
     with get_connection(instance) as conn:
         raw = collect_base_metrics(conn)
-        p95 = collect_p95_latency(conn)
+        percentiles = collect_latency_percentiles(conn)
 
     if not raw:
         return 0
@@ -85,15 +85,15 @@ def collect_and_store(db: Session, instance: DatabaseInstance) -> int:
         )
         for name, value in raw.items()
     ]
-    if p95 is not None:
-        metrics.append(
-            Metric(
-                instance_id=instance.id,
-                metric_name="p95_query_latency_ms",
-                value=p95,
-                collected_at=now,
-            )
+    metrics.extend(
+        Metric(
+            instance_id=instance.id,
+            metric_name=name,
+            value=value,
+            collected_at=now,
         )
+        for name, value in percentiles.items()
+    )
 
     db.add_all(metrics)
     db.commit()
