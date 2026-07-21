@@ -401,6 +401,8 @@ export interface SimulationStatus {
   phase_index: number;
   phase_count: number;
   phase_progress: number;
+  // Progresso do roteiro inteiro (0-1), monotônico — o da fase zera a cada etapa.
+  progress: number;
   has_simulated_data: boolean;
   speed_factor: number;
   started_at: string | null;

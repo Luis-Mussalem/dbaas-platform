@@ -26,6 +26,9 @@ class SimulationStatus(BaseModel):
     phase_index: int
     phase_count: int
     phase_progress: float
+    # Progresso do roteiro inteiro (0-1). É o que a barra do banner mostra:
+    # o da fase zera a cada etapa e parecia andar para trás.
+    progress: float = 0.0
     has_simulated_data: bool
     speed_factor: float
     started_at: datetime | None = None

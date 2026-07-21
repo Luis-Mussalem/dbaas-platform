@@ -47,11 +47,12 @@ export function SimulationBanner() {
       </span>
 
       {inScript && (
-        // Progresso da etapa atual — não existe em regime, de propósito.
+        // Progresso do ROTEIRO, não da etapa: a barra por etapa zerava a cada
+        // transição e parecia andar de ré. Em regime ela some, de propósito.
         <div className="h-1.5 w-28 shrink-0 overflow-hidden rounded-full bg-warn/20">
           <div
             className="h-full rounded-full bg-warn transition-[width] duration-1000 ease-linear"
-            style={{ width: `${Math.round(status.phase_progress * 100)}%` }}
+            style={{ width: `${Math.round(status.progress * 100)}%` }}
           />
         </div>
       )}

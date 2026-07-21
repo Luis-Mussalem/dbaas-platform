@@ -159,11 +159,21 @@ spanning 3-4 collection cycles so the alert really opens from a measured value:
 A phase that fails (no Docker, no `pg_dump`) is logged into the state's event
 list and the script moves on — a demo must never hang.
 
-**Virtual clock.** `virtual_now()` maps real elapsed time onto
-`started_at + elapsed × speed_factor` (144 by default). The workload's
-`target_connections(name, timestamp)` is a pure function of that clock, so a 24h
-curve draws itself in ten minutes. Only traffic uses virtual time; everything
-persisted is stamped with the real one.
+**Clocks.** Two deliberate choices here:
+
+- *Monotonic scheduling.* Phase durations, the progress bar and the event log are
+  measured with `time.monotonic()`, never with wall-clock deltas. A dev machine
+  whose clock steps backwards (WSL2 does, by tens of seconds) would otherwise
+  delay every remaining phase by the same amount — a 1m40 script became 2m30 —
+  and drive the progress bar in reverse. The wall clock is still what gets
+  persisted and displayed; it just never measures a duration.
+- *Virtual clock.* `virtual_now()` maps elapsed time onto
+  `started_at + elapsed × speed_factor` (144 by default), so the workload's
+  `target_connections(name, timestamp)` — a pure function of that clock — draws a
+  24h curve in ten minutes. Only traffic uses virtual time.
+
+The UI's bar reports progress of the **whole script**, not of the current phase:
+a per-phase bar resets at every transition and reads as going backwards.
 
 ### The workload generator
 

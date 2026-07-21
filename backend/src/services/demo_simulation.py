@@ -34,6 +34,8 @@ Escopo: só instâncias da frota demo (`notes == DEMO_MARKER`). Com
 """
 import asyncio
 import logging
+import threading
+import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
@@ -71,8 +73,11 @@ PHASE_DURATIONS: dict[SimulationPhase, timedelta] = {
     SimulationPhase.BACKFILL: timedelta(seconds=5),
     SimulationPhase.WARMUP: timedelta(seconds=18),
     SimulationPhase.ALERT: timedelta(seconds=22),
-    SimulationPhase.BACKUP: timedelta(seconds=20),
-    SimulationPhase.MAINTENANCE: timedelta(seconds=15),
+    # BACKUP e MAINTENANCE são curtas de propósito: os três pg_dump levam ~0.4s
+    # somados e as tarefas de manutenção poucos segundos. O tempo aqui é para o
+    # visitante LER o que aconteceu, não para esperar o trabalho terminar.
+    SimulationPhase.BACKUP: timedelta(seconds=14),
+    SimulationPhase.MAINTENANCE: timedelta(seconds=14),
     SimulationPhase.RECOVER: timedelta(seconds=22),
 }
 
@@ -116,6 +121,11 @@ ACCELERATED_INTERVAL_SECONDS = 5
 # dura 18s.
 ACCELERATED_WORKLOAD_INTERVAL_SECONDS = 5
 
+# Fatia de espera dos loops que aceleram durante a simulação: eles reavaliam o
+# intervalo a cada fatia, então começar uma simulação encurta o ciclo em poucos
+# segundos em vez de só no ciclo seguinte.
+_WAIT_SLICE_SECONDS = 2
+
 # Margem do limiar do alerta: a regra é criada logo ABAIXO do valor medido
 # naquele instante, para o evento abrir a partir de dado real no ciclo seguinte.
 _ALERT_MARGIN_RATIO = 0.85
@@ -128,9 +138,70 @@ _MAX_EVENTS = 40
 # carga, não uma demonstração).
 _ACTION_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="demo-sim")
 
+# Referência MONOTÔNICA do início da fase e do roteiro (chave → time.monotonic()).
+#
+# O cronômetro do roteiro não pode depender do relógio de parede: neste ambiente
+# (WSL2) ele salta dezenas de segundos para frente e para trás, e um salto para
+# trás atrasava todas as fases pelo mesmo valor (um roteiro de 1m40 virava 2m30)
+# e fazia a barra de progresso andar de ré. O relógio de parede continua no banco
+# — é ele que a UI exibe e que sobrevive a restart —, mas quem mede *duração* é
+# time.monotonic(), que nunca anda para trás.
+#
+# Estado de processo: num restart do backend o dicionário volta vazio e o cálculo
+# cai para o relógio de parede (ver _phase_elapsed), que é o melhor disponível ali.
+_PHASE_KEY = "phase"
+_RUN_KEY = "run"
+_MONOTONIC_REFS: dict[str, float] = {}
+
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _mark_monotonic(key: str) -> None:
+    _MONOTONIC_REFS[key] = time.monotonic()
+
+
+# Cache curto do estado lido pelos loops (ver _read_live_state).
+_STATE_CACHE_TTL = 1.0
+_state_cache: tuple[float, tuple[Any, datetime | None, float]] | None = None
+_state_cache_lock = threading.Lock()
+
+
+def _state_cache_get():
+    with _state_cache_lock:
+        if _state_cache is None:
+            return None
+        stamped_at, value = _state_cache
+        return value if time.monotonic() - stamped_at < _STATE_CACHE_TTL else None
+
+
+def _state_cache_put(value) -> None:
+    global _state_cache
+    with _state_cache_lock:
+        _state_cache = (time.monotonic(), value)
+
+
+def invalidate_state_cache() -> None:
+    """Descarta o cache — chamado por start/stop/reset para a UI reagir na hora."""
+    global _state_cache
+    with _state_cache_lock:
+        _state_cache = None
+
+
+def _monotonic_elapsed(key: str, fallback_start: datetime | None) -> float | None:
+    """
+    Segundos decorridos desde a marca `key`, imune a saltos do relógio.
+
+    Sem marca em memória (processo reiniciado no meio de uma simulação), usa o
+    timestamp persistido. Devolve None quando não há nem um nem outro.
+    """
+    ref = _MONOTONIC_REFS.get(key)
+    if ref is not None:
+        return time.monotonic() - ref
+    if fallback_start is not None:
+        return max(0.0, (_now() - fallback_start).total_seconds())
+    return None
 
 
 # --------------------------------------------------------------------------- #
@@ -157,11 +228,26 @@ def _log_event(state: DemoSimulation, phase: SimulationPhase, message: str) -> N
     """
     events = list(state.events or [])
     events.append({
-        "at": _now().isoformat(),
+        "at": _event_timestamp(state).isoformat(),
         "phase": phase.value,
         "message": message,
     })
     state.events = events[-_MAX_EVENTS:]
+
+
+def _event_timestamp(state: DemoSimulation) -> datetime:
+    """
+    Instante do evento: início da execução + tempo monotônico decorrido.
+
+    Ler o relógio de parede a cada evento deixava o log fora de ordem quando ele
+    saltava (um evento chegava a ficar 50s no futuro, antes dos seguintes).
+    Ancorar no início e medir a duração de forma monotônica mantém a sequência
+    coerente com o que o visitante viu acontecer.
+    """
+    elapsed = _MONOTONIC_REFS.get(_RUN_KEY)
+    if state.started_at is None or elapsed is None:
+        return _now()
+    return state.started_at + timedelta(seconds=time.monotonic() - elapsed)
 
 
 def log_event_atomic(phase: SimulationPhase, message: str) -> None:
@@ -223,13 +309,25 @@ def _read_live_state() -> tuple[SimulationPhase, datetime | None, float]:
 
     Chamado por loops que rodam fora de contexto HTTP e não têm sessão à mão.
     Falha de banco devolve IDLE: sem simulação, ninguém gera carga.
+
+    Cacheado por _STATE_CACHE_TTL: durante a simulação isto é consultado várias
+    vezes por ciclo por três loops distintos, e cada consulta tomava uma conexão
+    do pool só para ler uma linha que muda no máximo a cada 2s.
     """
+    cached = _state_cache_get()
+    if cached is not None:
+        return cached
+
     db = SessionLocal()
     try:
         state = db.query(DemoSimulation).first()
-        if state is None:
-            return SimulationPhase.IDLE, None, 1.0
-        return state.phase, state.started_at, state.speed_factor or 1.0
+        value = (
+            (SimulationPhase.IDLE, None, 1.0)
+            if state is None
+            else (state.phase, state.started_at, state.speed_factor or 1.0)
+        )
+        _state_cache_put(value)
+        return value
     except Exception:  # noqa: BLE001 — leitura best-effort de estado de demo
         return SimulationPhase.IDLE, None, 1.0
     finally:
@@ -247,7 +345,10 @@ def virtual_now() -> datetime:
     phase, started_at, factor = _read_live_state()
     if phase == SimulationPhase.IDLE or started_at is None:
         return _now()
-    return started_at + (_now() - started_at) * factor
+    # Duração medida no relógio monotônico; o instante de origem continua sendo
+    # o timestamp real do início (é ele que ancora a curva no dia).
+    elapsed = _monotonic_elapsed(_RUN_KEY, started_at) or 0.0
+    return started_at + timedelta(seconds=elapsed * factor)
 
 
 def traffic_intensity() -> float:
@@ -275,6 +376,31 @@ def workload_interval(default: int) -> int:
     if phase == SimulationPhase.IDLE:
         return default
     return min(default, ACCELERATED_WORKLOAD_INTERVAL_SECONDS)
+
+
+async def sleep_until_next_cycle(
+    stop_event: asyncio.Event,
+    default_interval: int,
+    interval_fn=tick_interval,
+) -> None:
+    """
+    Espera o próximo ciclo, reavaliando o intervalo enquanto dorme.
+
+    Um `wait_for(timeout=60)` cravado no início do ciclo ignora o fato de a
+    simulação ter começado no meio da espera: o poller só aceleraria um minuto
+    depois, e a primeira fase do roteiro trabalharia com métricas velhas. Dormir
+    em fatias curtas faz a aceleração valer quase imediatamente, sem transformar
+    o loop numa espera ocupada fora da demo.
+    """
+    slept = 0.0
+    while not stop_event.is_set() and slept < interval_fn(default_interval):
+        try:
+            await asyncio.wait_for(
+                stop_event.wait(), timeout=_WAIT_SLICE_SECONDS
+            )
+            return  # stop_event disparou
+        except asyncio.TimeoutError:
+            slept += _WAIT_SLICE_SECONDS
 
 
 # --------------------------------------------------------------------------- #
@@ -357,6 +483,17 @@ def _phase_alert(db: Session) -> None:
     if target is None:
         log_event_atomic(SimulationPhase.ALERT, "No running production instance to watch")
         return
+
+    # Coleta na hora, em vez de confiar na última amostra do poller: a fase dura
+    # ~20s e uma amostra de antes da carga subir daria um limiar ridículo (1%),
+    # que nunca voltaria a fechar na fase de recuperação. É a mesma coleta real
+    # do poller — só que no instante em que a regra é escrita.
+    try:
+        from src.services.metrics import collect_and_store
+
+        collect_and_store(db, target)
+    except Exception as exc:  # noqa: BLE001 — sem coleta, usa a última amostra
+        logger.warning("Simulação: coleta imediata em %s falhou: %s", target.name, exc)
 
     active = _latest_metric(db, target.id, "connections_active")
     max_conn = _latest_metric(db, target.id, "connections_max") or 100.0
@@ -502,6 +639,9 @@ def start(db: Session) -> DemoSimulation:
     _log_event(state, state.phase, "Simulation started")
     db.commit()
 
+    _mark_monotonic(_RUN_KEY)
+    _mark_monotonic(_PHASE_KEY)
+    invalidate_state_cache()
     _dispatch_action(state.phase)
     return state
 
@@ -519,6 +659,8 @@ def stop(db: Session) -> DemoSimulation:
     state.stopped_at = _now()
     state.phase_started_at = None
     db.commit()
+    _MONOTONIC_REFS.clear()
+    invalidate_state_cache()
 
     from src.services import workload_simulator
 
@@ -593,9 +735,25 @@ def status(db: Session) -> dict[str, Any]:
     duration = PHASE_DURATIONS.get(state.phase)
 
     phase_progress = 1.0
-    if running and duration and state.phase_started_at:
-        elapsed = (_now() - state.phase_started_at).total_seconds()
-        phase_progress = min(1.0, max(0.0, elapsed / duration.total_seconds()))
+    phase_elapsed = 0.0
+    if running and duration:
+        phase_elapsed = _monotonic_elapsed(_PHASE_KEY, state.phase_started_at) or 0.0
+        phase_progress = min(1.0, max(0.0, phase_elapsed / duration.total_seconds()))
+
+    # Progresso do ROTEIRO INTEIRO, não da fase: uma barra que zera a cada etapa
+    # parece andar de ré. Somando as fases já concluídas ela só cresce, do
+    # primeiro clique até a conclusão.
+    if not running:
+        progress = 0.0
+    elif state.phase not in SCRIPT_PHASES:
+        progress = 1.0
+    else:
+        done = sum(
+            PHASE_DURATIONS[p].total_seconds()
+            for p in SCRIPT_PHASES[:phase_index]
+        )
+        total = sum(d.total_seconds() for d in PHASE_DURATIONS.values())
+        progress = min(1.0, max(0.0, (done + min(phase_elapsed, duration.total_seconds() if duration else 0)) / total))
 
     return {
         "enabled": settings.DEMO_MODE,
@@ -604,6 +762,7 @@ def status(db: Session) -> dict[str, Any]:
         "phase_index": phase_index,
         "phase_count": len(SCRIPT_PHASES),
         "phase_progress": round(phase_progress, 3),
+        "progress": round(progress, 3),
         "has_simulated_data": state.has_simulated_data,
         "speed_factor": state.speed_factor,
         "started_at": state.started_at,
@@ -659,9 +818,10 @@ def advance_once() -> None:
             return
 
         duration = PHASE_DURATIONS.get(state.phase)
-        if duration is None or state.phase_started_at is None:
+        if duration is None:
             return
-        if _now() - state.phase_started_at < duration:
+        elapsed = _monotonic_elapsed(_PHASE_KEY, state.phase_started_at)
+        if elapsed is None or elapsed < duration.total_seconds():
             return
 
         next_phase = PHASE_ORDER[PHASE_ORDER.index(state.phase) + 1]
@@ -669,11 +829,13 @@ def advance_once() -> None:
             "Simulação: %s → %s (%.0fs na fase anterior)",
             state.phase.value,
             next_phase.value,
-            (_now() - state.phase_started_at).total_seconds(),
+            elapsed,
         )
         state.phase = next_phase
         state.phase_started_at = _now()
         db.commit()
+        _mark_monotonic(_PHASE_KEY)
+        invalidate_state_cache()
         _dispatch_action(next_phase)
     except Exception as exc:  # noqa: BLE001
         db.rollback()

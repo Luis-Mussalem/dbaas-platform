@@ -12,6 +12,7 @@ As ações de fase que tocam Docker/pg_dump (backup, manutenção, backfill) sã
 substituídas por dublês: o valor testado é a máquina de estados, não o pg_dump —
 esse já tem cobertura em test_backup_service.py.
 """
+import time
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -42,6 +43,12 @@ def _no_side_effects(monkeypatch):
     ):
         monkeypatch.setitem(sim._PHASE_ACTIONS, phase, lambda db: None)
     monkeypatch.setattr(sim, "_dispatch_action", sim._execute_action)
+    # Estado de processo (marcas monotônicas e cache) não pode vazar entre testes.
+    sim._MONOTONIC_REFS.clear()
+    sim.invalidate_state_cache()
+    yield
+    sim._MONOTONIC_REFS.clear()
+    sim.invalidate_state_cache()
 
 
 @pytest.fixture
@@ -60,9 +67,15 @@ def demo_instance(db):
 
 
 def _expire_phase(db, seconds_ago: int = 3600):
+    """
+    Faz a fase atual vencer: recua a marca monotônica (o relógio que o diretor
+    de fato consulta) e o timestamp persistido, que é o fallback.
+    """
     state = sim.get_state(db)
     state.phase_started_at = sim._now() - timedelta(seconds=seconds_ago)
     db.commit()
+    sim._MONOTONIC_REFS[sim._PHASE_KEY] = time.monotonic() - seconds_ago
+    sim.invalidate_state_cache()
     return state
 
 
@@ -136,11 +149,13 @@ def test_virtual_clock_is_real_time_while_idle(db):
 def test_virtual_clock_accelerates_during_the_simulation(db, demo_instance):
     sim.start(db)
     state = sim.get_state(db)
-    state.started_at = sim._now() - timedelta(seconds=60)
     state.speed_factor = 144.0
     db.commit()
+    sim.invalidate_state_cache()
+    # 60s de execução, medidos no relógio monotônico (não no de parede, que
+    # pode saltar): 60 × 144 ≈ 2.4h virtuais à frente do início.
+    sim._MONOTONIC_REFS[sim._RUN_KEY] = time.monotonic() - 60
 
-    # 60s reais × 144 ≈ 2.4h virtuais à frente do início.
     ahead = (sim.virtual_now() - state.started_at).total_seconds()
     assert 8000 < ahead < 9000
 
@@ -297,12 +312,15 @@ def test_the_whole_script_fits_in_two_minutes(db):
     # O roteiro existe para ser assistido inteiro por quem está de passagem.
     total = sum(d.total_seconds() for d in sim.PHASE_DURATIONS.values())
     assert total <= 120
-    # ...mas cada fase precisa de pelo menos 3 ciclos de coleta, senão o alerta
-    # pode não abrir a partir de um valor medido.
-    timed = {p: d for p, d in sim.PHASE_DURATIONS.items() if p != SimulationPhase.BACKFILL}
-    assert all(
-        d.total_seconds() >= 3 * sim.ACCELERATED_INTERVAL_SECONDS for d in timed.values()
-    )
+
+    # ALERT e RECOVER são as únicas fases cuja duração é uma RESTRIÇÃO, não uma
+    # escolha: o alerta só abre (e só resolve) depois que o poller coletou e o
+    # avaliador rodou. Menos de 3 ciclos e a fase passa em branco.
+    for phase in (SimulationPhase.ALERT, SimulationPhase.RECOVER):
+        assert (
+            sim.PHASE_DURATIONS[phase].total_seconds()
+            >= 3 * sim.ACCELERATED_INTERVAL_SECONDS
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -339,3 +357,51 @@ def test_state_row_is_a_singleton(db):
     sim.get_state(db)
     sim.get_state(db)
     assert db.query(DemoSimulation).count() == 1
+
+
+# --------------------------------------------------------------------------- #
+# Cronômetro imune a saltos do relógio
+# --------------------------------------------------------------------------- #
+def test_schedule_ignores_a_wall_clock_jump_backwards(db, demo_instance):
+    """
+    Este ambiente (WSL2) volta o relógio de parede dezenas de segundos. Quando o
+    roteiro dependia dele, TODAS as fases seguintes atrasavam pelo mesmo tanto —
+    um roteiro de 1m40 virava 2m30. O cronômetro é monotônico justamente por isso.
+    """
+    sim.start(db)
+    # A fase já venceu no relógio monotônico...
+    sim._MONOTONIC_REFS[sim._PHASE_KEY] = time.monotonic() - 3600
+    # ...mas o relógio de parede diz que ela começou no futuro (salto para trás).
+    state = sim.get_state(db)
+    state.phase_started_at = sim._now() + timedelta(seconds=90)
+    db.commit()
+    sim.invalidate_state_cache()
+
+    sim.advance_once()
+    db.expire_all()
+    assert sim.get_state(db).phase != sim.PHASE_ORDER[0], "a fase tinha de ter avançado"
+
+
+def test_overall_progress_never_goes_backwards_between_phases(db, demo_instance):
+    sim.start(db)
+    seen = [sim.status(db)["progress"]]
+
+    for _ in range(len(sim.SCRIPT_PHASES) - 1):
+        _expire_phase(db)
+        sim.advance_once()
+        db.expire_all()
+        seen.append(sim.status(db)["progress"])
+
+    assert seen == sorted(seen), f"progresso andou para trás: {seen}"
+    assert seen[-1] <= 1.0
+
+
+def test_progress_is_full_in_steady_and_zero_while_idle(db, demo_instance):
+    assert sim.status(db)["progress"] == 0.0
+
+    state = sim.get_state(db)
+    state.phase = SimulationPhase.STEADY
+    state.started_at = sim._now()
+    db.commit()
+    sim.invalidate_state_cache()
+    assert sim.status(db)["progress"] == 1.0

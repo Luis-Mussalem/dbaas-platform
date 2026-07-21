@@ -140,7 +140,11 @@ def simulation_running(db):
     state.started_at = sim._now()
     state.speed_factor = 1.0
     db.commit()
+    # O estado é lido através de um cache de 1s pelos loops — sem invalidar,
+    # o gerador de carga ainda enxergaria a simulação parada.
+    sim.invalidate_state_cache()
     yield state
+    sim.invalidate_state_cache()
 
 
 @pytest.fixture
@@ -164,6 +168,7 @@ def _instance(db, name, *, marker=DEMO_MARKER, status=InstanceStatus.RUNNING, ur
 
 
 def test_no_traffic_until_the_user_starts_the_simulation(db, fake_connect):
+    sim.invalidate_state_cache()
     # Sem simulação ativa a frota tem de ficar intocada — é a promessa de
     # "tudo real até você clicar".
     _instance(db, "demo-untouched")

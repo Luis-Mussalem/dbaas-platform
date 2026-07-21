@@ -102,7 +102,7 @@ measured.
 
 A monitoring product with an idle fleet looks broken — and a dashboard full of
 fabricated numbers is worse. So the fabrication is opt-in: the **Simulate usage**
-button (top bar, or `/demo`) runs a **~2 minute** script in which the platform
+button (top bar, or `/demo`) runs a **~90 second** script in which the platform
 administers the fleet for real:
 
 | Step | What actually happens |

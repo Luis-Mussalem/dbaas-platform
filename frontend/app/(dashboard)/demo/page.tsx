@@ -127,6 +127,16 @@ export default function DemoPage() {
           </span>
         </div>
 
+        {/* Progresso do roteiro inteiro — só enquanto ele corre. */}
+        {status.running && !complete && (
+          <div className="mt-3 h-1 w-full overflow-hidden rounded-full bg-border">
+            <div
+              className="h-full rounded-full bg-brand transition-[width] duration-1000 ease-linear"
+              style={{ width: `${Math.round(status.progress * 100)}%` }}
+            />
+          </div>
+        )}
+
         <ol className="mt-3 flex flex-col">
           {PHASES.map((phase, index) => {
             const done = currentIndex > index;

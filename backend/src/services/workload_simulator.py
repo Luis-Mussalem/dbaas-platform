@@ -382,7 +382,7 @@ async def workload_loop(stop_event: asyncio.Event) -> None:
     simulação ele encurta ainda mais (ver demo_simulation.workload_interval) —
     as fases duram ~20s e o pool precisa alcançar o alvo dentro delas.
     """
-    from src.services.demo_simulation import workload_interval
+    from src.services.demo_simulation import sleep_until_next_cycle, workload_interval
 
     default_interval = settings.DEMO_WORKLOAD_INTERVAL_SECONDS
     logger.info(
@@ -396,12 +396,9 @@ async def workload_loop(stop_event: asyncio.Event) -> None:
         except Exception as exc:  # noqa: BLE001
             logger.exception("Erro no ciclo do workload simulator: %s", exc)
 
-        try:
-            await asyncio.wait_for(
-                stop_event.wait(), timeout=workload_interval(default_interval)
-            )
-        except asyncio.TimeoutError:
-            continue
+        await sleep_until_next_cycle(
+            stop_event, default_interval, interval_fn=workload_interval
+        )
 
     await asyncio.to_thread(shutdown_pools)
     logger.info("Demo workload simulator encerrado.")
