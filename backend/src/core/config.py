@@ -55,6 +55,21 @@ class Settings(BaseSettings):
     # current_value, threshold, message, triggered_at, resolved_at.
     ALERT_WEBHOOK_URL: str | None = None
 
+    # Demo mode — simulação de uso da frota de demonstração
+    # Expõe /api/v1/demo e mantém prontos o diretor do roteiro e o gerador de
+    # carga. Nada roda sozinho: até o usuário clicar em "Simular uso", a frota
+    # é 100% real (containers de verdade, sem histórico fabricado). Com
+    # DEMO_MODE=false os endpoints respondem 404 e os loops não sobem.
+    DEMO_MODE: bool = True
+    # Aceleração do tempo durante a simulação: 144 → a curva diária de tráfego
+    # (24h) se desenha em 10 minutos, que é o tempo de uma visita.
+    DEMO_SIMULATION_SPEED_FACTOR: float = 144.0
+    DEMO_WORKLOAD_INTERVAL_SECONDS: int = 15
+    # Teto de conexões simultâneas por instância de produção (staging usa ~metade).
+    # Cada conexão é um backend PostgreSQL (~10 MB): 14 × 3 prod + 7 × 3 staging
+    # ≈ 60 conexões na frota inteira. Baixe se a máquina for modesta.
+    DEMO_WORKLOAD_MAX_CONNECTIONS: int = 14
+
     # Provisioning — Docker
     # Senha do superuser postgres dentro de cada container provisionado.
     # Sem default intencional: pydantic-settings levanta ValidationError no

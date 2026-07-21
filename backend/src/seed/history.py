@@ -59,6 +59,7 @@ from src.models.maintenance import (
 )
 from src.models.metric import Metric
 from src.models.user import User, UserRole
+from src.services.workload_simulator import target_connections
 
 logger = logging.getLogger(__name__)
 
@@ -104,25 +105,27 @@ def _backfill_metrics(db: Session, instance: DatabaseInstance, idx: int) -> None
     """
     Série de 24h (288 pontos, um a cada 5 min) para sparklines e gráficos.
 
-    Soma de senoides → linha suave e orgânica. Cobre as métricas que a UI
-    plota (connections_active, cache_hit_ratio, db_size_bytes) mais o teto de
-    conexões. Não semeia xact_commit/p95: esses alimentam KPIs instantâneos de
-    instâncias RUNNING e o poller ao vivo os preenche — as instâncias
-    dados-apenas ficam STOPPED e não entram nesses KPIs de qualquer forma.
+    As conexões vêm da MESMA curva que o simulador de carga usa ao vivo
+    (`workload_simulator.target_connections`). É isso que faz o histórico
+    emendar com o presente: sem compartilhar a curva, o gráfico de 24h mostra
+    um degrau no instante em que o histórico sintético acaba e a medição real
+    começa. Cache hit e tamanho continuam em senoides próprias, variando por
+    instância (idx). Não semeia xact_commit/p95: esses alimentam KPIs
+    instantâneos de instâncias RUNNING e o poller ao vivo os preenche — as
+    instâncias dados-apenas ficam STOPPED e não entram nesses KPIs.
     """
     if db.query(Metric).filter(Metric.instance_id == instance.id).first():
         return  # já tem métricas — não duplica
 
     now = _now()
     capacity = (instance.storage_gb or 20) * 1024 ** 3
-    base = 40 + idx * 30
     cache_base = 96 + idx * 0.7
     used = 0.35 + idx * 0.15
     n_points = 288
     rows: list[Metric] = []
     for k in range(n_points):
         ts = now - timedelta(minutes=(n_points - 1 - k) * 5)
-        conns = max(0, base + 16 * sin(k / 30.0) + 7 * sin(k / 12.5) + 3 * sin(k / 5.5))
+        conns = target_connections(instance.name, instance.environment, ts)
         cache = min(99.9, max(90.0, cache_base + 0.8 * sin(k / 22.0) + 0.4 * sin(k / 9.0)))
         size = used * capacity * (0.97 + 0.0001 * k)
         rows.append(Metric(instance_id=instance.id, metric_name="connections_active",
@@ -492,3 +495,51 @@ def enrich_fleet(db: Session) -> None:
             _seed_audit(db, company, admin, members, sorted(insts, key=lambda i: i.name))
 
     logger.info("Seed demo: histórico da frota concluído.")
+
+
+def reseed_metrics(db: Session) -> int:
+    """
+    Apaga e regenera as 24h de métricas sintéticas da frota demo.
+
+    Existe para consertar um histórico gerado por uma versão anterior da curva
+    (o caso concreto: séries semeadas na casa das dezenas de conexões contra
+    uma frota ociosa medindo 1, o que desenhava um degrau no sparkline).
+    Diferente de `enrich_fleet`, não é idempotente por definição — sempre
+    substitui. Só mexe em métricas; alertas, backups e audit ficam intactos.
+
+        python -m src.seed.history --reseed-metrics
+    """
+    from src.seed.demo import DEMO_MARKER  # lazy: evita import circular
+
+    instances = (
+        db.query(DatabaseInstance)
+        .filter(DatabaseInstance.notes == DEMO_MARKER,
+                DatabaseInstance.deleted_at.is_(None))
+        .order_by(DatabaseInstance.name.asc())
+        .all()
+    )
+    for idx, inst in enumerate(instances):
+        db.query(Metric).filter(Metric.instance_id == inst.id).delete(
+            synchronize_session=False
+        )
+        db.commit()
+        _backfill_metrics(db, inst, idx)
+        logger.info("Seed demo: métricas de %s regeneradas.", inst.name)
+    return len(instances)
+
+
+if __name__ == "__main__":
+    import sys
+
+    from src.core.database import SessionLocal
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    if "--reseed-metrics" not in sys.argv:
+        print("uso: python -m src.seed.history --reseed-metrics")
+        raise SystemExit(2)
+    session = SessionLocal()
+    try:
+        n = reseed_metrics(session)
+        print(f"Métricas regeneradas para {n} instância(s) demo.")
+    finally:
+        session.close()

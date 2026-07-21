@@ -385,6 +385,10 @@
       "replication": "Replication"
     }
   },
+  "InstanceSearch": {
+    "empty": "No instances found.",
+    "placeholder": "Search instance…"
+  },
   "Instances": {
     "empty": {
       "noneHere": "No databases in this environment",
@@ -396,10 +400,6 @@
     "managedCount": "{count, plural, one {# managed database} other {# managed databases}}",
     "new": "New instance",
     "title": "Instances"
-  },
-  "InstanceSearch": {
-    "empty": "No instances found.",
-    "placeholder": "Search instance…"
   },
   "Login": {
     "failed": "Login failed",
@@ -467,6 +467,7 @@
   "Nav": {
     "audit": "Logs & Audit",
     "dashboard": "Dashboard",
+    "demo": "Demo",
     "employees": "Employees",
     "help": "Help",
     "instances": "Instances",
@@ -603,6 +604,80 @@
     "subtitle": "Your operator account.",
     "superuser": "Superuser",
     "title": "Settings"
+  },
+  "Simulation": {
+    "actions": {
+      "reset": "Clear simulated data",
+      "start": "Simulate usage",
+      "stop": "Stop"
+    },
+    "banner": {
+      "details": "Details",
+      "finished": "The fleet still holds data produced by a simulation.",
+      "label": "Simulated usage",
+      "running": "{phase} · step {index} of {count}"
+    },
+    "disabled": {
+      "subtitle": "This deployment runs with demo mode turned off, so there is nothing to simulate here.",
+      "title": "Demo mode is off"
+    },
+    "loadFailed": "Could not load the simulation state.",
+    "loading": "Loading the simulation state…",
+    "log": {
+      "title": "What the simulation did"
+    },
+    "phase": {
+      "alert": {
+        "description": "Creates a rule just below the connection ratio measured right now, so the evaluator opens the event from a real metric.",
+        "title": "An alert fires"
+      },
+      "backfill": {
+        "description": "Seeds the history that cannot be produced live: 24h of metrics, 30-day uptime, weeks of backups and an audit trail.",
+        "title": "Seed the history"
+      },
+      "backup": {
+        "description": "Runs pg_dump against each production database — real .dump files land on disk.",
+        "title": "Back up production"
+      },
+      "idle": {
+        "description": "Nothing running. The fleet shows only what it has actually measured.",
+        "title": "Idle"
+      },
+      "maintenance": {
+        "description": "Executes VACUUM and ANALYZE on the production databases and records the tasks.",
+        "title": "Run maintenance"
+      },
+      "recover": {
+        "description": "Traffic falls back to baseline; the evaluator resolves the open alert on its own, from the metrics it reads.",
+        "title": "Load recovers"
+      },
+      "steady": {
+        "description": "The scripted run is over and the fleet keeps serving traffic until you stop it.",
+        "title": "Steady state"
+      },
+      "warmup": {
+        "description": "Connection pools open across the fleet and run an OLTP query mix — throughput, latency and cache hit start moving.",
+        "title": "Traffic ramps up"
+      }
+    },
+    "real": {
+      "body": "The fleet itself is real: six PostgreSQL containers, provisioned by this platform, with data loaded. Connections, throughput, latency, slow queries and disk growth are measured from them — never faked.",
+      "title": "What is real"
+    },
+    "reset": {
+      "description": "Deletes every metric, alert, backup (records and files), maintenance task and audit entry the simulation produced, and restores the original creation dates. The containers and their data stay.",
+      "title": "Clear the simulated data?"
+    },
+    "script": {
+      "speed": "Time runs {factor}× faster during the run",
+      "title": "The script"
+    },
+    "seeded": {
+      "body": "A 30-day uptime KPI or two weeks of backup history cannot happen in five minutes. The simulation seeds that history explicitly — and while any of it exists, the warning banner stays on screen.",
+      "title": "What is seeded"
+    },
+    "subtitle": "Start a scripted run and watch the platform administer the demo fleet for real: traffic, alerts, backups and maintenance. Until you press it, everything on screen was measured.",
+    "title": "Simulate usage"
   },
   "Sql": {
     "empty": {

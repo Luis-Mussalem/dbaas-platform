@@ -58,9 +58,13 @@ async def alert_evaluation_loop(stop_event: asyncio.Event) -> None:
             logger.error("Exceção inesperada no alert evaluation loop: %s", exc)
 
         try:
+            # Acompanha o metrics_poller: acelera durante a simulação de uso
+            # (senão o alerta abriria minutos depois da métrica que o justifica).
+            from src.services.demo_simulation import tick_interval
+
             await asyncio.wait_for(
                 stop_event.wait(),
-                timeout=_EVALUATOR_INTERVAL_SECONDS,
+                timeout=tick_interval(_EVALUATOR_INTERVAL_SECONDS),
             )
         except asyncio.TimeoutError:
             pass

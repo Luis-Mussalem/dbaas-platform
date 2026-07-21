@@ -30,6 +30,7 @@ import type {
   AlertMetricType,
   UserAdminCreate,
   UserAdminUpdate,
+  SimulationStatus,
 } from "@/lib/types";
 
 const API_BASE =
@@ -553,4 +554,22 @@ export async function getAuditLogs(params?: {
   if (params?.user_id) qs.set("user_id", params.user_id);
   const query = qs.toString() ? `?${qs}` : "";
   return request<AuditLog[]>(`/admin/audit-log${query}`);
+}
+// ─── Demo simulation ──────────────────────────────────────────────────────────
+
+export async function getSimulation(): Promise<SimulationStatus> {
+  return request<SimulationStatus>("/demo/simulation");
+}
+
+export async function startSimulation(): Promise<SimulationStatus> {
+  return request<SimulationStatus>("/demo/simulation/start", { method: "POST" });
+}
+
+export async function stopSimulation(): Promise<SimulationStatus> {
+  return request<SimulationStatus>("/demo/simulation/stop", { method: "POST" });
+}
+
+// Apaga tudo o que a simulação produziu e devolve a frota ao estado real.
+export async function resetSimulation(): Promise<SimulationStatus> {
+  return request<SimulationStatus>("/demo/simulation/reset", { method: "POST" });
 }

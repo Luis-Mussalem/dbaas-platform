@@ -106,7 +106,7 @@ sequenceDiagram
 
 ## 4. Background workers
 
-Six long-running loops are started in the FastAPI **lifespan** and stopped
+Eight long-running loops are started in the FastAPI **lifespan** and stopped
 gracefully on shutdown (each has its own `asyncio.Event`; shutdown sets them all
 and awaits the tasks so no DB commit is torn mid-flight):
 
@@ -118,12 +118,77 @@ and awaits the tasks so no DB commit is torn mid-flight):
 | Backup scheduler | 60s | Run due `BackupSchedule`s (cron), apply retention |
 | Maintenance scheduler | 60s | Run due `MaintenanceSchedule`s (VACUUM/ANALYZE/…) |
 | Replication poller | ~10s | Monitor standby lag |
+| Demo simulation director | 2s | Advance the scripted usage simulation, phase by phase (see below) |
+| Demo workload generator | 15s | Drive the traffic the current simulation phase asks for |
 
 Each loop opens its own `SessionLocal()` (outside the HTTP request scope), guards
 every instance in a `try/except` so one bad instance doesn't sink the cycle, and
 does blocking I/O in `asyncio.to_thread` to keep the event loop free. The Docker
 connection itself is a fail-fast at startup: if the daemon is unreachable, the app
 refuses to boot rather than failing on the first provisioning request.
+
+### The usage simulation (demo mode)
+
+A clean clone provisions six real PostgreSQL containers and nothing else — no
+traffic, no alerts, no backups, because none of that has happened yet. Honest,
+but a five-minute visitor never sees the product work. The answer is an **opt-in
+simulation**, not a pre-cooked database: until someone presses *Simulate usage*,
+every number on screen was measured.
+
+**The director** (`services/demo_simulation.py`) keeps its state in a singleton
+`demo_simulation` row — surviving restarts, shared across tabs, and holding the
+`restore_points` the reset needs. Each 2s tick checks whether the current phase
+has expired and runs the next one:
+
+| Phase | Real effect |
+|---|---|
+| `backfill` | `seed/history.enrich_fleet()` — the one seeded step (30-day uptime, weeks of backups) |
+| `warmup` | Traffic ramps; metrics poller and alert evaluator drop to a 10s interval |
+| `alert` | Creates a rule just under the connection ratio **measured at that instant**; the ordinary evaluator opens the event |
+| `backup` | `backup.create_logical_backup()` — real `pg_dump`, real files under `data/backups/` |
+| `maintenance` | `maintenance.run_task()` — real `VACUUM` and `ANALYZE` |
+| `recover` | Traffic intensity drops to 15%; the evaluator resolves the alert on its own |
+| `steady` | Traffic continues until the user stops it |
+
+A phase that fails (no Docker, no `pg_dump`) is logged into the state's event
+list and the script moves on — a demo must never hang.
+
+**Virtual clock.** `virtual_now()` maps real elapsed time onto
+`started_at + elapsed × speed_factor` (144 by default). The workload's
+`target_connections(name, timestamp)` is a pure function of that clock, so a 24h
+curve draws itself in ten minutes. Only traffic uses virtual time; everything
+persisted is stamped with the real one.
+
+### The workload generator
+
+`services/workload_simulator.py` is the engine the director drives — it asks
+`traffic_intensity()` each cycle and sleeps when it is zero.
+
+- **Connection curve.** Each instance holds an open pool whose size follows a
+  24h cosine (afternoon peak, night trough, dampened on weekends), phase-shifted
+  per instance so the fleet doesn't breathe in unison. Production instances run
+  the full range up to `DEMO_WORKLOAD_MAX_CONNECTIONS`; staging about half.
+  The curve is pure and deterministic, which makes it unit-testable — and lets
+  the `backfill` phase reuse the *same* function, so seeded history joins the
+  live series without a step.
+- **Query mix.** Every cycle, part of the pool executes an OLTP-shaped mix:
+  ~55% point reads and ~20% aggregates over the seeded dataset, ~20% writes, and
+  an occasional deliberately expensive self-join — the one that gives the slow
+  query screen something real to investigate.
+- **Blast radius.** Only instances marked as demo (`notes == DEMO_MARKER`),
+  RUNNING and provisioned are touched; instances you create are never driven.
+  Writes are confined to a `workload_events` table the generator creates itself,
+  pruned to ~2k rows so the size graph doesn't ramp forever; the seeded dataset
+  is read-only to it. Connections carry
+  `application_name='dbaas-demo-workload'`, so simulated traffic is identifiable
+  in the active-connections screen rather than disguised as users.
+- **Reversibility.** `POST /demo/simulation/reset` erases what the run produced —
+  metrics, alerts, backups (rows *and* files), maintenance, status history and
+  the demo companies' audit trail — and restores each instance's original
+  `created_at` from `restore_points`. Containers and their data stay: those are
+  real.
+- **Off switch.** `DEMO_MODE=false` — the `/demo` routes 404 and neither loop
+  starts.
 
 ---
 

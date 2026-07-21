@@ -16,7 +16,7 @@ The project simulates real-world DBaaS concepts commonly found in modern platfor
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)
 
 [![CI](https://github.com/Luis-Mussalem/dbaas-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/Luis-Mussalem/dbaas-platform/actions/workflows/ci.yml)
-![Tests](https://img.shields.io/badge/tests-272%20passing-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-312%20passing-brightgreen?style=flat-square)
 ![Coverage](https://img.shields.io/badge/coverage-82%25-brightgreen?style=flat-square)
 ![Ruff](https://img.shields.io/badge/lint-ruff-blue?style=flat-square)
 
@@ -58,12 +58,12 @@ The goal is not only to build APIs, but to design systems that simulate operatio
 
 | | |
 |---|---|
-| **API surface** | 60 REST endpoints across 12 domain routers (`/api/v1`) |
+| **API surface** | 64 REST endpoints across 13 domain routers (`/api/v1`) |
 | **Codebase** | ~24,000 lines — 10,100 backend (Python) · 5,000 tests · 9,000 frontend (TypeScript) |
-| **Test suite** | 272 backend tests (82% coverage) + 9 Playwright E2E smoke tests |
-| **Data layer** | 16 Alembic migrations, 14 SQLAlchemy models |
-| **Frontend** | 10 routes, 37 reusable React components, fully typed API client |
-| **Background automation** | 6 concurrent loops — status, metrics, alerts, backups, maintenance, replication lag |
+| **Test suite** | 312 backend tests (82% coverage) + 9 Playwright E2E smoke tests |
+| **Data layer** | 17 Alembic migrations, 15 SQLAlchemy models |
+| **Frontend** | 11 routes, 38 reusable React components, fully typed API client |
+| **Background automation** | 8 concurrent loops — status, metrics, alerts, backups, maintenance, replication lag, demo simulation director, workload generator |
 | **Delivery** | 3-job CI pipeline + one-command full-stack Docker Compose |
 
 ## Demo Login
@@ -82,17 +82,48 @@ The account is seeded automatically by the database migrations. Since the projec
 runs locally with fictional seed data, each person works against their own copy —
 so exploring freely (including destructive actions) is safe and expected.
 
-### A demo fleet is already there
+### A demo fleet is already there — and it is real
 
-On the first `docker compose up`, the backend also seeds a fictional multi-tenant
-**fleet** so the dashboard is populated from the start — 3 companies, each with a
-`prod` and a `staging` instance across three regions, plus ~100 rows of mock data
-in each production database. When Docker is available these are **real PostgreSQL
-containers**, so the SQL console, live logs and metrics work end to end; on
-Docker Desktop for macOS/Windows the seed falls back to data-only records (the
-dashboard still fills in). The seed is idempotent — restarting the stack never
-duplicates it — and it populates in the background, so it may take a minute to
-appear on a fresh boot.
+On the first `docker compose up`, the backend seeds a fictional multi-tenant
+**fleet**: 3 companies, each with a `prod` and a `staging` instance across three
+regions, plus ~100 rows of mock data in each production database. When Docker is
+available these are **real PostgreSQL containers** provisioned by the platform
+itself, so the SQL console, live logs and metrics work end to end; on Docker
+Desktop for macOS/Windows the seed falls back to data-only records. The seed is
+idempotent — restarting the stack never duplicates it — and runs in the
+background, so the fleet may take a minute to appear on a fresh boot.
+
+What the seed does **not** do is invent history. On a clean clone the fleet is
+minutes old: alerts, backups and maintenance screens are honestly empty, and the
+charts are as shallow as a brand-new database deserves. Everything you see was
+measured.
+
+### Press "Simulate usage" to watch it work
+
+A monitoring product with an idle fleet looks broken — and a dashboard full of
+fabricated numbers is worse. So the fabrication is opt-in: the **Simulate usage**
+button (sidebar → *Simulate usage*, or `/demo`) runs a ~6 minute script in which
+the platform administers the fleet for real:
+
+| Step | What actually happens |
+|---|---|
+| Seed the history | The one honest exception: 30-day uptime and weeks of backups can't happen live, so they are seeded — and flagged |
+| Traffic ramps up | Connection pools open across the fleet and run an OLTP query mix, on a daily curve compressed to run 144× faster |
+| An alert fires | A rule is set just under the connection ratio *measured at that moment*; the evaluator opens the event on its own |
+| Back up production | `pg_dump` runs against each production database — real `.dump` files land in `data/backups/` |
+| Run maintenance | Real `VACUUM` and `ANALYZE`, recorded as maintenance tasks |
+| Load recovers | Traffic drops, and the evaluator resolves the open alert from the metrics it reads |
+
+While any simulated data exists, a banner says so on every screen, and one click
+clears it — deleting the seeded history along with the artifacts the run
+produced, and restoring the fleet to its real state. The traffic generator only
+ever touches the demo fleet (instances you create are never driven), confines its
+writes to a `workload_events` table it creates, and identifies its connections as
+`dbaas-demo-workload` in the active-connections screen.
+
+`DEMO_MODE=false` removes the endpoints and the button entirely;
+`DEMO_WORKLOAD_MAX_CONNECTIONS` lowers the load on a modest machine. Design notes
+in [ARCHITECTURE.md](ARCHITECTURE.md#4-background-workers).
 
 To explore the per-company view and RBAC, log in as any seeded company user
 (each company has 1 admin + 4 members) — they see only their own company, while

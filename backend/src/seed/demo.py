@@ -1,6 +1,12 @@
 """
-Seed da frota de demonstração (multi-tenant) — para recrutadores explorarem o
-produto já populado num clone limpo.
+Seed da frota de demonstração (multi-tenant) — a frota que um clone limpo
+entrega pronta para explorar.
+
+O que este seed cria é REAL: empresas, usuários e containers PostgreSQL de
+verdade com dados carregados. Ele não fabrica histórico — métricas de 24h,
+alertas, backups e audit só aparecem quando o usuário roda a simulação de uso
+em /demo (`services/demo_simulation.py`). Até lá, tudo o que o dashboard mostra
+foi medido.
 
 Cria, de forma idempotente:
 - 3 empresas fictícias + 5 usuários cada (1 admin de empresa + 4 membros), todos
@@ -12,8 +18,8 @@ Modo de provisionamento:
   CONTAINERS PostgreSQL REAIS e carrega ~100 linhas de dados fictícios na DB de
   produção. SQL Console, logs e métricas ao vivo funcionam de verdade.
 - **Sem Docker** (ex.: Docker Desktop em Mac/Windows): cai para registros
-  dados-apenas (STOPPED) com histórico de métricas sintético, para o dashboard
-  ainda aparecer populado (mapa de regiões, cards, sparklines).
+  dados-apenas (STOPPED), para o dashboard ainda mostrar a frota (mapa de
+  regiões, cards) — sem tráfego, porque não há banco para consultar.
 
 Executado automaticamente pelo docker compose após as migrations. Idempotente:
 instâncias já existentes (por nome+empresa) são puladas, então religar o stack
@@ -38,7 +44,6 @@ from src.models.database_instance import DatabaseInstance, Environment, Instance
 from src.models.metric import Metric
 from src.models.user import User, UserRole
 from src.schemas.instance import InstanceCreate
-from src.seed import history
 from src.services.instance import create_instance
 
 logger = logging.getLogger(__name__)
@@ -251,8 +256,9 @@ def _seed_real(db, company: Company, admin: User, cfg: dict) -> None:
 
 
 def _seed_data_only(db, company: Company, cfg: dict) -> None:
-    """Insere registros STOPPED (sem Docker). O histórico — métricas inclusas —
-    é semeado depois por history.enrich_fleet(), igual ao caminho real."""
+    """Insere registros STOPPED (sem Docker). Se o usuário rodar a simulação,
+    o backfill histórico ainda popula estas instâncias — mas não haverá
+    tráfego, porque não existe banco para consultar."""
     for name, env, cpu, mem, storage in cfg["instances"]:
         if _existing_instance(db, name, company.id) is not None:
             continue
@@ -292,9 +298,10 @@ def seed(db) -> None:
             _seed_real(db, company, admin, cfg)
         else:
             _seed_data_only(db, company, cfg)
-    # Enriquece a frota com histórico (métricas, uptime, alertas, backups,
-    # manutenção, audit) — idempotente, roda nos dois modos.
-    history.enrich_fleet(db)
+    # NADA de histórico aqui, de propósito: o boot entrega uma frota real e
+    # recém-criada. O enriquecimento sintético (métricas de 24h, uptime,
+    # alertas, backups, manutenção, audit) é a primeira fase da simulação de
+    # uso, disparada pelo usuário em /demo — ver services/demo_simulation.py.
     logger.info("Seed demo: concluído. Login: qualquer usuário @{neptune,saturn,jupiter}.example / %s", DEMO_PASSWORD)
 
 

@@ -373,3 +373,36 @@ export interface Replica {
   updated_at: string;
   replica_instance: ReplicaInstanceInfo | null;
 }
+
+// ─── Demo usage simulation ────────────────────────────────────────────────────
+
+export type SimulationPhase =
+  | "idle"
+  | "backfill"
+  | "warmup"
+  | "alert"
+  | "backup"
+  | "maintenance"
+  | "recover"
+  | "steady";
+
+export interface SimulationEvent {
+  at: string;
+  phase: SimulationPhase;
+  message: string;
+}
+
+// `has_simulated_data` é independente de `running`: quando a simulação para,
+// o que ela semeou continua no banco — e o aviso continua na tela.
+export interface SimulationStatus {
+  enabled: boolean;
+  running: boolean;
+  phase: SimulationPhase;
+  phase_index: number;
+  phase_count: number;
+  phase_progress: number;
+  has_simulated_data: boolean;
+  speed_factor: number;
+  started_at: string | null;
+  events: SimulationEvent[];
+}

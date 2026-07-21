@@ -23,8 +23,13 @@ only their own company; the admin superuser sees and switches between all.
   monitoring, manual failover) and Phase 10 (container logs, full-stack docker-compose,
   frontend CI, OpenAPI tags) landed 2026-07-07. A visual-polish pass (2026-07-02) added
   real fleet KPIs (queries/s, P95 latency, 30-day uptime via `instance_status_history`),
-  per-user last-activity, and a dashboard/instances/employees redesign. 272 tests, 82%
-  backend coverage. Full phase detail and dependency map in [ROADMAP.md](ROADMAP.md).
+  per-user last-activity, and a dashboard/instances/employees redesign. A **usage
+  simulation** (2026-07-20) makes the demo honest: the seed no longer fabricates
+  history, so a clean clone shows a genuinely new fleet, and the *Simulate usage*
+  button (`/demo`) runs a scripted ~6 min demo — traffic, a real alert, `pg_dump`,
+  VACUUM/ANALYZE — with a warning banner while simulated data exists and a reset that
+  restores the real state (`services/demo_simulation.py` + `workload_simulator.py`,
+  off via `DEMO_MODE=false`). 312 tests, 82% backend coverage. Full phase detail and dependency map in [ROADMAP.md](ROADMAP.md).
 - **i18n** — the UI is bilingual (EN default, PT via the top-bar toggle), using next-intl
   with the locale in a `NEXT_LOCALE` cookie (no `/[locale]/` in the URLs). ~460 keys in
   `messages/{en,pt}.json`; parity is enforced in CI by `npm run i18n:check`. Everything

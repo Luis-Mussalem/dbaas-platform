@@ -11,7 +11,7 @@ from slowapi.errors import RateLimitExceeded
 from src.core.audit_middleware import AuditMiddleware
 from src.core.config import settings
 from src.core.rate_limit import limiter
-from src.routers import admin, alerts, auth, backups, companies, health, instances, maintenance, metrics, query, replicas, users
+from src.routers import admin, alerts, auth, backups, companies, demo, health, instances, maintenance, metrics, query, replicas, users
 from src.services.alert_evaluator import alert_evaluation_loop
 from src.services.backup_scheduler import backup_scheduling_loop
 from src.services.maintenance_scheduler import maintenance_scheduling_loop
@@ -92,6 +92,20 @@ async def lifespan(app: FastAPI):
     )
     logger.info("Replication poller iniciado.")
 
+    # Modo demo: o diretor do roteiro + o gerador de carga. Ambos ficam ociosos
+    # até o usuário clicar em "Simular uso" — no boot, a frota é 100% real.
+    demo_stop_event = asyncio.Event()
+    demo_tasks: list[asyncio.Task] = []
+    if settings.DEMO_MODE:
+        from src.services.demo_simulation import simulation_loop
+        from src.services.workload_simulator import workload_loop
+
+        demo_tasks = [
+            asyncio.create_task(simulation_loop(demo_stop_event)),
+            asyncio.create_task(workload_loop(demo_stop_event)),
+        ]
+        logger.info("Demo mode ativo: diretor da simulação e gerador de carga prontos.")
+
     yield  # Aplicação em execução — processando requests
 
     # --- SHUTDOWN ---
@@ -102,12 +116,15 @@ async def lifespan(app: FastAPI):
     maintenance_stop_event.set()
     alert_stop_event.set()
     replication_stop_event.set()
+    demo_stop_event.set()
     await poller_task
     await metrics_poller_task
     await backup_scheduler_task
     await maintenance_scheduler_task
     await alert_evaluator_task
     await replication_poller_task
+    for task in demo_tasks:
+        await task
     logger.info("Encerramento concluído.")
 
 
@@ -139,6 +156,7 @@ openapi_tags = [
     {"name": "Alerts", "description": "Alert rules, automatic evaluation and event history."},
     {"name": "Replication", "description": "Streaming standbys, lag monitoring and promotion (manual failover)."},
     {"name": "Administration", "description": "Consolidated platform view and audit trail."},
+    {"name": "Demo", "description": "Scripted usage simulation on the demo fleet (demo mode only)."},
 ]
 
 app = FastAPI(
@@ -207,4 +225,5 @@ api_v1.include_router(maintenance.router)
 api_v1.include_router(alerts.router)
 api_v1.include_router(replicas.router)
 api_v1.include_router(admin.router)
+api_v1.include_router(demo.router)
 app.include_router(api_v1)
