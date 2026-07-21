@@ -30,8 +30,8 @@ export function InstanceCard({
   const tc = useTranslations("Common");
   const { bytes, ratio, number, ago } = useFormatters();
 
-  // Sparkline REAL: histórico de conexões nas últimas 24h (vem do endpoint de
-  // histórico que lê a tabela metrics). Vazio → o Sparkline mostra uma linha-base.
+  // Sparkline REAL: histórico de conexões (vem do endpoint de histórico que lê a
+  // tabela metrics). Vazio → o Sparkline mostra uma linha-base.
   const { dataPollMs, dataVersion } = useSimulation();
   // Janela de 1h em 60 baldes — um balde por minuto, que é a cadência do poller
   // em repouso. Antes eram 24h em 48 baldes de 30 min: cada amostra nova movia
@@ -118,7 +118,7 @@ export function InstanceCard({
         )}
       </div>
 
-      {/* sparkline real: conexões nas últimas 24h */}
+      {/* sparkline real: conexões na última hora */}
       <Sparkline data={connHistory} color={sparkColor} className="h-12 w-full" />
 
       {/* métricas ao vivo: as três que se movem com a carga */}
