@@ -466,10 +466,6 @@
     "emptySeries": "Sem série suficiente nesta janela.",
     "latency": "Latência (p50 / p95 / p99)",
     "loadFailed": "Falha ao carregar métricas",
-    "tag": {
-      "demo": "demonstração",
-      "real": "real"
-    },
     "title": "Métricas"
   },
   "Nav": {

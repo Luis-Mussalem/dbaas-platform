@@ -13,13 +13,14 @@ interface UseDashboardResult {
   error: string | null;
 }
 
-export function useDashboard(pollMs?: number): UseDashboardResult {
+export function useDashboard(pollMs?: number, version?: number): UseDashboardResult {
   const t = useTranslations("Dashboard");
   const fetcher = useCallback(() => getDashboard(), []);
   const { data, isLoading, error } = useResource(
     fetcher,
     t("loadFailed"),
-    pollMs
+    pollMs,
+    version
   );
 
   return { summary: data, isLoading, error };

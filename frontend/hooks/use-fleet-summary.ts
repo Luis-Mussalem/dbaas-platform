@@ -18,13 +18,14 @@ interface UseFleetSummaryResult {
   error: string | null;
 }
 
-export function useFleetSummary(pollMs?: number): UseFleetSummaryResult {
+export function useFleetSummary(pollMs?: number, version?: number): UseFleetSummaryResult {
   const t = useTranslations("Dashboard");
   const fetcher = useCallback(() => getFleetSummary(), []);
   const { data, isLoading, error } = useResource(
     fetcher,
     t("loadFailed"),
-    pollMs ?? POLL_INTERVAL_MS
+    pollMs ?? POLL_INTERVAL_MS,
+    version
   );
 
   const summaries = useMemo(

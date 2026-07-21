@@ -20,7 +20,11 @@ interface UseResourceResult<T> {
 export function useResource<T>(
   fetcher: () => Promise<T>,
   errorMessage: string,
-  pollMs?: number
+  pollMs?: number,
+  // Muda quando algo externo já sabe que os dados mudaram (uma ação da
+  // simulação, por exemplo). Só participa das dependências do efeito: uma
+  // mudança refaz a busca na hora, em vez de esperar o próximo `pollMs`.
+  version?: number
 ): UseResourceResult<T> {
   const [data, setData] = useState<T | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -69,7 +73,7 @@ export function useResource<T>(
       active = false;
       if (intervalId) clearInterval(intervalId);
     };
-  }, [fetcher, errorMessage, pollMs]);
+  }, [fetcher, errorMessage, pollMs, version]);
 
   return { data, isLoading, error, refresh, setData };
 }

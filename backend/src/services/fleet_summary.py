@@ -230,6 +230,8 @@ def get_fleet_summary(
 
     qps = queries_per_second_by_instance(db, instance_ids)
     p95 = latest_metric_by_instance(db, instance_ids, "p95_query_latency_ms")
+    conns = latest_metric_by_instance(db, instance_ids, "connections_active")
+    conns_max = latest_metric_by_instance(db, instance_ids, "connections_max")
     size = latest_metric_by_instance(db, instance_ids, "db_size_bytes")
     growth = _size_delta_24h(db, instance_ids, size)
     alerts = _open_alerts(db, instance_ids)
@@ -243,6 +245,8 @@ def get_fleet_summary(
         summaries.append(
             InstanceSummary(
                 instance_id=inst.id,
+                connections_active=conns.get(inst.id),
+                connections_max=conns_max.get(inst.id),
                 queries_per_second=qps.get(inst.id),
                 p95_latency_ms=p95.get(inst.id),
                 db_size_bytes=size.get(inst.id),

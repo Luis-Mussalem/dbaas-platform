@@ -33,7 +33,7 @@ export function ActivityFeed() {
   const [isLoading, setIsLoading] = useState(true);
   // A simulação de uso gera ações auditadas (backup, manutenção): enquanto ela
   // roda, a atividade recente se atualiza sozinha em vez de exigir F5.
-  const { dataPollMs } = useSimulation();
+  const { dataPollMs, dataVersion } = useSimulation();
 
   useEffect(() => {
     let active = true;
@@ -46,12 +46,12 @@ export function ActivityFeed() {
     }
 
     load();
-    const intervalId = dataPollMs ? setInterval(load, dataPollMs) : undefined;
+    const intervalId = setInterval(load, dataPollMs);
     return () => {
       active = false;
-      if (intervalId) clearInterval(intervalId);
+      clearInterval(intervalId);
     };
-  }, [dataPollMs]);
+  }, [dataPollMs, dataVersion]);
 
   return (
     <div className="rounded-lg border border-border bg-surface p-3.5">

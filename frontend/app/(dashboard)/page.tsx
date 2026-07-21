@@ -30,12 +30,12 @@ export default function PainelPage() {
   //  - ActivityFeed:  audit log (busca própria, dentro do componente)
   // Enquanto a simulação de uso mexe na frota, tudo aqui se refresca sozinho —
   // antes o painel só mostrava o resultado depois de um F5.
-  const { dataPollMs } = useSimulation();
-  const { instances, isLoading: loadingInstances } = useInstances(dataPollMs);
-  const { summary, isLoading: loadingSummary } = useDashboard(dataPollMs);
+  const { dataPollMs, dataVersion } = useSimulation();
+  const { instances, isLoading: loadingInstances } = useInstances(dataPollMs, dataVersion);
+  const { summary, isLoading: loadingSummary } = useDashboard(dataPollMs, dataVersion);
   // Agregado por instância (alertas, backup, uptime, throughput) para os cards,
   // numa requisição só em vez de quatro por card.
-  const { summaries } = useFleetSummary(dataPollMs);
+  const { summaries } = useFleetSummary(dataPollMs, dataVersion);
   const [envFilter, setEnvFilter] = useState<EnvFilter>("all");
 
   const isLoading = loadingInstances || loadingSummary;

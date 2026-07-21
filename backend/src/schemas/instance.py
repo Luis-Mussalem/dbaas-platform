@@ -64,6 +64,8 @@ class InstanceSummary(BaseModel):
     """
 
     instance_id: uuid.UUID
+    connections_active: Optional[float] = None
+    connections_max: Optional[float] = None
     queries_per_second: Optional[float] = None
     p95_latency_ms: Optional[float] = None
     db_size_bytes: Optional[float] = None

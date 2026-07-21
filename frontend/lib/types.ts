@@ -118,6 +118,8 @@ export interface Instance {
 // "—" em vez de zero (que seria uma afirmação falsa).
 export interface InstanceSummary {
   instance_id: string;
+  connections_active: number | null;
+  connections_max: number | null;
   queries_per_second: number | null;
   p95_latency_ms: number | null;
   db_size_bytes: number | null;

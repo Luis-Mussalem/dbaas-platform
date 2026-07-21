@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { TriangleAlert, DatabaseBackup, ShieldCheck } from "lucide-react";
 import type { Instance, InstanceSummary } from "@/lib/types";
-import { useMetrics } from "@/hooks/use-metrics";
 import { useMetricHistory } from "@/hooks/use-metric-history";
 import { useSimulation } from "@/context/SimulationProvider";
 import { useFormatters } from "@/hooks/use-formatters";
@@ -30,30 +29,29 @@ export function InstanceCard({
   const t = useTranslations("InstanceCard");
   const tc = useTranslations("Common");
   const { bytes, ratio, number, ago } = useFormatters();
-  // Métricas ao vivo do banco (poll a cada 10s pelo hook). Para instâncias
-  // não-RUNNING, o backend devolve a última leitura armazenada (ou vazio).
-  const { metrics } = useMetrics(instance.id);
-  const m = metrics?.metrics ?? {};
 
   // Sparkline REAL: histórico de conexões nas últimas 24h (vem do endpoint de
   // histórico que lê a tabela metrics). Vazio → o Sparkline mostra uma linha-base.
-  const { dataPollMs } = useSimulation();
-  // 48 baldes de 30 min para 24h: um sparkline de ~250px não mostra mais que
-  // isso, e a média por balde é o que mantém a linha suave independentemente da
-  // cadência de coleta (que acelera durante a simulação de uso).
+  const { dataPollMs, dataVersion } = useSimulation();
+  // Janela de 1h em 60 baldes — um balde por minuto, que é a cadência do poller
+  // em repouso. Antes eram 24h em 48 baldes de 30 min: cada amostra nova movia
+  // a média do último balde em ~1/30, então a linha parecia CONGELADA mesmo com
+  // o polling funcionando. O card mostra o presente; a visão de 24h continua na
+  // tela de detalhe, onde há espaço para lê-la.
   const connHistory = useMetricHistory(
     instance.id,
     "connections_active",
-    "24h",
+    "1h",
     dataPollMs,
-    48
+    60,
+    dataVersion
   );
 
-  const connActive = m.connections_active;
-  const connMax = m.connections_max;
-  // Tamanho: o do agregado quando existe (mesma leitura, já paga na requisição
-  // da frota) e o do poll ao vivo como fallback.
-  const sizeBytes = summary?.db_size_bytes ?? m.db_size_bytes;
+  // Todos os valores escalares vêm do agregado da frota: uma requisição serve
+  // o grid inteiro, em vez de um GET /metrics por card a cada poll.
+  const connActive = summary?.connections_active;
+  const connMax = summary?.connections_max;
+  const sizeBytes = summary?.db_size_bytes;
 
   // Barra de armazenamento: tamanho atual do banco vs capacidade contratada.
   const capacityBytes = instance.storage_gb ? instance.storage_gb * 1024 ** 3 : null;
