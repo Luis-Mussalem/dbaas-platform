@@ -69,7 +69,9 @@ _TROUGH_FACTOR = 0.18
 _WEEKEND_FACTOR = 0.55
 
 # Passo máximo de variação do pool por ciclo — rampa suave em vez de degrau.
-_MAX_POOL_STEP = 2
+# Com o ciclo acelerado (5s) da simulação, 4 conexões por passo levam o pool ao
+# alvo dentro dos 18s da fase WARMUP sem virar um salto instantâneo.
+_MAX_POOL_STEP = 4
 
 
 def _now() -> datetime:
@@ -376,10 +378,17 @@ async def workload_loop(stop_event: asyncio.Event) -> None:
     Loop async do simulador (mesmo padrão do metrics_polling_loop).
 
     O intervalo é bem menor que o do poller de métricas: a curva precisa se
-    mover entre duas coletas, senão o gráfico vira uma escada.
+    mover entre duas coletas, senão o gráfico vira uma escada. Durante a
+    simulação ele encurta ainda mais (ver demo_simulation.workload_interval) —
+    as fases duram ~20s e o pool precisa alcançar o alvo dentro delas.
     """
-    interval = settings.DEMO_WORKLOAD_INTERVAL_SECONDS
-    logger.info("Demo workload simulator iniciado (intervalo: %ds)", interval)
+    from src.services.demo_simulation import workload_interval
+
+    default_interval = settings.DEMO_WORKLOAD_INTERVAL_SECONDS
+    logger.info(
+        "Demo workload simulator iniciado (intervalo: %ds em repouso)",
+        default_interval,
+    )
 
     while not stop_event.is_set():
         try:
@@ -388,7 +397,9 @@ async def workload_loop(stop_event: asyncio.Event) -> None:
             logger.exception("Erro no ciclo do workload simulator: %s", exc)
 
         try:
-            await asyncio.wait_for(stop_event.wait(), timeout=interval)
+            await asyncio.wait_for(
+                stop_event.wait(), timeout=workload_interval(default_interval)
+            )
         except asyncio.TimeoutError:
             continue
 

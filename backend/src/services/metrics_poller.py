@@ -15,7 +15,9 @@ _POLL_INTERVAL_SECONDS = 60
 # Retenção: apagar métricas com mais de N dias (padrão: 30 dias)
 METRICS_RETENTION_DAYS = 30
 
-# Limpeza de métricas antigas: a cada N ciclos (60s × 1440 = 24h)
+# Limpeza de métricas antigas: a cada N ciclos (60s × 1440 = 24h). Durante uma
+# simulação o ciclo encurta e a janela vira ~2h — inofensivo, já que a limpeza
+# só apaga o que passou da retenção.
 _METRICS_CLEANUP_EVERY_N_CYCLES = 1440
 _metrics_cycle_counter = 0
 

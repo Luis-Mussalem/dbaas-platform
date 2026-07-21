@@ -35,14 +35,14 @@ export function Sidebar() {
   const initials = (user?.email ?? "?").slice(0, 2).toUpperCase();
 
   return (
-    <aside className="flex min-w-0 flex-col overflow-hidden border-r border-border bg-sidebar px-3 py-3.5">
+    <aside className="flex min-w-0 flex-col overflow-hidden border-r border-border bg-sidebar px-4 py-4">
       {/* Brand */}
-      <div className="flex items-center gap-2 px-1.5 pb-3.5 text-[15px] font-semibold">
-        <div className="flex h-6.5 w-6.5 items-center justify-center rounded-[7px] bg-primary text-[14px] font-bold text-primary-foreground">
+      <div className="flex items-center gap-2.5 px-1.5 pb-4 text-[18px] font-semibold">
+        <div className="flex h-8 w-8 items-center justify-center rounded-[8px] bg-primary text-[16px] font-bold text-primary-foreground">
           D
         </div>
         <span>DBaaS</span>
-        <span className="ml-auto rounded bg-bg-2 px-1.5 py-0.5 text-[10px] font-medium text-fg-3">
+        <span className="ml-auto rounded bg-bg-2 px-1.5 py-0.5 text-[11.5px] font-medium text-fg-3">
           v0.1
         </span>
       </div>
@@ -92,23 +92,23 @@ export function Sidebar() {
       </nav>
 
       {/* Rodapé: operador logado + logout */}
-      <div className="mt-2 border-t border-border px-1 pt-2.5">
+      <div className="mt-2 border-t border-border px-1 pt-3">
         <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-[11px] font-semibold text-primary-foreground">
+          <div className="flex h-8.5 w-8.5 items-center justify-center rounded-md bg-primary text-[13px] font-semibold text-primary-foreground">
             {initials}
           </div>
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[12.5px] font-medium text-foreground">
+            <div className="truncate text-[14.5px] font-medium text-foreground">
               {user?.email ?? "—"}
             </div>
-            <div className="text-[11px] text-fg-3">{t("onlineNow")}</div>
+            <div className="text-[12.5px] text-fg-3">{t("onlineNow")}</div>
           </div>
           <button
             onClick={handleLogout}
             title={t("logout")}
-            className="flex h-6.5 w-6.5 items-center justify-center rounded-md border border-border bg-surface text-fg-2 transition-colors hover:bg-surface-2 hover:text-foreground"
+            className="flex h-8 w-8 items-center justify-center rounded-md border border-border bg-surface text-fg-2 transition-colors hover:bg-surface-2 hover:text-foreground"
           >
-            <LogOut size={14} />
+            <LogOut size={16} />
           </button>
         </div>
       </div>
@@ -118,7 +118,7 @@ export function Sidebar() {
 
 function NavSection({ label }: { label: string }) {
   return (
-    <div className="px-2.5 pb-1.5 pt-3.5 text-[10.5px] font-semibold uppercase tracking-wider text-fg-3">
+    <div className="px-3 pb-2 pt-4 text-[12px] font-semibold uppercase tracking-wider text-fg-3">
       {label}
     </div>
   );
@@ -140,16 +140,16 @@ function NavLink({
     <Link
       href={item.href}
       className={cn(
-        "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors",
+        "flex items-center gap-3 rounded-md px-3 py-2 text-[15px] font-medium transition-colors",
         active
           ? "bg-brand-subtle text-brand"
           : "text-fg-2 hover:bg-surface-2 hover:text-foreground"
       )}
     >
-      <Icon size={16} className="shrink-0" />
+      <Icon size={19} className="shrink-0" />
       <span>{label}</span>
       {badge && (
-        <span className="ml-auto rounded-full bg-bg-2 px-1.5 text-[11px] text-fg-3">
+        <span className="ml-auto rounded-full bg-bg-2 px-2 text-[12.5px] text-fg-3">
           {badge}
         </span>
       )}

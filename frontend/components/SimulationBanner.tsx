@@ -8,11 +8,12 @@ import { BTN_GHOST } from "@/lib/ui";
 
 // Aviso honesto, sempre visível enquanto houver dado simulado na frota.
 //
-// Dois estados, e a distinção importa:
-//  - rodando: o roteiro está em curso (fase X de N) e há tráfego sendo gerado;
-//  - parado, mas com dados: o roteiro acabou (ou foi interrompido) e o que ele
-//    semeou continua no banco — o visitante precisa saber disso ao olhar os
-//    gráficos, mesmo sem nada acontecendo no momento.
+// Três estados, e a distinção importa:
+//  - roteiro em curso: mostra a etapa (X de N) e o progresso dela;
+//  - regime (steady): o roteiro acabou, o tráfego continua — sem barra de
+//    progresso, senão parece que ainda está carregando algo;
+//  - parado, mas com dados: o que foi semeado continua no banco, e o visitante
+//    precisa saber disso ao olhar os gráficos, mesmo sem nada acontecendo.
 // Frota limpa (nunca simulada) não renderiza nada: a UI não fala de simulação
 // para quem não pediu uma.
 export function SimulationBanner() {
@@ -23,28 +24,31 @@ export function SimulationBanner() {
   if (!status.running && !status.has_simulated_data) return null;
 
   const running = status.running;
-  const phaseLabel = t(`phase.${status.phase}.title`);
+  const complete = status.phase === "steady";
+  const inScript = running && !complete;
 
   return (
     <div
       role="status"
-      className="flex h-9 shrink-0 items-center gap-3 border-b border-warn/25 bg-warn/10 px-5 text-[13px] text-warn"
+      className="flex h-11 shrink-0 items-center gap-3.5 border-b border-warn/25 bg-warn/10 px-6 text-[15px] text-warn"
     >
-      <FlaskConical size={14} className="shrink-0" />
+      <FlaskConical size={17} className="shrink-0" />
       <span className="font-medium">{t("banner.label")}</span>
       <span className="min-w-0 truncate text-warn/80">
-        {running
+        {inScript
           ? t("banner.running", {
-              phase: phaseLabel,
+              phase: t(`phase.${status.phase}.title`),
               index: status.phase_index + 1,
               count: status.phase_count,
             })
-          : t("banner.finished")}
+          : complete
+            ? t("banner.complete")
+            : t("banner.finished")}
       </span>
 
-      {running && (
-        // Progresso da fase atual — some quando o roteiro termina.
-        <div className="h-1 w-24 shrink-0 overflow-hidden rounded-full bg-warn/20">
+      {inScript && (
+        // Progresso da etapa atual — não existe em regime, de propósito.
+        <div className="h-1.5 w-28 shrink-0 overflow-hidden rounded-full bg-warn/20">
           <div
             className="h-full rounded-full bg-warn transition-[width] duration-1000 ease-linear"
             style={{ width: `${Math.round(status.phase_progress * 100)}%` }}

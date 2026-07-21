@@ -29,13 +29,19 @@ DEMO_MARKER = "__demo_fleet__"
 
 @pytest.fixture(autouse=True)
 def _no_side_effects(monkeypatch):
-    """Neutraliza as fases que dependem de Docker, pg_dump e psycopg."""
+    """
+    Neutraliza as fases que dependem de Docker, pg_dump e psycopg, e torna o
+    despacho SÍNCRONO: em produção as ações rodam numa thread própria (para o
+    relógio do roteiro não depender da duração de um pg_dump), o que aqui só
+    tornaria as asserções uma corrida.
+    """
     for phase in (
         SimulationPhase.BACKFILL,
         SimulationPhase.BACKUP,
         SimulationPhase.MAINTENANCE,
     ):
-        monkeypatch.setitem(sim._PHASE_ACTIONS, phase, lambda db, state: None)
+        monkeypatch.setitem(sim._PHASE_ACTIONS, phase, lambda db: None)
+    monkeypatch.setattr(sim, "_dispatch_action", sim._execute_action)
 
 
 @pytest.fixture
@@ -105,7 +111,7 @@ def test_phase_does_not_advance_before_its_duration(db, demo_instance):
 
 
 def test_failing_phase_is_logged_and_the_script_continues(db, demo_instance, monkeypatch):
-    def _boom(db_, state):
+    def _boom(db_):
         raise RuntimeError("pg_dump não encontrado")
 
     monkeypatch.setitem(sim._PHASE_ACTIONS, SimulationPhase.WARMUP, _boom)
@@ -177,8 +183,7 @@ def test_alert_phase_uses_the_measured_value_as_threshold(db, demo_instance):
     ])
     db.commit()
 
-    state = sim.get_state(db)
-    sim._phase_alert(db, state)
+    sim._phase_alert(db)
 
     rule = db.query(AlertRule).filter(AlertRule.instance_id == demo_instance.id).one()
     assert rule.metric_type == "connections_ratio"
@@ -187,8 +192,8 @@ def test_alert_phase_uses_the_measured_value_as_threshold(db, demo_instance):
 
 
 def test_alert_phase_skips_when_no_metric_was_collected(db, demo_instance):
-    state = sim.get_state(db)
-    sim._phase_alert(db, state)
+    sim.get_state(db)  # a linha de estado é onde o log da fase é escrito
+    sim._phase_alert(db)
 
     assert db.query(AlertRule).count() == 0
     assert any("skipped" in e["message"] for e in sim.get_state(db).events)
@@ -269,8 +274,35 @@ def test_status_reports_progress_and_phase_position(db, demo_instance):
     payload = sim.status(db)
     assert payload["running"] is True
     assert payload["phase_index"] == 0
-    assert payload["phase_count"] == len(sim.PHASE_ORDER)
+    # STEADY não conta como etapa — a UI numera "X de 6".
+    assert payload["phase_count"] == len(sim.SCRIPT_PHASES) == len(sim.PHASE_ORDER) - 1
     assert 0.0 <= payload["phase_progress"] <= 1.0
+
+
+def test_steady_reports_itself_as_finished_not_as_a_step(db, demo_instance):
+    # Em regime a timeline tem de aparecer inteira concluída (índice além da
+    # última etapa) — foi o que evitou o "parece que ainda está carregando".
+    state = sim.get_state(db)
+    state.phase = SimulationPhase.STEADY
+    state.started_at = sim._now()
+    db.commit()
+
+    payload = sim.status(db)
+    assert payload["running"] is True
+    assert payload["phase"] == "steady"
+    assert payload["phase_index"] == payload["phase_count"]
+
+
+def test_the_whole_script_fits_in_two_minutes(db):
+    # O roteiro existe para ser assistido inteiro por quem está de passagem.
+    total = sum(d.total_seconds() for d in sim.PHASE_DURATIONS.values())
+    assert total <= 120
+    # ...mas cada fase precisa de pelo menos 3 ciclos de coleta, senão o alerta
+    # pode não abrir a partir de um valor medido.
+    timed = {p: d for p, d in sim.PHASE_DURATIONS.items() if p != SimulationPhase.BACKFILL}
+    assert all(
+        d.total_seconds() >= 3 * sim.ACCELERATED_INTERVAL_SECONDS for d in timed.values()
+    )
 
 
 # --------------------------------------------------------------------------- #

@@ -612,10 +612,15 @@
       "stop": "Parar"
     },
     "banner": {
+      "complete": "Roteiro concluído — a frota segue atendendo tráfego.",
       "details": "Detalhes",
       "finished": "A frota ainda contém dados produzidos por uma simulação.",
       "label": "Uso simulado",
       "running": "{phase} · etapa {index} de {count}"
+    },
+    "complete": {
+      "body": "As seis etapas terminaram. O tráfego continua para a frota seguir viva enquanto você explora — pare quando quiser.",
+      "title": "Roteiro concluído"
     },
     "disabled": {
       "subtitle": "Esta instalação roda com o modo demo desligado, então não há o que simular aqui.",

@@ -95,8 +95,8 @@ export function InstanceSearch() {
   return (
     <div ref={boxRef} className="relative hidden md:block">
       <Search
-        size={14}
-        className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-fg-3"
+        size={17}
+        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-3"
       />
       <input
         ref={inputRef}
@@ -110,11 +110,11 @@ export function InstanceSearch() {
         }}
         onFocus={() => setOpen(true)}
         onKeyDown={onKeyDown}
-        className="h-7.5 w-56 rounded-md border border-border bg-surface pl-8 pr-7 text-[13px] text-foreground placeholder:text-fg-faint transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+        className="h-9 w-64 rounded-md border border-border bg-surface pl-9 pr-8 text-[15px] text-foreground placeholder:text-fg-faint transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
       />
       {/* Dica visual do atalho de teclado */}
       {!query && (
-        <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded border border-border bg-bg-2 px-1 text-[10px] text-fg-3">
+        <kbd className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rounded border border-border bg-bg-2 px-1.5 text-[11.5px] text-fg-3">
           /
         </kbd>
       )}

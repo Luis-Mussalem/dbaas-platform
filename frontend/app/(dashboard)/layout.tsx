@@ -11,7 +11,7 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="grid h-screen grid-cols-[232px_1fr] overflow-hidden bg-background text-foreground">
+    <div className="grid h-screen grid-cols-[280px_1fr] overflow-hidden bg-background text-foreground">
       <Sidebar />
       <div className="flex min-w-0 flex-col overflow-hidden">
         {/* Acima da Topbar de propósito: o aviso de dado simulado vale para

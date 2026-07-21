@@ -6,6 +6,17 @@ import { useFormatter, useNow, useTranslations } from "next-intl";
 // Formatação sensível a locale. Substitui lib/format.ts, cujas funções eram
 // puras e por isso não tinham como conhecer o idioma (viviam com "pt-BR" cravado).
 // Como hook, cada chamada usa os formatos de i18n/formats.ts do locale ativo.
+
+// Fuso do navegador, resolvido uma vez. Sem isto, o next-intl herda o timeZone
+// do runtime do SERVIDOR — que no container é UTC — e todo horário aparecia
+// adiantado (3h no Brasil). Como nenhuma data é renderizada no servidor (todas
+// vêm de fetch em efeito), passar o fuso do cliente é o certo e não gera
+// divergência de hidratação: no servidor fica undefined, como antes.
+const BROWSER_TIME_ZONE =
+  typeof window === "undefined"
+    ? undefined
+    : Intl.DateTimeFormat().resolvedOptions().timeZone;
+
 export function useFormatters() {
   const format = useFormatter();
   const t = useTranslations("Common");
@@ -48,7 +59,7 @@ export function useFormatters() {
       // não satura em dias ("2 months ago").
       ago: (iso: string) => format.relativeTime(new Date(iso), now),
       dateTime: (iso: string, style: "date" | "full" | "clock") =>
-        format.dateTime(new Date(iso), style),
+        format.dateTime(new Date(iso), style, { timeZone: BROWSER_TIME_ZONE }),
     }),
     [bytes, format, now, t]
   );

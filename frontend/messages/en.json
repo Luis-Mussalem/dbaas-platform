@@ -612,10 +612,15 @@
       "stop": "Stop"
     },
     "banner": {
+      "complete": "Run complete — the fleet keeps serving traffic.",
       "details": "Details",
       "finished": "The fleet still holds data produced by a simulation.",
       "label": "Simulated usage",
       "running": "{phase} · step {index} of {count}"
+    },
+    "complete": {
+      "body": "All six steps finished. Traffic keeps flowing so the fleet stays alive while you explore — stop it whenever you like.",
+      "title": "Run complete"
     },
     "disabled": {
       "subtitle": "This deployment runs with demo mode turned off, so there is nothing to simulate here.",

@@ -21,9 +21,13 @@ Desenho:
 - **Relógio virtual**: `virtual_now()` acelera o tempo por `speed_factor` (144 →
   24h em 10 min) para a curva diária de tráfego se desenhar na tela. Só o
   tráfego usa esse relógio; tudo o que é persistido usa o tempo real.
-- **Diretor**: `simulation_loop` bate a cada 2s, vê se a fase venceu e executa a
-  ação da próxima. Uma fase que falha (Docker fora, pg_dump ausente) é
-  registrada no log de eventos e o roteiro segue — a demo nunca trava.
+- **Diretor**: `simulation_loop` bate a cada 2s e, quando a fase vence, avança e
+  *despacha* a ação da próxima para uma thread dedicada. Despachar em vez de
+  executar é o que mantém o relógio do roteiro previsível: `pg_dump`, `VACUUM` e
+  o backfill variam de segundos a mais de um minuto conforme a máquina, e no tick
+  eles esticavam a fase pelo próprio tempo de execução. Uma ação que falha
+  (Docker fora, pg_dump ausente) vira evento no log e o roteiro segue — a demo
+  nunca trava.
 
 Escopo: só instâncias da frota demo (`notes == DEMO_MARKER`). Com
 `DEMO_MODE=false` o router não é registrado e este loop não sobe.
@@ -31,6 +35,7 @@ Escopo: só instâncias da frota demo (`notes == DEMO_MARKER`). Com
 import asyncio
 import logging
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -55,15 +60,20 @@ logger = logging.getLogger(__name__)
 # ticks, não faz nada — o custo é irrelevante e a transição de fase fica no ponto.
 _TICK_SECONDS = 2
 
-# Duração de cada fase do roteiro. STEADY não tem duração: é o fim (o tráfego
-# continua até o usuário parar).
+# Duração de cada fase do roteiro (~1m40 no total). STEADY não tem duração: é o
+# fim (o tráfego continua até o usuário parar).
+#
+# O piso de cada fase não é estético: o alerta precisa abrir a partir de uma
+# métrica COLETADA e resolver a partir da queda MEDIDA depois. Com coleta a cada
+# ACCELERATED_INTERVAL_SECONDS, estes valores dão 3-4 ciclos por fase — encurtar
+# mais faria a fase passar em branco quando um ciclo atrasasse.
 PHASE_DURATIONS: dict[SimulationPhase, timedelta] = {
-    SimulationPhase.BACKFILL: timedelta(seconds=10),
-    SimulationPhase.WARMUP: timedelta(seconds=60),
-    SimulationPhase.ALERT: timedelta(seconds=60),
-    SimulationPhase.BACKUP: timedelta(seconds=75),
-    SimulationPhase.MAINTENANCE: timedelta(seconds=60),
-    SimulationPhase.RECOVER: timedelta(seconds=60),
+    SimulationPhase.BACKFILL: timedelta(seconds=5),
+    SimulationPhase.WARMUP: timedelta(seconds=18),
+    SimulationPhase.ALERT: timedelta(seconds=22),
+    SimulationPhase.BACKUP: timedelta(seconds=20),
+    SimulationPhase.MAINTENANCE: timedelta(seconds=15),
+    SimulationPhase.RECOVER: timedelta(seconds=22),
 }
 
 # Ordem do roteiro.
@@ -76,6 +86,10 @@ PHASE_ORDER: list[SimulationPhase] = [
     SimulationPhase.RECOVER,
     SimulationPhase.STEADY,
 ]
+
+# Fases que compõem o roteiro propriamente dito — STEADY fica de fora porque é
+# a conclusão, não um passo: a UI conta "etapa X de 6" e desenha o fim à parte.
+SCRIPT_PHASES: list[SimulationPhase] = PHASE_ORDER[:-1]
 
 # Intensidade do tráfego por fase (multiplica o alvo de conexões). RECOVER cai
 # de propósito: é a queda que faz o avaliador resolver o alerta aberto na fase
@@ -93,14 +107,26 @@ _TRAFFIC_INTENSITY: dict[SimulationPhase, float] = {
 
 # Enquanto a simulação roda, métricas e alertas são coletados/avaliados neste
 # intervalo, em vez dos 60s normais: com o tempo acelerado, 60s de relógio real
-# seriam ~2.5h virtuais e o gráfico viraria uma escada de dois degraus.
-ACCELERATED_INTERVAL_SECONDS = 10
+# seriam ~2.5h virtuais e o gráfico viraria uma escada de dois degraus. É também
+# o que permite fases de ~20s — cada uma ainda vê 3-4 amostras.
+ACCELERATED_INTERVAL_SECONDS = 5
+
+# Ciclo do gerador de carga durante a simulação. Precisa ser curto pelo mesmo
+# motivo: o pool sobe _MAX_POOL_STEP conexões por ciclo, e a fase WARMUP inteira
+# dura 18s.
+ACCELERATED_WORKLOAD_INTERVAL_SECONDS = 5
 
 # Margem do limiar do alerta: a regra é criada logo ABAIXO do valor medido
 # naquele instante, para o evento abrir a partir de dado real no ciclo seguinte.
 _ALERT_MARGIN_RATIO = 0.85
 
 _MAX_EVENTS = 40
+
+# Thread única para as ações das fases: mantém o diretor livre para avançar no
+# horário e, ao mesmo tempo, garante que duas ações nunca rodem em paralelo
+# (um pg_dump e um VACUUM concorrentes na mesma instância seriam um teste de
+# carga, não uma demonstração).
+_ACTION_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="demo-sim")
 
 
 def _now() -> datetime:
@@ -122,7 +148,13 @@ def get_state(db: Session) -> DemoSimulation:
 
 
 def _log_event(state: DemoSimulation, phase: SimulationPhase, message: str) -> None:
-    """Acrescenta uma linha ao log do roteiro (mantido curto, é UI)."""
+    """
+    Acrescenta uma linha ao log do roteiro (mantido curto, é UI).
+
+    Não commita: quem chama decide o momento. Para escritas vindas da thread das
+    ações — que corre em paralelo ao diretor — use `log_event_atomic`, senão as
+    duas transações se sobrescrevem e um evento some.
+    """
     events = list(state.events or [])
     events.append({
         "at": _now().isoformat(),
@@ -130,6 +162,29 @@ def _log_event(state: DemoSimulation, phase: SimulationPhase, message: str) -> N
         "message": message,
     })
     state.events = events[-_MAX_EVENTS:]
+
+
+def log_event_atomic(phase: SimulationPhase, message: str) -> None:
+    """
+    Append seguro sob concorrência: relê a linha com FOR UPDATE, acrescenta e
+    commita numa transação curta e própria.
+
+    Necessário porque a JSONB é reescrita inteira a cada append: sem o lock, o
+    diretor e a thread de ações partiriam da mesma lista e a última gravação
+    apagaria o evento da outra.
+    """
+    db = SessionLocal()
+    try:
+        state = db.query(DemoSimulation).with_for_update().first()
+        if state is None:
+            return
+        _log_event(state, phase, message)
+        db.commit()
+    except Exception as exc:  # noqa: BLE001 — log de demo nunca derruba a fase
+        db.rollback()
+        logger.warning("Simulação: falha ao registrar evento: %s", exc)
+    finally:
+        db.close()
 
 
 def is_running(state: DemoSimulation) -> bool:
@@ -148,6 +203,15 @@ def _demo_instances(db: Session) -> list[DatabaseInstance]:
         .order_by(DatabaseInstance.name.asc())
         .all()
     )
+
+
+def _production_instances(db: Session) -> list[DatabaseInstance]:
+    """Instâncias demo de produção no ar — o alvo das operações do roteiro."""
+    return [
+        i for i in _demo_instances(db)
+        if i.environment == Environment.PRODUCTION
+        and i.status == InstanceStatus.RUNNING
+    ]
 
 
 # --------------------------------------------------------------------------- #
@@ -205,6 +269,14 @@ def tick_interval(default: int) -> int:
     return min(default, ACCELERATED_INTERVAL_SECONDS)
 
 
+def workload_interval(default: int) -> int:
+    """Ciclo do gerador de carga: acelerado durante a simulação, normal fora."""
+    phase, _, _ = _read_live_state()
+    if phase == SimulationPhase.IDLE:
+        return default
+    return min(default, ACCELERATED_WORKLOAD_INTERVAL_SECONDS)
+
+
 # --------------------------------------------------------------------------- #
 # Ações das fases — todas usam os serviços REAIS da plataforma
 # --------------------------------------------------------------------------- #
@@ -238,7 +310,7 @@ def _audit(
     db.commit()
 
 
-def _phase_backfill(db: Session, state: DemoSimulation) -> None:
+def _phase_backfill(db: Session) -> None:
     """
     Semeia o histórico que não dá para produzir ao vivo (uptime de 30 dias,
     semanas de backup, frota com idade) e guarda os pontos de restauração.
@@ -246,33 +318,31 @@ def _phase_backfill(db: Session, state: DemoSimulation) -> None:
     from src.seed import history
 
     instances = _demo_instances(db)
-    restore = dict(state.restore_points or {})
-    for inst in instances:
-        restore.setdefault(str(inst.id), inst.created_at.isoformat())
-    state.restore_points = restore
-    state.has_simulated_data = True
-    db.commit()
+    state = db.query(DemoSimulation).with_for_update().first()
+    if state is not None:
+        restore = dict(state.restore_points or {})
+        for inst in instances:
+            restore.setdefault(str(inst.id), inst.created_at.isoformat())
+        state.restore_points = restore
+        state.has_simulated_data = True
+        db.commit()
 
     history.enrich_fleet(db)
-    _log_event(
-        state,
+    log_event_atomic(
         SimulationPhase.BACKFILL,
         f"Seeded 24h of metrics, uptime and operational history for "
         f"{len(instances)} instances",
     )
-    db.commit()
 
 
-def _phase_warmup(db: Session, state: DemoSimulation) -> None:
-    _log_event(
-        state,
+def _phase_warmup(db: Session) -> None:
+    log_event_atomic(
         SimulationPhase.WARMUP,
         "Traffic ramping up — connection pools follow an accelerated daily curve",
     )
-    db.commit()
 
 
-def _phase_alert(db: Session, state: DemoSimulation) -> None:
+def _phase_alert(db: Session) -> None:
     """
     Cria uma regra cujo limiar fica logo abaixo da razão de conexões MEDIDA
     agora, para o avaliador real abrir o evento a partir de dado real.
@@ -285,15 +355,15 @@ def _phase_alert(db: Session, state: DemoSimulation) -> None:
         None,
     )
     if target is None:
-        _log_event(state, SimulationPhase.ALERT, "No running production instance to watch")
-        db.commit()
+        log_event_atomic(SimulationPhase.ALERT, "No running production instance to watch")
         return
 
     active = _latest_metric(db, target.id, "connections_active")
     max_conn = _latest_metric(db, target.id, "connections_max") or 100.0
     if active is None:
-        _log_event(state, SimulationPhase.ALERT, "No connection metric collected yet — rule skipped")
-        db.commit()
+        log_event_atomic(
+            SimulationPhase.ALERT, "No connection metric collected yet — rule skipped"
+        )
         return
 
     ratio = (active / max_conn) * 100.0
@@ -319,23 +389,19 @@ def _phase_alert(db: Session, state: DemoSimulation) -> None:
         existing.is_active = True
     db.commit()
 
-    _log_event(
-        state,
+    log_event_atomic(
         SimulationPhase.ALERT,
         f"Watching {target.name}: rule connections_ratio > {threshold}% "
         f"(measured {ratio:.1f}%) — the evaluator opens the event on its own",
     )
-    db.commit()
 
 
-def _phase_backup(db: Session, state: DemoSimulation) -> None:
+def _phase_backup(db: Session) -> None:
     """pg_dump de verdade na instância de produção de cada empresa."""
     from src.services import backup as backup_service
 
     done = 0
-    for inst in _demo_instances(db):
-        if inst.environment != Environment.PRODUCTION or inst.status != InstanceStatus.RUNNING:
-            continue
+    for inst in _production_instances(db):
         try:
             record = backup_service.create_logical_backup(
                 db, inst, backup_type=BackupType.MANUAL, retention_days=7
@@ -344,20 +410,28 @@ def _phase_backup(db: Session, state: DemoSimulation) -> None:
             done += 1
         except Exception as exc:  # noqa: BLE001 — uma falha não trava o roteiro
             logger.warning("Simulação: backup de %s falhou: %s", inst.name, exc)
-            _log_event(state, SimulationPhase.BACKUP, f"Backup of {inst.name} failed: {exc}")
-    _log_event(state, SimulationPhase.BACKUP, f"{done} logical backup(s) written with pg_dump")
-    db.commit()
+            log_event_atomic(
+                SimulationPhase.BACKUP, f"Backup of {inst.name} failed: {exc}"
+            )
+    log_event_atomic(
+        SimulationPhase.BACKUP, f"{done} logical backup(s) written with pg_dump"
+    )
 
 
-def _phase_maintenance(db: Session, state: DemoSimulation) -> None:
-    """VACUUM e ANALYZE de verdade nas instâncias de produção."""
+def _phase_maintenance(db: Session) -> None:
+    """
+    Manutenção de verdade nas instâncias de produção.
+
+    ANALYZE em todas e VACUUM só na primeira: sob a carga da simulação, um
+    VACUUM por instância levava mais tempo que a fase inteira. Uma tarefa de
+    cada tipo já mostra o recurso funcionando — que é o ponto da demo.
+    """
     from src.services import maintenance as maintenance_service
 
     done = 0
-    for inst in _demo_instances(db):
-        if inst.environment != Environment.PRODUCTION or inst.status != InstanceStatus.RUNNING:
-            continue
-        for task_type in (TaskType.VACUUM, TaskType.ANALYZE):
+    for index, inst in enumerate(_production_instances(db)):
+        task_types = (TaskType.ANALYZE, TaskType.VACUUM) if index == 0 else (TaskType.ANALYZE,)
+        for task_type in task_types:
             try:
                 task = maintenance_service.run_task(
                     db, inst, MaintenanceTaskCreate(task_type=task_type)
@@ -366,26 +440,23 @@ def _phase_maintenance(db: Session, state: DemoSimulation) -> None:
                 done += 1
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Simulação: %s em %s falhou: %s", task_type, inst.name, exc)
-    _log_event(state, SimulationPhase.MAINTENANCE, f"{done} maintenance task(s) executed")
-    db.commit()
+    log_event_atomic(
+        SimulationPhase.MAINTENANCE, f"{done} maintenance task(s) executed"
+    )
 
 
-def _phase_recover(db: Session, state: DemoSimulation) -> None:
-    _log_event(
-        state,
+def _phase_recover(db: Session) -> None:
+    log_event_atomic(
         SimulationPhase.RECOVER,
         "Traffic falling back to baseline — open alerts resolve from real metrics",
     )
-    db.commit()
 
 
-def _phase_steady(db: Session, state: DemoSimulation) -> None:
-    _log_event(
-        state,
+def _phase_steady(db: Session) -> None:
+    log_event_atomic(
         SimulationPhase.STEADY,
         "Scripted run finished — the fleet keeps serving traffic until you stop it",
     )
-    db.commit()
 
 
 _PHASE_ACTIONS = {
@@ -431,7 +502,7 @@ def start(db: Session) -> DemoSimulation:
     _log_event(state, state.phase, "Simulation started")
     db.commit()
 
-    _run_phase_action(db, state)
+    _dispatch_action(state.phase)
     return state
 
 
@@ -511,7 +582,14 @@ def status(db: Session) -> dict[str, Any]:
     """Estado para a UI: fase, progresso do roteiro e log de eventos."""
     state = get_state(db)
     running = is_running(state)
-    phase_index = PHASE_ORDER.index(state.phase) if running else -1
+    # STEADY não é etapa: reporta o índice logo além da última, e a UI usa isso
+    # (ou a própria fase) para desenhar a conclusão em vez de mais um passo.
+    if not running:
+        phase_index = -1
+    elif state.phase in SCRIPT_PHASES:
+        phase_index = SCRIPT_PHASES.index(state.phase)
+    else:
+        phase_index = len(SCRIPT_PHASES)
     duration = PHASE_DURATIONS.get(state.phase)
 
     phase_progress = 1.0
@@ -524,7 +602,7 @@ def status(db: Session) -> dict[str, Any]:
         "running": running,
         "phase": state.phase.value,
         "phase_index": phase_index,
-        "phase_count": len(PHASE_ORDER),
+        "phase_count": len(SCRIPT_PHASES),
         "phase_progress": round(phase_progress, 3),
         "has_simulated_data": state.has_simulated_data,
         "speed_factor": state.speed_factor,
@@ -536,18 +614,37 @@ def status(db: Session) -> dict[str, Any]:
 # --------------------------------------------------------------------------- #
 # Diretor
 # --------------------------------------------------------------------------- #
-def _run_phase_action(db: Session, state: DemoSimulation) -> None:
-    """Executa a ação da fase atual; falha vira evento no log e o roteiro segue."""
-    action = _PHASE_ACTIONS.get(state.phase)
+def _execute_action(phase: SimulationPhase) -> None:
+    """
+    Roda a ação de uma fase numa sessão própria. Falha vira evento no log e o
+    roteiro segue — uma demo nunca deve travar.
+    """
+    action = _PHASE_ACTIONS.get(phase)
     if action is None:
         return
+    db = SessionLocal()
     try:
-        action(db, state)
-    except Exception as exc:  # noqa: BLE001 — demo nunca deve travar
+        action(db)
+    except Exception as exc:  # noqa: BLE001
         db.rollback()
-        logger.exception("Simulação: fase %s falhou: %s", state.phase, exc)
-        _log_event(state, state.phase, f"Phase failed: {exc}")
-        db.commit()
+        logger.exception("Simulação: fase %s falhou: %s", phase, exc)
+        log_event_atomic(phase, f"Phase failed: {exc}")
+    finally:
+        db.close()
+
+
+def _dispatch_action(phase: SimulationPhase) -> None:
+    """
+    Dispara a ação FORA do tick do diretor.
+
+    O relógio do roteiro precisa ser previsível: `pg_dump`, `VACUUM` e o backfill
+    levam de segundos a mais de um minuto dependendo da máquina, e rodando dentro
+    do tick eles esticavam a fase pelo próprio tempo de execução (a barra de
+    progresso ficava parada e o roteiro dobrava de duração). Numa thread única
+    dedicada, as fases avançam no horário e as ações continuam serializadas
+    entre si.
+    """
+    _ACTION_EXECUTOR.submit(_execute_action, phase)
 
 
 def advance_once() -> None:
@@ -568,10 +665,16 @@ def advance_once() -> None:
             return
 
         next_phase = PHASE_ORDER[PHASE_ORDER.index(state.phase) + 1]
+        logger.info(
+            "Simulação: %s → %s (%.0fs na fase anterior)",
+            state.phase.value,
+            next_phase.value,
+            (_now() - state.phase_started_at).total_seconds(),
+        )
         state.phase = next_phase
         state.phase_started_at = _now()
         db.commit()
-        _run_phase_action(db, state)
+        _dispatch_action(next_phase)
     except Exception as exc:  # noqa: BLE001
         db.rollback()
         logger.exception("Erro no tick da simulação: %s", exc)

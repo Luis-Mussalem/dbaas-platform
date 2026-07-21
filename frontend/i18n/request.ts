@@ -24,6 +24,9 @@ export default getRequestConfig(async () => {
     // diverge entre servidor e cliente na hidratação.
     now: new Date(),
     // timeZone deliberadamente indefinido: nenhuma data é renderizada no
-    // servidor (todas vêm de useEffect), então o fuso local do usuário é o certo.
+    // servidor (todas vêm de useEffect). Atenção: omitir NÃO significa "usa o
+    // fuso do usuário" — o next-intl cai no fuso do runtime do servidor (UTC no
+    // container). Quem injeta o fuso do navegador é hooks/use-formatters.ts,
+    // por onde passa toda data exibida.
   };
 });

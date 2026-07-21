@@ -13,7 +13,7 @@ stack.
 | `dashboard.spec.ts` | Dashboard loads with the seeded fleet |
 | `navigation.spec.ts` | Sidebar navigation · **⌘K/Ctrl+K command palette** opens, navigates, closes |
 | `instances.spec.ts` | Instances list renders and opens an instance detail |
-| `simulation.spec.ts` | Demo page states what is real vs. seeded · sidebar reaches it · the simulated-data banner matches the API state |
+| `simulation.spec.ts` | Demo page states what is real vs. seeded · sidebar reaches it · top-bar control is present · the simulated-data banner matches the API state |
 
 `auth.setup.ts` logs in once and saves the session (`e2e/.auth/user.json`); the
 other specs reuse it, so login isn't repeated per test. Auth lives in **HttpOnly

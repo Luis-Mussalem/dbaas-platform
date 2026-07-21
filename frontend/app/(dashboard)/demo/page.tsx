@@ -20,9 +20,12 @@ import { BTN, BTN_DANGER, BTN_PRIMARY } from "@/lib/ui";
 import { cn } from "@/lib/utils";
 import type { SimulationPhase } from "@/lib/types";
 
-// Ordem do roteiro no backend (services/demo_simulation.py::PHASE_ORDER).
-// Duplicada aqui só para desenhar a timeline antes de a simulação começar —
-// o estado ao vivo (fase atual, progresso) continua vindo da API.
+// As etapas do roteiro (services/demo_simulation.py::SCRIPT_PHASES). Duplicadas
+// aqui só para desenhar a timeline antes de a simulação começar — o estado ao
+// vivo (etapa atual, progresso) continua vindo da API.
+//
+// `steady` NÃO entra: é a conclusão, não uma etapa. Como item da lista, com
+// spinner, parecia que algo ainda estava carregando; virou o card de fim.
 const PHASES: SimulationPhase[] = [
   "backfill",
   "warmup",
@@ -30,7 +33,6 @@ const PHASES: SimulationPhase[] = [
   "backup",
   "maintenance",
   "recover",
-  "steady",
 ];
 
 export default function DemoPage() {
@@ -47,7 +49,10 @@ export default function DemoPage() {
     return <EmptyState title={t("disabled.title")} subtitle={t("disabled.subtitle")} />;
   }
 
+  // Em regime (`steady`) o backend devolve phase_index além da última etapa,
+  // então toda a timeline aparece concluída e o card de fim assume.
   const currentIndex = status.running ? status.phase_index : -1;
+  const complete = status.phase === "steady";
 
   async function handleReset() {
     const ok = await confirm({
@@ -158,6 +163,24 @@ export default function DemoPage() {
           })}
         </ol>
       </section>
+
+      {/* Conclusão: fora da timeline, e visualmente diferente dela — em regime
+          não há nada carregando, e o usuário precisa ver isso de imediato. */}
+      {complete && (
+        <section className="flex flex-wrap items-center gap-3 rounded-xl border border-ok/30 bg-ok/5 p-4">
+          <CheckCircle2 size={20} className="shrink-0 text-ok" />
+          <div className="min-w-0 flex-1">
+            <h2 className="text-sm font-semibold text-ok">{t("complete.title")}</h2>
+            <p className="mt-0.5 text-[13px] leading-relaxed text-muted-foreground">
+              {t("complete.body")}
+            </p>
+          </div>
+          <button type="button" onClick={stop} disabled={isPending} className={BTN}>
+            <Square size={14} />
+            {t("actions.stop")}
+          </button>
+        </section>
+      )}
 
       {/* Log do que a simulação fez de fato */}
       {status.events.length > 0 && (

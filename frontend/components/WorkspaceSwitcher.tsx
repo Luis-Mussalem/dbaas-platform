@@ -33,11 +33,11 @@ export function WorkspaceSwitcher() {
 function FixedWorkspace({ name }: { name: string }) {
   const t = useTranslations("WorkspaceSwitcher");
   return (
-    <div className="mb-3.5 flex items-center gap-2 rounded-md border border-border bg-surface px-2.5 py-2 text-left">
-      <div className="h-5.5 w-5.5 shrink-0 rounded-md bg-linear-to-br from-primary to-info" />
+    <div className="mb-4 flex items-center gap-2.5 rounded-md border border-border bg-surface px-3 py-2.5 text-left">
+      <div className="h-6.5 w-6.5 shrink-0 rounded-md bg-linear-to-br from-primary to-info" />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[13px] font-medium">{name}</div>
-        <div className="text-[11px] text-fg-3">{t("companyLabel")}</div>
+        <div className="truncate text-[15px] font-medium">{name}</div>
+        <div className="text-[12.5px] text-fg-3">{t("companyLabel")}</div>
       </div>
     </div>
   );
@@ -88,14 +88,14 @@ function SuperuserSwitcher() {
     <div className="relative mb-3.5">
       <button
         onClick={() => companies.length > 0 && setOpen((v) => !v)}
-        className="flex w-full items-center gap-2 rounded-md border border-border bg-surface px-2.5 py-2 text-left transition-colors hover:bg-surface-2"
+        className="flex w-full items-center gap-2.5 rounded-md border border-border bg-surface px-3 py-2.5 text-left transition-colors hover:bg-surface-2"
       >
-        <div className="h-5.5 w-5.5 shrink-0 rounded-md bg-linear-to-br from-primary to-info" />
+        <div className="h-6.5 w-6.5 shrink-0 rounded-md bg-linear-to-br from-primary to-info" />
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[13px] font-medium">{activeName}</div>
-          <div className="text-[11px] text-fg-3">{t("adminSubtitle")}</div>
+          <div className="truncate text-[15px] font-medium">{activeName}</div>
+          <div className="text-[12.5px] text-fg-3">{t("adminSubtitle")}</div>
         </div>
-        <ChevronDown size={14} className="shrink-0 text-fg-3" />
+        <ChevronDown size={17} className="shrink-0 text-fg-3" />
       </button>
 
       {open && (
@@ -107,20 +107,20 @@ function SuperuserSwitcher() {
             <li>
               <button
                 onClick={() => select(null)}
-                className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[13px] text-fg-2 transition-colors hover:bg-surface-2 hover:text-foreground"
+                className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[15px] text-fg-2 transition-colors hover:bg-surface-2 hover:text-foreground"
               >
                 <span className="flex-1 truncate">{t("allCompanies")}</span>
-                {activeId === null && <Check size={13} className="shrink-0 text-brand" />}
+                {activeId === null && <Check size={15} className="shrink-0 text-brand" />}
               </button>
             </li>
             {companies.map((c) => (
               <li key={c.id}>
                 <button
                   onClick={() => select(c.id)}
-                  className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[13px] text-fg-2 transition-colors hover:bg-surface-2 hover:text-foreground"
+                  className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[15px] text-fg-2 transition-colors hover:bg-surface-2 hover:text-foreground"
                 >
                   <span className="flex-1 truncate">{c.name}</span>
-                  {c.id === activeId && <Check size={13} className="shrink-0 text-brand" />}
+                  {c.id === activeId && <Check size={15} className="shrink-0 text-brand" />}
                 </button>
               </li>
             ))}

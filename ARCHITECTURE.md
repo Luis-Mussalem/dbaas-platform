@@ -119,7 +119,7 @@ and awaits the tasks so no DB commit is torn mid-flight):
 | Maintenance scheduler | 60s | Run due `MaintenanceSchedule`s (VACUUM/ANALYZE/…) |
 | Replication poller | ~10s | Monitor standby lag |
 | Demo simulation director | 2s | Advance the scripted usage simulation, phase by phase (see below) |
-| Demo workload generator | 15s | Drive the traffic the current simulation phase asks for |
+| Demo workload generator | 15s (5s running) | Drive the traffic the current simulation phase asks for |
 
 Each loop opens its own `SessionLocal()` (outside the HTTP request scope), guards
 every instance in a `try/except` so one bad instance doesn't sink the cycle, and
@@ -138,17 +138,23 @@ every number on screen was measured.
 **The director** (`services/demo_simulation.py`) keeps its state in a singleton
 `demo_simulation` row — surviving restarts, shared across tabs, and holding the
 `restore_points` the reset needs. Each 2s tick checks whether the current phase
-has expired and runs the next one:
+has expired and, when it has, advances and **dispatches** the next phase's action
+to a dedicated single worker thread. Dispatching rather than executing is what
+keeps the script's clock predictable: `pg_dump`, `VACUUM` and the backfill range
+from seconds to over a minute depending on the machine, and running them inside
+the tick stretched each phase by its own execution time. The whole script now
+runs in **~1m40** — short enough to be watched end to end, with each phase still
+spanning 3-4 collection cycles so the alert really opens from a measured value:
 
 | Phase | Real effect |
 |---|---|
 | `backfill` | `seed/history.enrich_fleet()` — the one seeded step (30-day uptime, weeks of backups) |
-| `warmup` | Traffic ramps; metrics poller and alert evaluator drop to a 10s interval |
+| `warmup` | Traffic ramps; metrics poller, evaluator and workload generator drop to a 5s interval |
 | `alert` | Creates a rule just under the connection ratio **measured at that instant**; the ordinary evaluator opens the event |
 | `backup` | `backup.create_logical_backup()` — real `pg_dump`, real files under `data/backups/` |
-| `maintenance` | `maintenance.run_task()` — real `VACUUM` and `ANALYZE` |
+| `maintenance` | `maintenance.run_task()` — real `ANALYZE` on each production DB, plus one `VACUUM` |
 | `recover` | Traffic intensity drops to 15%; the evaluator resolves the alert on its own |
-| `steady` | Traffic continues until the user stops it |
+| `steady` | Not a step but the end state: traffic continues until the user stops it |
 
 A phase that fails (no Docker, no `pg_dump`) is logged into the state's event
 list and the script moves on — a demo must never hang.

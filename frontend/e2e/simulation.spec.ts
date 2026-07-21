@@ -23,6 +23,16 @@ test("sidebar reaches the simulation page", async ({ page }) => {
   await expect(page).toHaveURL(/\/demo$/);
 });
 
+test("top bar exposes the simulation control", async ({ page }) => {
+  await page.goto("/");
+  // Mesma posição, rótulo conforme o estado: parada → "Simulate usage",
+  // rodando → "Stop". É o atalho que torna o recurso descobrível.
+  const control = page
+    .locator("header")
+    .getByRole("button", { name: /simulate usage|stop/i });
+  await expect(control).toBeVisible();
+});
+
 test("simulated-data banner reflects the fleet state", async ({ page }) => {
   const status = await page.request.get("/api/v1/demo/simulation").catch(() => null);
   await page.goto("/");

@@ -8,6 +8,7 @@ import { Plus, Sun, Moon, Files } from "lucide-react";
 import { useTheme } from "@/context/ThemeProvider";
 import { Segmented } from "@/components/Segmented";
 import { InstanceSearch } from "@/components/InstanceSearch";
+import { SimulationButton } from "@/components/SimulationButton";
 import { OPEN_EVENT } from "@/components/CommandPalette";
 import { navKeyFor } from "@/lib/nav";
 import { setLocale } from "@/i18n/locale-action";
@@ -41,9 +42,9 @@ export function Topbar() {
   const [isPending, startTransition] = useTransition();
 
   return (
-    <header className="flex h-13 shrink-0 items-center gap-3 border-b border-border bg-background px-5">
+    <header className="flex h-16 shrink-0 items-center gap-3.5 border-b border-border bg-background px-6">
       {/* Breadcrumb */}
-      <div className="flex items-center gap-1.5 text-[13px] text-fg-3">
+      <div className="flex items-center gap-2 text-[15px] text-fg-3">
         {crumbs.map((c, i) => (
           <span key={i} className="flex items-center gap-1.5">
             {i > 0 && <span className="text-fg-faint">/</span>}
@@ -64,10 +65,10 @@ export function Topbar() {
         onClick={() => window.dispatchEvent(new CustomEvent(OPEN_EVENT))}
         title={tCmd("openLabel")}
         aria-label={tCmd("openLabel")}
-        className="flex h-7.5 items-center gap-1.5 rounded-md border border-border bg-surface pl-2 pr-2.5 text-fg-2 transition-colors hover:bg-surface-2 hover:text-foreground"
+        className="flex h-9 items-center gap-2 rounded-md border border-border bg-surface pl-2.5 pr-3 text-fg-2 transition-colors hover:bg-surface-2 hover:text-foreground"
       >
-        <Files size={14} className="shrink-0" />
-        <kbd className="hidden text-[11px] font-medium tracking-wide text-fg-3 sm:block">
+        <Files size={17} className="shrink-0" />
+        <kbd className="hidden text-[13px] font-medium tracking-wide text-fg-3 sm:block">
           Ctrl&nbsp;K
         </kbd>
       </button>
@@ -75,7 +76,7 @@ export function Topbar() {
       {/* Idioma — grava o cookie via Server Action e revalida o layout */}
       <div className={`hidden sm:block ${isPending ? "pointer-events-none opacity-60" : ""}`}>
         <Segmented<Locale>
-          size="sm"
+          size="lg"
           value={locale}
           onChange={(next) => startTransition(() => void setLocale(next))}
           options={[
@@ -89,17 +90,20 @@ export function Topbar() {
       <button
         onClick={toggleTheme}
         title={t("toggleTheme")}
-        className="flex h-7.5 w-7.5 items-center justify-center rounded-md border border-border bg-surface text-fg-2 transition-colors hover:bg-surface-2 hover:text-foreground"
+        className="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-surface text-fg-2 transition-colors hover:bg-surface-2 hover:text-foreground"
       >
-        {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
+        {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
       </button>
+
+      {/* Simular uso ↔ Parar — só aparece em modo demo */}
+      <SimulationButton />
 
       {/* Nova instância → abre o wizard de criação */}
       <Link
         href="/instances/new"
-        className="flex h-7.5 items-center gap-1.5 rounded-md bg-primary px-3 text-[13px] font-medium text-primary-foreground transition hover:brightness-110"
+        className="flex h-9 items-center gap-2 rounded-md bg-primary px-3.5 text-[15px] font-medium text-primary-foreground transition hover:brightness-110"
       >
-        <Plus size={14} />
+        <Plus size={17} />
         {t("newInstance")}
       </Link>
     </header>

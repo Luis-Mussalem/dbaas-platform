@@ -16,7 +16,7 @@ The project simulates real-world DBaaS concepts commonly found in modern platfor
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)
 
 [![CI](https://github.com/Luis-Mussalem/dbaas-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/Luis-Mussalem/dbaas-platform/actions/workflows/ci.yml)
-![Tests](https://img.shields.io/badge/tests-312%20passing-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-314%20passing-brightgreen?style=flat-square)
 ![Coverage](https://img.shields.io/badge/coverage-82%25-brightgreen?style=flat-square)
 ![Ruff](https://img.shields.io/badge/lint-ruff-blue?style=flat-square)
 
@@ -60,9 +60,9 @@ The goal is not only to build APIs, but to design systems that simulate operatio
 |---|---|
 | **API surface** | 64 REST endpoints across 13 domain routers (`/api/v1`) |
 | **Codebase** | ~24,000 lines — 10,100 backend (Python) · 5,000 tests · 9,000 frontend (TypeScript) |
-| **Test suite** | 312 backend tests (82% coverage) + 9 Playwright E2E smoke tests |
+| **Test suite** | 314 backend tests (82% coverage) + 13 Playwright E2E smoke tests |
 | **Data layer** | 17 Alembic migrations, 15 SQLAlchemy models |
-| **Frontend** | 11 routes, 38 reusable React components, fully typed API client |
+| **Frontend** | 11 routes, 39 reusable React components, fully typed API client |
 | **Background automation** | 8 concurrent loops — status, metrics, alerts, backups, maintenance, replication lag, demo simulation director, workload generator |
 | **Delivery** | 3-job CI pipeline + one-command full-stack Docker Compose |
 
@@ -102,8 +102,8 @@ measured.
 
 A monitoring product with an idle fleet looks broken — and a dashboard full of
 fabricated numbers is worse. So the fabrication is opt-in: the **Simulate usage**
-button (sidebar → *Simulate usage*, or `/demo`) runs a ~6 minute script in which
-the platform administers the fleet for real:
+button (top bar, or `/demo`) runs a **~2 minute** script in which the platform
+administers the fleet for real:
 
 | Step | What actually happens |
 |---|---|

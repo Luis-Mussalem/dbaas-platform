@@ -19,9 +19,15 @@ export function Segmented<T extends string>({
   options: SegmentedOption<T>[];
   value: T;
   onChange: (value: T) => void;
-  size?: "sm" | "md";
+  size?: "sm" | "md" | "lg";
 }) {
-  const pad = size === "sm" ? "px-2.5 py-1 text-[12px]" : "px-3 py-1.5 text-[13px]";
+  // `lg` existe para a moldura fixa (toggle EN/PT da topbar), que é ~20% maior
+  // que os controles das páginas — `sm`/`md` seguem servindo o conteúdo.
+  const pad = {
+    sm: "px-2.5 py-1 text-[12px]",
+    md: "px-3 py-1.5 text-[13px]",
+    lg: "px-3.5 py-1.5 text-[14.5px]",
+  }[size];
   return (
     <div className="inline-flex items-center gap-0.5 rounded-lg border border-border bg-surface p-0.5">
       {options.map((opt) => {
