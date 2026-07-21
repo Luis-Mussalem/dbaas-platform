@@ -71,6 +71,32 @@ _FLEET_AGE_DAYS = 45
 # resolvido. Mantém o contador de "alertas ativos" pequeno e crível.
 _OPEN_ALERT_INSTANCES = {"neptune-payments-prod", "saturn-store-staging"}
 
+# Janela e resolução da série sintética. 24h é o maior intervalo que os
+# gráficos oferecem; 5 min é a cadência que o poller usaria em repouso.
+_BACKFILL_WINDOW = timedelta(hours=24)
+_BACKFILL_STEP = timedelta(minutes=5)
+
+# Idade a partir da qual consideramos a janela "já coberta" e não semeamos de
+# novo. Um pouco menor que a janela, para o poller ao vivo (que grava a cada
+# minuto) não passar por histórico — só passa quando a frota realmente
+# acumulou quase 24h de medição, e aí o sintético é desnecessário mesmo.
+_BACKFILL_COVERED_AFTER = _BACKFILL_WINDOW - timedelta(hours=1)
+
+# Quanto o banco "cresceu" ao longo da janela, em fração do tamanho medido.
+# Modesto de propósito: é o que o card mostra como crescimento em 24h.
+_BACKFILL_GROWTH_RATIO = 0.02
+
+# Latência base quando a instância nunca reportou percentis (dados-apenas, sem
+# pg_stat_statements) e quanto ela sobe do vale ao pico de carga.
+_P95_FALLBACK_MS = 3.2
+_P95_LOAD_SPREAD = 1.6
+
+# Razão p50/p95 e p99/p95 usada para derivar os outros dois percentis quando a
+# instância só reportou um deles. Valores típicos de uma carga OLTP: a mediana
+# fica bem abaixo do p95 e o p99 estica a cauda.
+_P50_OF_P95 = 0.35
+_P99_OF_P95 = 1.9
+
 _UNIT_BY_METRIC = {
     "connections_ratio": "%",
     "cache_hit_ratio": "%",
@@ -81,6 +107,13 @@ _UNIT_BY_METRIC = {
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _has(db: Session, model, instance: DatabaseInstance) -> bool:
+    """Já existe algum registro deste tipo para a instância? (guarda de idempotência)"""
+    return (
+        db.query(model).filter(model.instance_id == instance.id).first() is not None
+    )
 
 
 def _rng(instance: DatabaseInstance) -> random.Random:
@@ -101,41 +134,129 @@ def _alert_message(rule: AlertRule, current_value: float) -> str:
 # --------------------------------------------------------------------------- #
 # Métricas (24h @ 5min) — a janela máxima dos gráficos é 24h
 # --------------------------------------------------------------------------- #
+def _earliest_measured(
+    db: Session, instance: DatabaseInstance, metric_name: str
+) -> float | None:
+    """Valor da amostra REAL mais antiga de uma métrica — a âncora da emenda."""
+    row = (
+        db.query(Metric.value)
+        .filter(Metric.instance_id == instance.id, Metric.metric_name == metric_name)
+        .order_by(Metric.collected_at.asc())
+        .first()
+    )
+    return row[0] if row else None
+
+
 def _backfill_metrics(db: Session, instance: DatabaseInstance, idx: int) -> None:
     """
-    Série de 24h (288 pontos, um a cada 5 min) para sparklines e gráficos.
+    Série sintética de 24h (um ponto a cada 5 min) para sparklines e gráficos.
 
     As conexões vêm da MESMA curva que o simulador de carga usa ao vivo
     (`workload_simulator.target_connections`). É isso que faz o histórico
     emendar com o presente: sem compartilhar a curva, o gráfico de 24h mostra
     um degrau no instante em que o histórico sintético acaba e a medição real
-    começa. Cache hit e tamanho continuam em senoides próprias, variando por
-    instância (idx). Não semeia xact_commit/p95: esses alimentam KPIs
-    instantâneos de instâncias RUNNING e o poller ao vivo os preenche — as
-    instâncias dados-apenas ficam STOPPED e não entram nesses KPIs.
-    """
-    if db.query(Metric).filter(Metric.instance_id == instance.id).first():
-        return  # já tem métricas — não duplica
+    começa. Semeia os percentis de latência (grandezas instantâneas, moduladas
+    pela mesma curva) mas NÃO xact_commit: aquele é um contador cumulativo, e
+    uma série sintética produziria uma taxa falsa de queries/s exatamente na
+    emenda com a medição real — o poller ao vivo o preenche em um ciclo.
 
+    Guarda: pula só quando JÁ EXISTE medição cobrindo a janela. A guarda antiga
+    ("existe qualquer métrica?") tornava o backfill inócuo na prática — o poller
+    ao vivo grava uma linha por minuto, então bastava um intervalo de 60s entre
+    o reset e o clique em "Simular uso" para a série de 24h nunca ser semeada e
+    os gráficos ficarem com poucos minutos de dados.
+
+    A série termina onde a medição real começa (não por cima dela) e é ANCORADA
+    no valor medido nessa emenda: tamanho e cache hit partem do que a instância
+    de fato reporta, em vez de uma fração arbitrária da capacidade — que, com o
+    plano de 1 GB, desenhava um degrau e uma barra de storage acima de 100%.
+    """
     now = _now()
+    if (
+        db.query(Metric)
+        .filter(
+            Metric.instance_id == instance.id,
+            Metric.collected_at < now - _BACKFILL_COVERED_AFTER,
+        )
+        .first()
+    ):
+        return  # a janela já tem histórico (semeado antes ou medido de verdade)
+
+    # Onde a medição real começa: o sintético para aí, para não haver dois
+    # pontos concorrentes no mesmo instante.
+    oldest_live = (
+        db.query(Metric.collected_at)
+        .filter(Metric.instance_id == instance.id)
+        .order_by(Metric.collected_at.asc())
+        .first()
+    )
+    end = oldest_live[0] if oldest_live else now
+    start = now - _BACKFILL_WINDOW
+
+    # Âncoras: o valor medido na emenda. Sem medição (instância dados-apenas,
+    # que nunca conecta), cai para números plausíveis do porte da instância.
     capacity = (instance.storage_gb or 20) * 1024 ** 3
-    cache_base = 96 + idx * 0.7
-    used = 0.35 + idx * 0.15
-    n_points = 288
+    size_anchor = _earliest_measured(db, instance, "db_size_bytes") or capacity * 0.25
+    cache_anchor = _earliest_measured(db, instance, "cache_hit_ratio") or (96 + idx * 0.7)
+    max_conn = _earliest_measured(db, instance, "connections_max") or 100.0
+    p95_anchor = _earliest_measured(db, instance, "p95_query_latency_ms") or _P95_FALLBACK_MS
+    # p50 e p99 usam a própria medição quando existe; senão derivam do p95, para
+    # os três percentis se moverem juntos em vez de virarem linhas independentes.
+    p50_anchor = (
+        _earliest_measured(db, instance, "p50_query_latency_ms")
+        or p95_anchor * _P50_OF_P95
+    )
+    p99_anchor = (
+        _earliest_measured(db, instance, "p99_query_latency_ms")
+        or p95_anchor * _P99_OF_P95
+    )
+
+    # Faixa de conexões da instância — usada para converter a curva de tráfego em
+    # um fator de carga em [0, 1], que é o que modula a latência.
+    peak_conns = max(
+        1,
+        target_connections(
+            instance.name, instance.environment, now.replace(hour=15, minute=0)
+        ),
+    )
+
     rows: list[Metric] = []
-    for k in range(n_points):
-        ts = now - timedelta(minutes=(n_points - 1 - k) * 5)
+    steps = int((end - start).total_seconds() // (_BACKFILL_STEP.total_seconds())) + 1
+    if steps <= 1:
+        return
+    for k in range(steps):
+        ts = start + _BACKFILL_STEP * k
+        # progress ∈ [0, 1]: 0 no começo da janela, 1 na emenda com o real.
+        progress = k / (steps - 1)
         conns = target_connections(instance.name, instance.environment, ts)
-        cache = min(99.9, max(90.0, cache_base + 0.8 * sin(k / 22.0) + 0.4 * sin(k / 9.0)))
-        size = used * capacity * (0.97 + 0.0001 * k)
+        # O banco cresceu _BACKFILL_GROWTH_RATIO ao longo do dia até o valor medido.
+        size = size_anchor * (1 - _BACKFILL_GROWTH_RATIO * (1 - progress))
+        cache = min(99.99, max(90.0, cache_anchor - 0.6 + 0.5 * sin(k / 22.0) + 0.25 * sin(k / 9.0)))
         rows.append(Metric(instance_id=instance.id, metric_name="connections_active",
                            value=float(round(conns)), collected_at=ts))
         rows.append(Metric(instance_id=instance.id, metric_name="cache_hit_ratio",
                            value=round(cache, 2), collected_at=ts))
         rows.append(Metric(instance_id=instance.id, metric_name="db_size_bytes",
                            value=float(int(size)), collected_at=ts))
-    rows.append(Metric(instance_id=instance.id, metric_name="connections_max",
-                       value=100.0, collected_at=now))
+        rows.append(Metric(instance_id=instance.id, metric_name="connections_max",
+                           value=float(max_conn), collected_at=ts))
+        # Os percentis acompanham a carga: mais conexões concorrentes, fila
+        # maior, cauda mais alta. Sem estas séries o gráfico de latência da tela
+        # de detalhe nascia vazio, mesmo com o card já mostrando o p95 do
+        # instante. O p99 abre mais que o p50 sob carga — é o que caracteriza
+        # uma cauda, e o que uma linha só não mostraria.
+        load = min(1.0, conns / peak_conns)
+        for metric_name, anchor, spread in (
+            ("p50_query_latency_ms", p50_anchor, _P95_LOAD_SPREAD * 0.5),
+            ("p95_query_latency_ms", p95_anchor, _P95_LOAD_SPREAD),
+            ("p99_query_latency_ms", p99_anchor, _P95_LOAD_SPREAD * 1.4),
+        ):
+            rows.append(Metric(
+                instance_id=instance.id,
+                metric_name=metric_name,
+                value=round(anchor * (1 + spread * load), 2),
+                collected_at=ts,
+            ))
     db.add_all(rows)
     db.commit()
 
@@ -399,7 +520,10 @@ def _seed_audit(
             action=action,
             resource_type=resource_type,
             resource_id=str(resource_id) if resource_id else None,
-            details={"method": method, "path": path, "status": 200},
+            # `simulated: true` é a marca que o reset usa para saber o que
+            # apagar — sem ela, este histórico sobreviveria ao "restaurar frota
+            # real". É a mesma marca que demo_simulation._audit grava.
+            details={"method": method, "path": path, "status": 200, "simulated": True},
             ip_address="203.0.113.%d" % (7 + (hash(user.email) % 40) if user else 1),
             timestamp=ts,
         ))
@@ -461,16 +585,22 @@ def enrich_fleet(db: Session) -> None:
             table_by_company[comp.id] = cfg["table"]
 
     for idx, inst in enumerate(instances):
-        if db.query(AlertRule).filter(AlertRule.instance_id == inst.id).first():
-            continue  # já enriquecida
         is_prod = inst.environment == Environment.PRODUCTION
         blip = inst.name in _OPEN_ALERT_INSTANCES  # reaproveita: quem tem alerta aberto teve um blip
         logger.info("Seed demo: enriquecendo histórico de %s ...", inst.name)
+        # Uma guarda POR RECURSO, não uma só para a instância inteira. Com a
+        # guarda única ("tem regra de alerta?"), a fase ALERT da simulação —
+        # que cria uma regra — passava a marcar a instância como enriquecida:
+        # numa segunda execução nada mais era semeado, nem as métricas.
         _backfill_metrics(db, inst, idx)
-        _backdate_status(db, inst, blip=blip)
-        _seed_alerts(db, inst, is_prod)
-        _seed_backups(db, inst, is_prod)
-        _seed_maintenance(db, inst, is_prod, table_by_company.get(inst.company_id))
+        if not _has(db, InstanceStatusHistory, inst):
+            _backdate_status(db, inst, blip=blip)
+        if not _has(db, AlertRule, inst):
+            _seed_alerts(db, inst, is_prod)
+        if not _has(db, Backup, inst):
+            _seed_backups(db, inst, is_prod)
+        if not _has(db, MaintenanceTask, inst):
+            _seed_maintenance(db, inst, is_prod, table_by_company.get(inst.company_id))
 
     # Audit por empresa (uma vez, se ainda vazia).
     by_company: dict[uuid.UUID, list[DatabaseInstance]] = {}
