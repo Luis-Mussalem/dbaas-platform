@@ -63,7 +63,7 @@ The goal is not only to build APIs, but to design systems that simulate operatio
 | **Test suite** | 314 backend tests (82% coverage) + 13 Playwright E2E smoke tests |
 | **Data layer** | 17 Alembic migrations, 15 SQLAlchemy models |
 | **Frontend** | 11 routes, 39 reusable React components, fully typed API client |
-| **Background automation** | 8 concurrent loops — status, metrics, alerts, backups, maintenance, replication lag, demo simulation director, workload generator |
+| **Background automation** | 7 concurrent loops — status, metrics, alerts, backups, maintenance, replication lag, demo workload generator |
 | **Delivery** | 3-job CI pipeline + one-command full-stack Docker Compose |
 
 ## Demo Login
@@ -93,37 +93,36 @@ Desktop for macOS/Windows the seed falls back to data-only records. The seed is
 idempotent — restarting the stack never duplicates it — and runs in the
 background, so the fleet may take a minute to appear on a fresh boot.
 
-What the seed does **not** do is invent history. On a clean clone the fleet is
-minutes old: alerts, backups and maintenance screens are honestly empty, and the
-charts are as shallow as a brand-new database deserves. Everything you see was
-measured.
+### The fleet is generated on purpose — and the UI says so
 
-### Press "Simulate usage" to watch it work
+A monitoring product with an idle fleet looks broken — but the databases are real
+and their backups, `VACUUM`s and metrics all really run against them. What the
+platform generates, on purpose, is something to monitor: from the first login the
+fleet is **already alive**, and a persistent notice plus an *About this demo* page
+(`/demo`) are upfront about exactly what is real and what is generated.
 
-A monitoring product with an idle fleet looks broken — and a dashboard full of
-fabricated numbers is worse. So the fabrication is opt-in: the **Simulate usage**
-button (top bar, or `/demo`) runs a **~90 second** script in which the platform
-administers the fleet for real:
+- **Real:** six PostgreSQL 16 containers with data loaded; every number on screen
+  is measured from them — connections, throughput, latency, slow queries, disk
+  growth, `pg_dump` backups, `VACUUM`/`ANALYZE`.
+- **Generated:** the fictional companies; a light, continuous synthetic **baseline
+  load** that keeps the live numbers moving (its connections identify themselves
+  as `dbaas-demo-workload` in the active-connections screen, never disguised as
+  users); and, seeded at startup, the history that can't happen in a five-minute
+  visit — 24h of metrics, a 30-day uptime KPI, weeks of backups, and alert and
+  maintenance timelines.
 
-| Step | What actually happens |
-|---|---|
-| Seed the history | The one honest exception: 30-day uptime and weeks of backups can't happen live, so they are seeded — and flagged |
-| Traffic ramps up | Connection pools open across the fleet and run an OLTP query mix, on a daily curve compressed to run 144× faster |
-| An alert fires | A rule is set just under the connection ratio *measured at that moment*; the evaluator opens the event on its own |
-| Back up production | `pg_dump` runs against each production database — real `.dump` files land in `data/backups/` |
-| Run maintenance | Real `VACUUM` and `ANALYZE`, recorded as maintenance tasks |
-| Load recovers | Traffic drops, and the evaluator resolves the open alert from the metrics it reads |
+`DEMO_MODE=false` stops the seed and the load generator and (via
+`NEXT_PUBLIC_DEMO_MODE`) hides the notice; `DEMO_WORKLOAD_MAX_CONNECTIONS` lowers
+the load on a modest machine.
 
-While any simulated data exists, a banner says so on every screen, and one click
-clears it — deleting the seeded history along with the artifacts the run
-produced, and restoring the fleet to its real state. The traffic generator only
-ever touches the demo fleet (instances you create are never driven), confines its
-writes to a `workload_events` table it creates, and identifies its connections as
-`dbaas-demo-workload` in the active-connections screen.
-
-`DEMO_MODE=false` removes the endpoints and the button entirely;
-`DEMO_WORKLOAD_MAX_CONNECTIONS` lowers the load on a modest machine. Design notes
-in [ARCHITECTURE.md](ARCHITECTURE.md#4-background-workers).
+> **A note on the road here.** An earlier version kept the fleet empty on boot and
+> put all of this behind a **Simulate usage** button — one click ran a ~90-second
+> scripted "reel" (traffic climbing, an alert firing, a real backup and
+> maintenance running). It proved the operations were genuine, but the first
+> screen looked switched off until you found the button, and most visitors never
+> pressed it. So the idea was folded into the product: the fleet is generated and
+> kept alive by default, and the *About this demo* page keeps that transparent.
+> Design notes in [ARCHITECTURE.md](ARCHITECTURE.md#4-background-workers).
 
 To explore the per-company view and RBAC, log in as any seeded company user
 (each company has 1 admin + 4 members) — they see only their own company, while

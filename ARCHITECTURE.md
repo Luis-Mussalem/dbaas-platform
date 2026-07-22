@@ -106,7 +106,7 @@ sequenceDiagram
 
 ## 4. Background workers
 
-Eight long-running loops are started in the FastAPI **lifespan** and stopped
+Seven long-running loops are started in the FastAPI **lifespan** and stopped
 gracefully on shutdown (each has its own `asyncio.Event`; shutdown sets them all
 and awaits the tasks so no DB commit is torn mid-flight):
 
@@ -118,8 +118,7 @@ and awaits the tasks so no DB commit is torn mid-flight):
 | Backup scheduler | 60s | Run due `BackupSchedule`s (cron), apply retention |
 | Maintenance scheduler | 60s | Run due `MaintenanceSchedule`s (VACUUM/ANALYZE/…) |
 | Replication poller | ~10s | Monitor standby lag |
-| Demo simulation director | 2s | Advance the scripted usage simulation, phase by phase (see below) |
-| Demo workload generator | 15s (5s running) | Drive the traffic the current simulation phase asks for |
+| Demo workload generator | 15s | Keep the demo fleet alive with a light baseline load (demo mode only, see below) |
 
 Each loop opens its own `SessionLocal()` (outside the HTTP request scope), guards
 every instance in a `try/except` so one bad instance doesn't sink the cycle, and
@@ -127,84 +126,68 @@ does blocking I/O in `asyncio.to_thread` to keep the event loop free. The Docker
 connection itself is a fail-fast at startup: if the daemon is unreachable, the app
 refuses to boot rather than failing on the first provisioning request.
 
-### The usage simulation (demo mode)
+### The always-live demo fleet (demo mode)
 
-A clean clone provisions six real PostgreSQL containers and nothing else — no
-traffic, no alerts, no backups, because none of that has happened yet. Honest,
-but a five-minute visitor never sees the product work. The answer is an **opt-in
-simulation**, not a pre-cooked database: until someone presses *Simulate usage*,
-every number on screen was measured.
+The platform's job is to manage database instances — but a fresh fleet of empty
+databases for fictional companies has nothing to monitor. So in demo mode the
+fleet is **generated on purpose and alive from the first login**, and the UI is
+explicit about it (a persistent notice + an *About this demo* page). Two pieces
+make it live, both honest about being synthetic:
 
-**The director** (`services/demo_simulation.py`) keeps its state in a singleton
-`demo_simulation` row — surviving restarts, shared across tabs, and holding the
-`restore_points` the reset needs. Each 2s tick checks whether the current phase
-has expired and, when it has, advances and **dispatches** the next phase's action
-to a dedicated single worker thread. Dispatching rather than executing is what
-keeps the script's clock predictable: `pg_dump`, `VACUUM` and the backfill range
-from seconds to over a minute depending on the machine, and running them inside
-the tick stretched each phase by its own execution time. The whole script now
-runs in **~1m40** — short enough to be watched end to end, with each phase still
-spanning 3-4 collection cycles so the alert really opens from a measured value:
+**Seeded history (boot).** After provisioning, `seed/demo._enrich_boot()` takes
+one real measurement per instance and then calls `seed/history.enrich_fleet()` to
+write what can't happen live in a five-minute visit: 24h of metrics, a 30-day
+uptime KPI (backdated `created_at` + `instance_status_history`), ~2 weeks of
+backups, alert timelines and maintenance history. It is idempotent, so restarting
+the stack never duplicates it. (A subtlety worth noting: provisioning writes
+`pending/provisioning/running` status rows, so `_enrich_boot` clears them first —
+otherwise the uptime backdate would be skipped and the KPI would measure a
+seconds-long window.)
 
-| Phase | Real effect |
-|---|---|
-| `backfill` | `seed/history.enrich_fleet()` — the one seeded step (30-day uptime, weeks of backups) |
-| `warmup` | Traffic ramps; metrics poller, evaluator and workload generator drop to a 5s interval |
-| `alert` | Creates a rule just under the connection ratio **measured at that instant**; the ordinary evaluator opens the event |
-| `backup` | `backup.create_logical_backup()` — real `pg_dump`, real files under `data/backups/` |
-| `maintenance` | `maintenance.run_task()` — real `ANALYZE` on each production DB, plus one `VACUUM` |
-| `recover` | Traffic intensity drops to 15%; the evaluator resolves the alert on its own |
-| `steady` | Not a step but the end state: traffic continues until the user stops it |
+**Baseline load (continuous).** `services/workload_simulator.py` keeps a light,
+continuous load flowing so the *live* numbers — connections, throughput, latency,
+slow queries, disk growth — always have real signal. It has no external state: it
+runs every cycle at `BASELINE_INTENSITY` and only ever touches demo instances.
 
-A phase that fails (no Docker, no `pg_dump`) is logged into the state's event
-list and the script moves on — a demo must never hang.
-
-**Clocks.** Two deliberate choices here:
-
-- *Monotonic scheduling.* Phase durations, the progress bar and the event log are
-  measured with `time.monotonic()`, never with wall-clock deltas. A dev machine
-  whose clock steps backwards (WSL2 does, by tens of seconds) would otherwise
-  delay every remaining phase by the same amount — a 1m40 script became 2m30 —
-  and drive the progress bar in reverse. The wall clock is still what gets
-  persisted and displayed; it just never measures a duration.
-- *Virtual clock.* `virtual_now()` maps elapsed time onto
-  `started_at + elapsed × speed_factor` (144 by default), so the workload's
-  `target_connections(name, timestamp)` — a pure function of that clock — draws a
-  24h curve in ten minutes. Only traffic uses virtual time.
-
-The UI's bar reports progress of the **whole script**, not of the current phase:
-a per-phase bar resets at every transition and reads as going backwards.
-
-### The workload generator
-
-`services/workload_simulator.py` is the engine the director drives — it asks
-`traffic_intensity()` each cycle and sleeps when it is zero.
-
-- **Connection curve.** Each instance holds an open pool whose size follows a
-  24h cosine (afternoon peak, night trough, dampened on weekends), phase-shifted
-  per instance so the fleet doesn't breathe in unison. Production instances run
-  the full range up to `DEMO_WORKLOAD_MAX_CONNECTIONS`; staging about half.
-  The curve is pure and deterministic, which makes it unit-testable — and lets
-  the `backfill` phase reuse the *same* function, so seeded history joins the
-  live series without a step.
-- **Query mix.** Every cycle, part of the pool executes an OLTP-shaped mix:
-  ~55% point reads and ~20% aggregates over the seeded dataset, ~20% writes, and
-  an occasional deliberately expensive self-join — the one that gives the slow
-  query screen something real to investigate.
-- **Blast radius.** Only instances marked as demo (`notes == DEMO_MARKER`),
+- **Connection curve.** Each instance holds an open pool whose size follows a 24h
+  cosine (afternoon peak, night trough, dampened on weekends), phase-shifted per
+  instance so the fleet doesn't breathe in unison, scaled by `BASELINE_INTENSITY`.
+  Production runs the full range up to `DEMO_WORKLOAD_MAX_CONNECTIONS`; staging
+  about half. The curve is pure and deterministic (unit-testable), and the boot
+  backfill reuses the *same* function at the *same* intensity — so the 24h history
+  meets the live baseline with no step at "now".
+- **Query mix.** Every cycle part of the pool runs an OLTP-shaped mix: ~55% point
+  reads and ~20% aggregates over the seeded dataset, ~20% writes, and an occasional
+  deliberately expensive self-join over a ballast table — the one that gives the
+  slow-query screen something real to investigate.
+- **Blast radius & labelling.** Only instances marked demo (`notes == DEMO_MARKER`),
   RUNNING and provisioned are touched; instances you create are never driven.
   Writes are confined to a `workload_events` table the generator creates itself,
-  pruned to ~2k rows so the size graph doesn't ramp forever; the seeded dataset
-  is read-only to it. Connections carry
-  `application_name='dbaas-demo-workload'`, so simulated traffic is identifiable
-  in the active-connections screen rather than disguised as users.
-- **Reversibility.** `POST /demo/simulation/reset` erases what the run produced —
-  metrics, alerts, backups (rows *and* files), maintenance, status history and
-  the demo companies' audit trail — and restores each instance's original
-  `created_at` from `restore_points`. Containers and their data stay: those are
-  real.
-- **Off switch.** `DEMO_MODE=false` — the `/demo` routes 404 and neither loop
-  starts.
+  pruned to ~2k rows so the size graph doesn't ramp forever. Connections carry
+  `application_name='dbaas-demo-workload'`, so the synthetic traffic is identifiable
+  in the active-connections screen, never disguised as users.
+- **Off switch.** `DEMO_MODE=false` — the workload loop doesn't start and the seed
+  doesn't enrich; the UI's demo notice (a build-time `NEXT_PUBLIC_DEMO_MODE` flag)
+  disappears too.
+
+**Design note — the road here (why there's no "Simulate usage" button).** An
+earlier iteration kept the fleet *empty* on boot for honesty and gated everything
+behind a **Simulate usage** button: one click ran a ~90-second scripted "reel" —
+a director (`demo_simulation.py`) drove traffic up, created an alert from a
+measured value, ran a real `pg_dump` and `VACUUM`, then let the alert resolve as
+traffic fell. It worked, and it demonstrated that the operations were genuinely
+real. But it had costs: the first screen looked switched off until you found and
+pressed the button (most visitors never did); the accelerated virtual clock it
+used to draw a 24h curve in minutes made the sparklines jump; and stopping it left
+the fleet looking dead again. Since a fresh clone is populated on boot anyway, the
+reel's unique value had shrunk to "watch it happen live", which most visitors
+skip. So it was removed and its intent folded into the product: the fleet is
+generated and kept alive from the first second, and the *About this demo* page
+keeps that transparent. A monitoring platform should be shown monitoring
+something — the honest move was to make that the default, and say so on screen,
+rather than hide it behind a button. (Removed with it: the director, the
+`demo_simulation` table, the accelerated clock, and the `/demo/simulation/*`
+endpoints.)
 
 ---
 
@@ -293,11 +276,10 @@ Metrics have a 30-day retention sweep to bound table growth.
 
 **Chart resolution is server-side.** `GET /instances/{id}/metrics/history`
 resamples the window into at most `points` buckets (default 120) and returns the
-**average per bucket**. Collection cadence varies — 60s normally, 5s while a demo
-simulation runs — so without this the same 24h chart would render smooth one
-moment and as a saw blade the next, and a 24h window at 5s would ship ~17k points
-to draw a 250px sparkline. The card sparklines ask for 48 buckets; full-page
-charts use the default.
+**average per bucket**. Without it, a 24h window at the raw cadence would ship
+thousands of points to draw a 250px sparkline, and the seeded 24h history (5-min
+steps) would not blend cleanly with the live 60s samples. The card sparklines ask
+for 48 buckets; full-page charts use the default.
 
 ---
 

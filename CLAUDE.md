@@ -23,18 +23,20 @@ only their own company; the admin superuser sees and switches between all.
   monitoring, manual failover) and Phase 10 (container logs, full-stack docker-compose,
   frontend CI, OpenAPI tags) landed 2026-07-07. A visual-polish pass (2026-07-02) added
   real fleet KPIs (queries/s, P95 latency, 30-day uptime via `instance_status_history`),
-  per-user last-activity, and a dashboard/instances/employees redesign. A **usage
-  simulation** (2026-07-20) makes the demo honest: the seed no longer fabricates
-  history, so a clean clone shows a genuinely new fleet, and the *Simulate usage*
-  button (`/demo`) runs a scripted ~6 min demo — traffic, a real alert, `pg_dump`,
-  VACUUM/ANALYZE — with a warning banner while simulated data exists and a reset that
-  restores the real state (`services/demo_simulation.py` + `workload_simulator.py`,
-  off via `DEMO_MODE=false`). Fleet cards (2026-07-21) show operational state instead of
-  flat gauges — throughput, P95, storage used/plan with 24h growth, open alerts, last
-  backup and 30-day uptime — all from one `GET /instances/fleet-summary`
-  (`services/fleet_summary.py`); the seed writes real ballast rows (~250 MB prod /
-  ~100 MB staging against a 1 GB plan) so the storage bar reports measured bytes.
-  328 tests, 82% backend coverage. Full phase detail and dependency map in [ROADMAP.md](ROADMAP.md).
+  per-user last-activity, and a dashboard/instances/employees redesign. Fleet cards
+  (2026-07-21) show operational state instead of flat gauges — throughput, P95, storage
+  used/plan with 24h growth, open alerts, last backup and 30-day uptime — all from one
+  `GET /instances/fleet-summary` (`services/fleet_summary.py`). An **always-live demo
+  fleet** (2026-07-22) replaced the earlier *Simulate usage* reel: instead of an empty
+  boot + an on-demand ~90s scripted director, the seed now enriches the fleet on boot
+  (`seed/demo._enrich_boot` → 24h metrics, uptime, backups, alerts, maintenance) and a
+  continuous **baseline load** (`services/workload_simulator.py`, `BASELINE_INTENSITY`)
+  keeps it alive, with per-instance ballast for a believable storage spread (~37–61%
+  prod / ~14–29% staging). The demo is transparent on screen — a persistent `DemoNotice`
+  banner + an *About this demo* page at `/demo` — and gated by `DEMO_MODE` / the
+  build-time `NEXT_PUBLIC_DEMO_MODE`. The reel director, its `demo_simulation` table and
+  the `/demo/simulation/*` endpoints were removed. Full phase detail and dependency map
+  in [ROADMAP.md](ROADMAP.md).
 - **i18n** — the UI is bilingual (EN default, PT via the top-bar toggle), using next-intl
   with the locale in a `NEXT_LOCALE` cookie (no `/[locale]/` in the URLs). ~460 keys in
   `messages/{en,pt}.json`; parity is enforced in CI by `npm run i18n:check`. Everything
