@@ -131,14 +131,13 @@ def _clean_pools():
 @pytest.fixture
 def simulation_running(db):
     """
-    O gerador de carga só trabalha dentro de uma simulação (é ela quem define a
-    intensidade). Estes testes exercitam o motor, então ligam a simulação na
-    fase de regime — o roteiro em si tem testes próprios.
+    Em modo demo o gerador roda sempre (carga-base), mas estes testes fixam a
+    fase STEADY para um estado explícito e estável — o roteiro em si tem testes
+    próprios. A intensidade de STEADY é a base (> 0), então o motor trabalha.
     """
     state = sim.get_state(db)
     state.phase = SimulationPhase.STEADY
     state.started_at = sim._now()
-    state.speed_factor = 1.0
     db.commit()
     # O estado é lido através de um cache de 1s pelos loops — sem invalidar,
     # o gerador de carga ainda enxergaria a simulação parada.
@@ -167,15 +166,16 @@ def _instance(db, name, *, marker=DEMO_MARKER, status=InstanceStatus.RUNNING, ur
     return inst
 
 
-def test_no_traffic_until_the_user_starts_the_simulation(db, fake_connect):
+def test_baseline_traffic_flows_without_a_reel(db, fake_connect):
+    # A frota demo nunca fica morta: mesmo sem reel rodando (IDLE), há a
+    # carga-base, então o gerador abre conexões. É o que mantém os cards vivos
+    # desde o boot, sem ninguém clicar em nada.
     sim.invalidate_state_cache()
-    # Sem simulação ativa a frota tem de ficar intocada — é a promessa de
-    # "tudo real até você clicar".
-    _instance(db, "demo-untouched")
+    inst = _instance(db, "demo-baseline")
     ws.simulate_once()
 
-    assert ws._pools == {}
-    assert _FakeConnection.opened == []
+    assert len(ws._pools[inst.id].conns) > 0
+    assert _FakeConnection.opened
 
 
 def test_simulate_once_opens_connections_for_demo_instances(db, fake_connect, simulation_running):

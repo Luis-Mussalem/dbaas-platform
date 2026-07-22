@@ -1,19 +1,19 @@
 """
-Testes do diretor da simulação de uso (o botão "Simular uso").
+Testes do diretor do "demo ao vivo" (o botão "Ver ao vivo").
 
 O que importa garantir aqui:
 - o roteiro avança fase a fase e nunca trava quando uma ação falha;
-- o relógio virtual acelera só enquanto a simulação roda;
-- `stop` preserva os dados e `reset` devolve a frota ao estado real,
-  inclusive o `created_at` que o backfill retroagiu;
+- não há mais relógio acelerado: virtual_now é sempre o tempo real;
+- a frota nunca esvazia — IDLE mantém a carga-base, `stop` volta à base e
+  `reset` RESTAURA a base semeada (repopula via enrich_fleet), não o vazio;
 - os endpoints exigem autenticação e somem com DEMO_MODE desligado.
 
-As ações de fase que tocam Docker/pg_dump (backup, manutenção, backfill) são
-substituídas por dublês: o valor testado é a máquina de estados, não o pg_dump —
-esse já tem cobertura em test_backup_service.py.
+As ações de fase que tocam Docker/pg_dump (backup, manutenção) são substituídas
+por dublês: o valor testado é a máquina de estados, não o pg_dump — esse já tem
+cobertura em test_backup_service.py.
 """
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 import pytest
 
@@ -37,7 +37,6 @@ def _no_side_effects(monkeypatch):
     tornaria as asserções uma corrida.
     """
     for phase in (
-        SimulationPhase.BACKFILL,
         SimulationPhase.BACKUP,
         SimulationPhase.MAINTENANCE,
     ):
@@ -86,7 +85,6 @@ def test_start_enters_the_first_phase(db, demo_instance):
     state = sim.start(db)
     assert state.phase == sim.PHASE_ORDER[0]
     assert state.started_at is not None
-    assert state.speed_factor == settings.DEMO_SIMULATION_SPEED_FACTOR
 
 
 def test_start_is_idempotent(db, demo_instance):
@@ -127,42 +125,40 @@ def test_failing_phase_is_logged_and_the_script_continues(db, demo_instance, mon
     def _boom(db_):
         raise RuntimeError("pg_dump não encontrado")
 
-    monkeypatch.setitem(sim._PHASE_ACTIONS, SimulationPhase.WARMUP, _boom)
-    sim.start(db)
+    # ALERT (2ª fase) falha: o diretor tem de entrar nela mesmo assim e logar.
+    monkeypatch.setitem(sim._PHASE_ACTIONS, SimulationPhase.ALERT, _boom)
+    sim.start(db)  # → WARMUP (ação real, só loga)
     _expire_phase(db)
-    sim.advance_once()
+    sim.advance_once()  # WARMUP → ALERT, despacha _boom
     db.expire_all()
 
     state = sim.get_state(db)
-    assert state.phase == SimulationPhase.WARMUP  # avançou apesar do erro
+    assert state.phase == SimulationPhase.ALERT  # entrou na fase apesar do erro
     assert any("Phase failed" in e["message"] for e in state.events)
 
 
 # --------------------------------------------------------------------------- #
-# Relógio virtual e intensidade
+# Tempo real (sem aceleração) e intensidade
 # --------------------------------------------------------------------------- #
 def test_virtual_clock_is_real_time_while_idle(db):
     sim.get_state(db)
     assert abs((sim.virtual_now() - sim._now()).total_seconds()) < 2
 
 
-def test_virtual_clock_accelerates_during_the_simulation(db, demo_instance):
+def test_virtual_clock_stays_real_time_during_a_run(db, demo_instance):
+    # A aceleração 144× foi removida (fazia o gráfico "subir estranho"): mesmo
+    # com o reel rodando há um bom tempo, virtual_now segue o relógio real.
     sim.start(db)
-    state = sim.get_state(db)
-    state.speed_factor = 144.0
-    db.commit()
-    sim.invalidate_state_cache()
-    # 60s de execução, medidos no relógio monotônico (não no de parede, que
-    # pode saltar): 60 × 144 ≈ 2.4h virtuais à frente do início.
-    sim._MONOTONIC_REFS[sim._RUN_KEY] = time.monotonic() - 60
-
-    ahead = (sim.virtual_now() - state.started_at).total_seconds()
-    assert 8000 < ahead < 9000
+    sim._MONOTONIC_REFS[sim._RUN_KEY] = time.monotonic() - 600  # 10 min de execução
+    assert abs((sim.virtual_now() - sim._now()).total_seconds()) < 2
 
 
-def test_traffic_intensity_is_zero_until_started(db, demo_instance):
+def test_traffic_intensity_is_baseline_until_started(db, demo_instance):
+    # IDLE não é 0: a frota demo mantém uma carga-base contínua para nunca
+    # parecer morta.
     sim.get_state(db)
-    assert sim.traffic_intensity() == 0.0
+    assert sim.traffic_intensity() == sim.BASELINE_INTENSITY
+    assert sim.BASELINE_INTENSITY > 0
 
     sim.start(db)
     _expire_phase(db)
@@ -170,12 +166,15 @@ def test_traffic_intensity_is_zero_until_started(db, demo_instance):
     assert sim.traffic_intensity() == 1.0
 
 
-def test_recover_phase_drops_the_load(db, demo_instance):
+def test_recover_phase_falls_back_to_baseline(db, demo_instance):
+    # RECOVER volta à base (não a zero): é a queda do pico à base que faz o
+    # avaliador resolver o alerta aberto.
     state = sim.get_state(db)
     state.phase = SimulationPhase.RECOVER
     state.started_at = sim._now()
     db.commit()
-    assert 0 < sim.traffic_intensity() < 0.5
+    sim.invalidate_state_cache()
+    assert sim.traffic_intensity() == sim.BASELINE_INTENSITY
 
 
 def test_tick_interval_accelerates_only_during_the_simulation(db, demo_instance):
@@ -217,7 +216,9 @@ def test_alert_phase_skips_when_no_metric_was_collected(db, demo_instance):
 # --------------------------------------------------------------------------- #
 # stop / reset
 # --------------------------------------------------------------------------- #
-def test_stop_keeps_the_data_and_the_warning(db, demo_instance):
+def test_stop_returns_to_baseline_without_emptying(db, demo_instance):
+    # Stop não fecha pools nem apaga nada: a frota volta à carga-base, cheia. O
+    # modelo antigo media a frota ociosa aqui e o dashboard parecia morto.
     sim.start(db)
     state = sim.get_state(db)
     state.has_simulated_data = True
@@ -231,22 +232,27 @@ def test_stop_keeps_the_data_and_the_warning(db, demo_instance):
     state = sim.get_state(db)
     assert state.phase == SimulationPhase.IDLE
     assert state.has_simulated_data is True
-    assert db.query(Metric).count() == 1
+    assert db.query(Metric).count() == 1  # nada foi apagado
+    # Em IDLE a intensidade é a base (> 0): o gerador não fecha os pools.
+    assert sim.traffic_intensity() == sim.BASELINE_INTENSITY
 
 
-def test_reset_restores_the_real_fleet(db, demo_instance):
-    original_created_at = datetime(2026, 7, 20, 12, 0, tzinfo=timezone.utc)
-    demo_instance.created_at = original_created_at
-    db.commit()
+def test_reset_wipes_reel_artifacts_and_repopulates_the_baseline(db, demo_instance, monkeypatch):
+    # O reset já NÃO devolve a frota ao vazio: apaga o resíduo do reel e RESTAURA
+    # a base semeada chamando enrich_fleet. Aqui enrich é um dublê — a garantia é
+    # "limpou e repopulou (chamou enrich)"; o conteúdo de enrich tem cobertura em
+    # test_seed_history.py.
+    enrich_calls: list[bool] = []
+    monkeypatch.setattr(
+        "src.seed.history.enrich_fleet", lambda _db: enrich_calls.append(True)
+    )
 
     sim.start(db)
     state = sim.get_state(db)
     state.has_simulated_data = True
-    state.restore_points = {str(demo_instance.id): original_created_at.isoformat()}
     db.commit()
 
-    # Resíduo típico de uma simulação: métrica, regra de alerta, backup e o
-    # created_at retroagido pelo backfill.
+    # Resíduo típico de um reel: métrica, regra de alerta e backup.
     db.add_all([
         Metric(instance_id=demo_instance.id, metric_name="connections_active", value=9.0),
         AlertRule(
@@ -263,20 +269,21 @@ def test_reset_restores_the_real_fleet(db, demo_instance):
             status=BackupStatus.COMPLETED,
         ),
     ])
-    demo_instance.created_at = original_created_at - timedelta(days=45)
     db.commit()
 
     sim.reset(db)
     db.expire_all()
 
+    # Resíduo apagado (enrich é dublê, então nada foi re-semeado no seu lugar).
     assert db.query(Metric).count() == 0
     assert db.query(AlertRule).count() == 0
     assert db.query(Backup).count() == 0
-    refreshed = db.get(DatabaseInstance, demo_instance.id)
-    assert refreshed.created_at == original_created_at
+    # Mas a base FOI restaurada: enrich_fleet foi chamado, e o estado segue
+    # marcando dado de demonstração — nunca "frota vazia".
+    assert enrich_calls == [True]
 
     state = sim.get_state(db)
-    assert state.has_simulated_data is False
+    assert state.has_simulated_data is True
     assert state.phase == SimulationPhase.IDLE
 
 
@@ -289,7 +296,7 @@ def test_status_reports_progress_and_phase_position(db, demo_instance):
     payload = sim.status(db)
     assert payload["running"] is True
     assert payload["phase_index"] == 0
-    # STEADY não conta como etapa — a UI numera "X de 6".
+    # STEADY não conta como etapa — a UI numera "X de 5".
     assert payload["phase_count"] == len(sim.SCRIPT_PHASES) == len(sim.PHASE_ORDER) - 1
     assert 0.0 <= payload["phase_progress"] <= 1.0
 
@@ -480,12 +487,16 @@ def test_action_from_the_current_run_still_executes(db, demo_instance, monkeypat
     assert executed == ["ran"]
 
 
-def test_reset_keeps_audit_the_visitor_generated(db, demo_instance, make_company):
+def test_reset_keeps_audit_the_visitor_generated(db, demo_instance, make_company, monkeypatch):
     """
     O reset apaga o que a SIMULAÇÃO escreveu, não tudo da empresa: os logins e
     ações do próprio visitante são reais e continuam na trilha.
     """
     from src.models.audit_log import AuditLog
+
+    # enrich_fleet como dublê: o foco aqui é o ESCOPO do reset (só o audit
+    # simulado sai), não a repopulação.
+    monkeypatch.setattr("src.seed.history.enrich_fleet", lambda _db: None)
 
     company = make_company("Demo Co")
     demo_instance.company_id = company.id
