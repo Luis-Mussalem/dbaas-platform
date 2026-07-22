@@ -152,13 +152,15 @@ def _backfill_metrics(db: Session, instance: DatabaseInstance, idx: int) -> None
     Série sintética de 24h (um ponto a cada 5 min) para sparklines e gráficos.
 
     As conexões vêm da MESMA curva que o simulador de carga usa ao vivo
-    (`workload_simulator.target_connections`). É isso que faz o histórico
-    emendar com o presente: sem compartilhar a curva, o gráfico de 24h mostra
-    um degrau no instante em que o histórico sintético acaba e a medição real
-    começa. Semeia os percentis de latência (grandezas instantâneas, moduladas
-    pela mesma curva) mas NÃO xact_commit: aquele é um contador cumulativo, e
-    uma série sintética produziria uma taxa falsa de queries/s exatamente na
-    emenda com a medição real — o poller ao vivo o preenche em um ciclo.
+    (`workload_simulator.target_connections`), e na MESMA intensidade da
+    carga-base (`demo_simulation.BASELINE_INTENSITY`). É isso que faz o histórico
+    emendar com o presente: sem a curva a série mostraria um degrau; sem a
+    intensidade-base, o histórico desenharia a curva CHEIA (~14 conexões) e a
+    medição ao vivo em repouso (~5) cairia num degrau no ponto "agora". Semeia os
+    percentis de latência (grandezas instantâneas, moduladas pela mesma curva)
+    mas NÃO xact_commit: aquele é um contador cumulativo, e uma série sintética
+    produziria uma taxa falsa de queries/s exatamente na emenda com a medição
+    real — o poller ao vivo o preenche em um ciclo.
 
     Guarda: pula só quando JÁ EXISTE medição cobrindo a janela. A guarda antiga
     ("existe qualquer métrica?") tornava o backfill inócuo na prática — o poller
@@ -220,6 +222,10 @@ def _backfill_metrics(db: Session, instance: DatabaseInstance, idx: int) -> None
         ),
     )
 
+    # Intensidade da carga-base: o histórico tem de bater com o que o gerador de
+    # carga mede em repouso (lazy import — evita ciclo com demo_simulation).
+    from src.services.demo_simulation import BASELINE_INTENSITY
+
     rows: list[Metric] = []
     steps = int((end - start).total_seconds() // (_BACKFILL_STEP.total_seconds())) + 1
     if steps <= 1:
@@ -228,7 +234,9 @@ def _backfill_metrics(db: Session, instance: DatabaseInstance, idx: int) -> None
         ts = start + _BACKFILL_STEP * k
         # progress ∈ [0, 1]: 0 no começo da janela, 1 na emenda com o real.
         progress = k / (steps - 1)
-        conns = target_connections(instance.name, instance.environment, ts)
+        conns = target_connections(
+            instance.name, instance.environment, ts, intensity=BASELINE_INTENSITY
+        )
         # O banco cresceu _BACKFILL_GROWTH_RATIO ao longo do dia até o valor medido.
         size = size_anchor * (1 - _BACKFILL_GROWTH_RATIO * (1 - progress))
         cache = min(99.99, max(90.0, cache_anchor - 0.6 + 0.5 * sin(k / 22.0) + 0.25 * sin(k / 9.0)))

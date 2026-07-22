@@ -68,8 +68,10 @@ services:
         condition: service_healthy
     # Após as migrations, semeia a frota de demonstração (3 empresas × prod/staging)
     # em background — provisiona containers reais quando há Docker, senão cai para
-    # dados-apenas. É idempotente, então religar o stack não recria nada. A API sobe
-    # imediatamente; a frota aparece no dashboard em ~1-2 min no primeiro boot.
+    # dados-apenas. Também grava o lastro de storage e semeia o histórico (frota
+    # viva no 1º login). É idempotente, então religar o stack não recria nada. A
+    # API sobe imediatamente; a frota, já populada, aparece no dashboard em ~2-4
+    # min no primeiro boot (depois é instantâneo).
     command: >
       sh -c "alembic upgrade head &&
              { (python -m src.seed.demo || true) &

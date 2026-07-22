@@ -3,10 +3,12 @@ Seed da frota de demonstração (multi-tenant) — a frota que um clone limpo
 entrega pronta para explorar.
 
 O que este seed cria é REAL: empresas, usuários e containers PostgreSQL de
-verdade com dados carregados. Ele não fabrica histórico — métricas de 24h,
-alertas, backups e audit só aparecem quando o usuário roda a simulação de uso
-em /demo (`services/demo_simulation.py`). Até lá, tudo o que o dashboard mostra
-foi medido.
+verdade com dados carregados. Além disso, no fim do boot ele deixa a frota VIVA:
+semeia o histórico sintético (24h de métricas, uptime, backups, alertas,
+manutenção, audit — via `seed/history.enrich_fleet`) e o gerador de carga mantém
+uma carga-base contínua, para o dashboard mostrar uma plataforma robusta já no
+primeiro login. O botão "Ver ao vivo" em /demo (`services/demo_simulation.py`) só
+amplifica essa base por ~1 min.
 
 Cria, de forma idempotente:
 - 3 empresas fictícias + 5 usuários cada (1 admin de empresa + 4 membros), todos
@@ -58,12 +60,21 @@ DEMO_PASSWORD = "DemoPass123!"
 
 MEMBER_NAMES = ["ana", "bruno", "carla", "diego"]
 
-# Ocupação alvo por ambiente, contra o plano de 1 GB declarado em COMPANIES:
-# ~25% em produção, ~10% em staging. Números escolhidos para a barra de storage
-# do card ter o que mostrar sem o seed gravar gigabytes na máquina de quem clona.
+# Tamanho-alvo do banco POR INSTÂNCIA (total de pg_database_size, não só o
+# lastro), contra o plano de 1 GB declarado em COMPANIES. Alvos VARIADOS de
+# propósito: com um valor único por ambiente, todos os cards mostravam a mesma
+# barra e a frota parecia de brinquedo. Aqui prod ocupa ~37–60% e staging
+# ~14–29% — um espectro que lê como "frota real", ainda sem gravar gigabytes por
+# instância (a opção rejeitada). Tunável: ajuste um número e o card acompanha,
+# porque os bytes são MEDIDOS por pg_database_size, não inventados.
+_MB = 1024 ** 2
 _BALLAST_TARGET_BYTES = {
-    Environment.PRODUCTION: 250 * 1024 ** 2,
-    Environment.STAGING: 100 * 1024 ** 2,
+    "neptune-payments-prod": 620 * _MB,      # ~60%
+    "saturn-store-prod": 500 * _MB,          # ~49%
+    "jupiter-clothing-prod": 380 * _MB,      # ~37%
+    "neptune-payments-staging": 180 * _MB,   # ~18%
+    "saturn-store-staging": 300 * _MB,       # ~29%
+    "jupiter-clothing-staging": 140 * _MB,   # ~14%
 }
 
 # Linhas por lote. ~640 bytes por linha → ~32 MB por lote; o teto de lotes é a
@@ -254,7 +265,7 @@ def _fill_storage(inst: DatabaseInstance) -> None:
     Idempotente: relê o tamanho a cada lote e para ao alcançar o alvo, então
     reexecutar o seed não engorda o banco.
     """
-    target = _BALLAST_TARGET_BYTES.get(inst.environment)
+    target = _BALLAST_TARGET_BYTES.get(inst.name)
     if target is None or not inst.connection_uri:
         return
 
@@ -398,11 +409,66 @@ def seed(db) -> None:
             _seed_real(db, company, admin, cfg)
         else:
             _seed_data_only(db, company, cfg)
-    # NADA de histórico aqui, de propósito: o boot entrega uma frota real e
-    # recém-criada. O enriquecimento sintético (métricas de 24h, uptime,
-    # alertas, backups, manutenção, audit) é a primeira fase da simulação de
-    # uso, disparada pelo usuário em /demo — ver services/demo_simulation.py.
+    # A frota nasce VIVA: o histórico sintético (24h de métricas, uptime, backups,
+    # alertas, manutenção, audit) é semeado agora, no boot — o dashboard mostra
+    # uma plataforma robusta já no primeiro login, sem ninguém clicar em nada. O
+    # botão "Ver ao vivo" em /demo só amplifica isso por ~1 min.
+    _enrich_boot(db)
     logger.info("Seed demo: concluído. Login: qualquer usuário @{neptune,saturn,jupiter}.example / %s", DEMO_PASSWORD)
+
+
+def _enrich_boot(db) -> None:
+    """
+    Popula a frota demo com histórico logo após o provisionamento.
+
+    Uma coleta real primeiro, para o backfill de 24h ancorar no tamanho de fato
+    medido (senão `enrich_fleet` cai para uma fração arbitrária da capacidade, e
+    a barra de storage não bate com o lastro gravado). Depois `enrich_fleet`
+    (idempotente: reruns não duplicam). Por fim marca o estado singleton para o
+    banner/UI saberem que a frota tem dado de demonstração.
+
+    Best-effort: falha de coleta numa instância só a deixa com o backfill de
+    fallback — o boot nunca falha por isto.
+    """
+    from src.models.instance_status_history import InstanceStatusHistory
+    from src.services import demo_simulation
+    from src.services.metrics import collect_and_store
+    from src.seed import history
+
+    demos = (
+        db.query(DatabaseInstance)
+        .filter(
+            DatabaseInstance.notes == DEMO_MARKER,
+            DatabaseInstance.deleted_at.is_(None),
+        )
+        .all()
+    )
+    for inst in demos:
+        if inst.status != InstanceStatus.RUNNING or not inst.connection_uri:
+            continue
+        try:
+            collect_and_store(db, inst)
+        except Exception as exc:  # noqa: BLE001 — o boot não pode falhar por isto
+            db.rollback()
+            logger.warning("Seed demo: coleta inicial em %s falhou: %s", inst.name, exc)
+
+    # O provisionamento já gravou linhas pending→provisioning→running no histórico
+    # de status. Sem removê-las, o guard de `enrich_fleet::_backdate_status`
+    # (`not _has(InstanceStatusHistory)`) pula o retroagir do created_at, e o KPI
+    # de uptime de 30 dias mede uma janela de segundos → percentuais absurdos.
+    # Zeramos aqui para o enrich semear a idade real (RUNNING desde ~45 dias).
+    demo_ids = [i.id for i in demos]
+    if demo_ids:
+        db.query(InstanceStatusHistory).filter(
+            InstanceStatusHistory.instance_id.in_(demo_ids)
+        ).delete(synchronize_session=False)
+        db.commit()
+
+    history.enrich_fleet(db)
+
+    state = demo_simulation.get_state(db)
+    state.has_simulated_data = True
+    db.commit()
 
 
 def clear(db) -> int:

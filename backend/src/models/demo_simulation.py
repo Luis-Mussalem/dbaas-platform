@@ -12,10 +12,12 @@ from src.core.database import Base
 
 class SimulationPhase(str, enum.Enum):
     """
-    Fases do roteiro de demonstração, na ordem em que o diretor as executa.
+    Fases do "demo ao vivo", na ordem em que o diretor as executa.
 
-    IDLE é o estado de repouso — nenhuma simulação rodando. STEADY é o fim do
-    roteiro: o tráfego continua indefinidamente até o usuário parar.
+    IDLE é o repouso — nenhum reel rodando, mas a frota segue viva na carga-base.
+    STEADY é a conclusão do reel: o tráfego volta à base e a UI mostra "concluído"
+    até o usuário parar. BACKFILL é vestígio (o histórico é semeado no boot); não
+    entra mais no roteiro, mas o valor do enum permanece para não exigir migração.
     """
 
     IDLE = "idle"
@@ -65,6 +67,9 @@ class DemoSimulation(Base):
     has_simulated_data: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
     )
+    # Vestígio: a aceleração 144× do tráfego foi removida (fazia o gráfico subir
+    # estranho). A coluna fica com default 1.0 para não exigir migração; nada a
+    # lê mais.
     speed_factor: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
     # {instance_id: created_at ISO} — estado real anterior ao backfill.
     restore_points: Mapped[dict[str, Any]] = mapped_column(

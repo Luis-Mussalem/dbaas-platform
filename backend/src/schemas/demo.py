@@ -13,11 +13,10 @@ class SimulationEvent(BaseModel):
 
 class SimulationStatus(BaseModel):
     """
-    Estado da simulação de uso, consumido pelo banner e pela página /demo.
+    Estado do "demo ao vivo", consumido pelo banner e pela página /demo.
 
-    `has_simulated_data` é independente de `running`: quando a simulação para,
-    os dados que ela semeou continuam no banco — e o aviso de "uso simulado"
-    continua na tela até o usuário limpar.
+    `has_simulated_data` é True desde o boot (a frota já nasce semeada) e
+    independe de `running` — sinaliza que existe dado de demonstração na frota.
     """
 
     enabled: bool
@@ -30,6 +29,5 @@ class SimulationStatus(BaseModel):
     # o da fase zera a cada etapa e parecia andar para trás.
     progress: float = 0.0
     has_simulated_data: bool
-    speed_factor: float
     started_at: datetime | None = None
     events: list[SimulationEvent] = []

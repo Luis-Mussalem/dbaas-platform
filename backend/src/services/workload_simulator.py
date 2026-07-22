@@ -12,9 +12,11 @@ madrugada, fim de semana mais fraco) e dispara um mix de queries por ciclo.
 Tudo o que o resto da plataforma mede passa a ter sinal real — conexões,
 transações/s, cache hit, p95 de latência, queries lentas, crescimento de disco.
 
-Ele é o *motor* do roteiro conduzido por `demo_simulation`, não um serviço
-autônomo: fora de uma simulação a intensidade é 0 e o ciclo não abre conexão
-nenhuma. Enquanto o usuário não clicar em "Simular uso", a frota fica intocada.
+Em modo demo ele roda o tempo todo numa **carga-base** leve
+(`demo_simulation.BASELINE_INTENSITY`), para a frota nunca parecer morta. O
+botão "Ver ao vivo" só AMPLIFICA essa base por ~1 min (`demo_simulation` eleva a
+intensidade da fase). Fora do modo demo os loops nem sobem (main.py), então
+instâncias criadas pelo usuário jamais recebem carga.
 
 Escopo e segurança:
 - Só toca instâncias da frota demo (`notes == DEMO_MARKER`), RUNNING e com
@@ -350,9 +352,9 @@ def simulate_once() -> None:
     mix de queries. Erro numa instância (container parado, rede) não cancela
     as demais — o pool dela é fechado e recomeça no ciclo seguinte.
 
-    Sem simulação ativa a intensidade é 0: os pools são devolvidos e o ciclo
-    não abre nada. É o que garante que a frota fica intocada até o usuário
-    clicar em "Simular uso".
+    Em modo demo a intensidade nunca é 0 (há sempre a carga-base), então os
+    pools ficam abertos continuamente. Só cai a 0 — e os pools são devolvidos —
+    fora do modo demo, quando os loops sequer sobem.
     """
     from src.services import demo_simulation
 
@@ -372,8 +374,9 @@ def simulate_once() -> None:
             if instance_id not in alive:
                 _pools.pop(instance_id).close_all()
 
-        # Tempo virtual: durante a simulação o relógio corre acelerado, então a
-        # curva de 24h se desenha em minutos (ver demo_simulation.virtual_now).
+        # Hora-do-dia real (a aceleração foi removida): a curva posiciona o alvo
+        # de conexões pelo horário; o que move o gráfico no reel é a intensidade
+        # da fase, não um relógio correndo (ver demo_simulation.virtual_now).
         now = demo_simulation.virtual_now()
         for inst in instances:
             pool = _pools.setdefault(inst.id, _InstancePool(inst.name))

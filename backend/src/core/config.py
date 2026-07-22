@@ -55,15 +55,14 @@ class Settings(BaseSettings):
     # current_value, threshold, message, triggered_at, resolved_at.
     ALERT_WEBHOOK_URL: str | None = None
 
-    # Demo mode — simulação de uso da frota de demonstração
-    # Expõe /api/v1/demo e mantém prontos o diretor do roteiro e o gerador de
-    # carga. Nada roda sozinho: até o usuário clicar em "Simular uso", a frota
-    # é 100% real (containers de verdade, sem histórico fabricado). Com
-    # DEMO_MODE=false os endpoints respondem 404 e os loops não sobem.
+    # Demo mode — frota de demonstração viva por padrão
+    # Expõe /api/v1/demo e sobe o diretor do "demo ao vivo" + o gerador de carga.
+    # Ao contrário do modelo antigo (frota nascia vazia), aqui o seed já popula a
+    # frota com histórico e o gerador mantém uma carga-base contínua, então o
+    # dashboard mostra uma plataforma viva já no primeiro login. O botão "Ver ao
+    # vivo" apenas amplifica isso por ~1 min. Com DEMO_MODE=false os endpoints
+    # respondem 404 e os loops não sobem.
     DEMO_MODE: bool = True
-    # Aceleração do tempo durante a simulação: 144 → a curva diária de tráfego
-    # (24h) se desenha em 10 minutos, que é o tempo de uma visita.
-    DEMO_SIMULATION_SPEED_FACTOR: float = 144.0
     DEMO_WORKLOAD_INTERVAL_SECONDS: int = 15
     # Teto de conexões simultâneas por instância de produção (staging usa ~metade).
     # Cada conexão é um backend PostgreSQL (~10 MB): 14 × 3 prod + 7 × 3 staging

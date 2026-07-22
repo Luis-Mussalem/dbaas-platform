@@ -1,33 +1,32 @@
 """
-Diretor da simulação de uso da frota de demonstração.
+Diretor do "demo ao vivo" da frota de demonstração.
 
-O clone limpo desta plataforma provisiona containers PostgreSQL reais e mais
-nada: sem tráfego, sem alertas, sem backups — porque nada disso aconteceu ainda.
-Honesto, mas um visitante não consegue ver o produto trabalhando em cinco
-minutos de visita.
+A frota demo já nasce viva: o seed popula o histórico (métricas de 24h, uptime,
+backups, alertas, manutenção — ver `seed/history.enrich_fleet`) e o gerador de
+carga mantém uma carga-base contínua, então o dashboard mostra uma plataforma
+robusta já no primeiro login, sem ninguém clicar em nada.
 
-Este módulo é o "Simular uso": um roteiro em fases que, uma vez iniciado pelo
-usuário, faz a plataforma administrar a frota **de verdade** — sobe tráfego OLTP,
-dispara um alerta a partir de métrica medida, roda `pg_dump`, roda VACUUM/ANALYZE,
-deixa o alerta resolver — e complementa com o backfill histórico daquilo que é
-impossível produzir ao vivo (uptime de 30 dias, semanas de backup). Enquanto
-qualquer dado semeado existir, a UI mostra o banner de "uso simulado", e
-`reset()` devolve a frota ao estado real.
+Este módulo é o botão "Ver ao vivo": um roteiro curto que, sob demanda,
+AMPLIFICA essa base por ~1 min para o visitante ver a plataforma administrando a
+frota **de verdade** — o tráfego sobe, um alerta abre a partir de métrica medida,
+roda `pg_dump`, roda VACUUM/ANALYZE, e o alerta resolve quando o tráfego cai de
+volta à base. Ao terminar, a frota **continua cheia e viva** (volta à base, nunca
+ao vazio). `reset()` restaura a base semeada pristina.
 
 Desenho:
-- **Estado no banco** (`DemoSimulation`, linha única): sobrevive a restart, é a
-  mesma verdade para todas as abas, e guarda os `restore_points` que o reset usa
-  para desfazer o que a simulação alterou nos registros reais.
-- **Relógio virtual**: `virtual_now()` acelera o tempo por `speed_factor` (144 →
-  24h em 10 min) para a curva diária de tráfego se desenhar na tela. Só o
-  tráfego usa esse relógio; tudo o que é persistido usa o tempo real.
+- **Estado no banco** (`DemoSimulation`, linha única): sobrevive a restart e é a
+  mesma verdade para todas as abas.
+- **Tempo real, sem aceleração**: a versão antiga acelerava o relógio 144× para a
+  curva de 24h se desenhar em minutos, mas isso fazia pontos consecutivos saltarem
+  pela curva e o gráfico "subir estranho". Agora o tráfego segue a hora-do-dia
+  real; o que move o gráfico durante o reel é a intensidade da fase (a rampa do
+  WARMUP, a queda do RECOVER), não um relógio correndo.
 - **Diretor**: `simulation_loop` bate a cada 2s e, quando a fase vence, avança e
   *despacha* a ação da próxima para uma thread dedicada. Despachar em vez de
-  executar é o que mantém o relógio do roteiro previsível: `pg_dump`, `VACUUM` e
-  o backfill variam de segundos a mais de um minuto conforme a máquina, e no tick
-  eles esticavam a fase pelo próprio tempo de execução. Uma ação que falha
-  (Docker fora, pg_dump ausente) vira evento no log e o roteiro segue — a demo
-  nunca trava.
+  executar mantém o relógio do roteiro previsível: `pg_dump` e `VACUUM` variam de
+  segundos a mais de um minuto conforme a máquina, e no tick eles esticavam a
+  fase pelo próprio tempo de execução. Uma ação que falha (Docker fora, pg_dump
+  ausente) vira evento no log e o roteiro segue — a demo nunca trava.
 
 Escopo: só instâncias da frota demo (`notes == DEMO_MARKER`). Com
 `DEMO_MODE=false` o router não é registrado e este loop não sobe.
@@ -63,15 +62,15 @@ logger = logging.getLogger(__name__)
 # ticks, não faz nada — o custo é irrelevante e a transição de fase fica no ponto.
 _TICK_SECONDS = 2
 
-# Duração de cada fase do roteiro (~1m40 no total). STEADY não tem duração: é o
-# fim (o tráfego continua até o usuário parar).
+# Duração de cada fase do roteiro (~1m30 no total). O reel já NÃO tem a fase
+# BACKFILL (o histórico é semeado no boot); começa direto no WARMUP. STEADY não
+# tem duração: é a conclusão (o tráfego segue na base até o usuário parar).
 #
 # O piso de cada fase não é estético: o alerta precisa abrir a partir de uma
 # métrica COLETADA e resolver a partir da queda MEDIDA depois. Com coleta a cada
 # ACCELERATED_INTERVAL_SECONDS, estes valores dão 3-4 ciclos por fase — encurtar
 # mais faria a fase passar em branco quando um ciclo atrasasse.
 PHASE_DURATIONS: dict[SimulationPhase, timedelta] = {
-    SimulationPhase.BACKFILL: timedelta(seconds=5),
     SimulationPhase.WARMUP: timedelta(seconds=18),
     SimulationPhase.ALERT: timedelta(seconds=22),
     # BACKUP e MAINTENANCE são curtas de propósito: os três pg_dump levam ~0.4s
@@ -82,9 +81,9 @@ PHASE_DURATIONS: dict[SimulationPhase, timedelta] = {
     SimulationPhase.RECOVER: timedelta(seconds=22),
 }
 
-# Ordem do roteiro.
+# Ordem do roteiro. BACKFILL saiu (é feito no boot pelo seed); STEADY é a
+# conclusão terminal.
 PHASE_ORDER: list[SimulationPhase] = [
-    SimulationPhase.BACKFILL,
     SimulationPhase.WARMUP,
     SimulationPhase.ALERT,
     SimulationPhase.BACKUP,
@@ -94,32 +93,42 @@ PHASE_ORDER: list[SimulationPhase] = [
 ]
 
 # Fases que compõem o roteiro propriamente dito — STEADY fica de fora porque é
-# a conclusão, não um passo: a UI conta "etapa X de 6" e desenha o fim à parte.
+# a conclusão, não um passo: a UI conta "etapa X de 5" e desenha o fim à parte.
 SCRIPT_PHASES: list[SimulationPhase] = PHASE_ORDER[:-1]
 
-# Intensidade do tráfego por fase (multiplica o alvo de conexões). RECOVER cai
-# de propósito: é a queda que faz o avaliador resolver o alerta aberto na fase
-# ALERT — a recuperação é observada, não escrita à mão.
+# Carga-base contínua da frota demo (fração do alvo de conexões). É o que mantém
+# a frota VIVA mesmo sem nenhum reel rodando: com IDLE > 0, o gerador nunca fecha
+# os pools e o poller sempre mede números críveis. Fora do modo demo os loops nem
+# sobem (main.py), então isto só vale para a frota de demonstração.
+#
+# O backfill histórico (seed/history) usa ESTA mesma fração ao escrever as
+# conexões de 24h — senão o histórico desenharia a curva cheia (~14 conexões) e a
+# medição ao vivo em repouso (~5) cairia num degrau no ponto "agora".
+BASELINE_INTENSITY = 0.3
+
+# Intensidade do tráfego por fase (multiplica o alvo de conexões). IDLE é a base
+# viva; RECOVER e STEADY voltam a ela — é a queda do pico à base que faz o
+# avaliador resolver o alerta aberto na fase ALERT (a recuperação é observada,
+# não escrita à mão).
 _TRAFFIC_INTENSITY: dict[SimulationPhase, float] = {
-    SimulationPhase.IDLE: 0.0,
-    SimulationPhase.BACKFILL: 0.0,
+    SimulationPhase.IDLE: BASELINE_INTENSITY,
     SimulationPhase.WARMUP: 1.0,
     SimulationPhase.ALERT: 1.0,
     SimulationPhase.BACKUP: 0.9,
     SimulationPhase.MAINTENANCE: 0.8,
-    SimulationPhase.RECOVER: 0.15,
-    SimulationPhase.STEADY: 1.0,
+    SimulationPhase.RECOVER: BASELINE_INTENSITY,
+    SimulationPhase.STEADY: BASELINE_INTENSITY,
 }
 
-# Enquanto a simulação roda, métricas e alertas são coletados/avaliados neste
-# intervalo, em vez dos 60s normais: com o tempo acelerado, 60s de relógio real
-# seriam ~2.5h virtuais e o gráfico viraria uma escada de dois degraus. É também
-# o que permite fases de ~20s — cada uma ainda vê 3-4 amostras.
+# Enquanto o reel roda, métricas e alertas são coletados/avaliados neste
+# intervalo, em vez dos 60s normais. Não é sobre relógio acelerado (já não há):
+# é densidade de amostras. O reel dura ~90s, e o que move o gráfico é a rampa da
+# intensidade da fase — sem coletar a cada 5s, uma fase de ~20s veria só 1-2
+# pontos e a rampa apareceria como um degrau em vez de uma subida.
 ACCELERATED_INTERVAL_SECONDS = 5
 
-# Ciclo do gerador de carga durante a simulação. Precisa ser curto pelo mesmo
-# motivo: o pool sobe _MAX_POOL_STEP conexões por ciclo, e a fase WARMUP inteira
-# dura 18s.
+# Ciclo do gerador de carga durante o reel. Precisa ser curto pelo mesmo motivo:
+# o pool sobe _MAX_POOL_STEP conexões por ciclo, e a fase WARMUP inteira dura 18s.
 ACCELERATED_WORKLOAD_INTERVAL_SECONDS = 5
 
 # Fatia de espera dos loops que aceleram durante a simulação: eles reavaliam o
@@ -185,9 +194,9 @@ def _mark_monotonic(key: str) -> None:
     _MONOTONIC_REFS[key] = time.monotonic()
 
 
-# Cache curto do estado lido pelos loops (ver _read_live_state).
+# Cache curto da FASE lida pelos loops (ver _read_live_state).
 _STATE_CACHE_TTL = 1.0
-_state_cache: tuple[float, tuple[Any, datetime | None, float]] | None = None
+_state_cache: tuple[float, SimulationPhase] | None = None
 _state_cache_lock = threading.Lock()
 
 
@@ -326,16 +335,16 @@ def _production_instances(db: Session) -> list[DatabaseInstance]:
 # --------------------------------------------------------------------------- #
 # Relógio virtual e intensidade — lidos pelo workload simulator e pelos pollers
 # --------------------------------------------------------------------------- #
-def _read_live_state() -> tuple[SimulationPhase, datetime | None, float]:
+def _read_live_state() -> SimulationPhase:
     """
-    Fase/início/velocidade atuais, numa sessão própria e curta.
+    Fase atual, numa sessão própria e curta.
 
     Chamado por loops que rodam fora de contexto HTTP e não têm sessão à mão.
-    Falha de banco devolve IDLE: sem simulação, ninguém gera carga.
+    Falha de banco devolve IDLE (a carga-base, não zero).
 
-    Cacheado por _STATE_CACHE_TTL: durante a simulação isto é consultado várias
-    vezes por ciclo por três loops distintos, e cada consulta tomava uma conexão
-    do pool só para ler uma linha que muda no máximo a cada 2s.
+    Cacheado por _STATE_CACHE_TTL: durante o reel isto é consultado várias vezes
+    por ciclo por loops distintos, e cada consulta tomava uma conexão do pool só
+    para ler uma linha que muda no máximo a cada 2s.
     """
     cached = _state_cache_get()
     if cached is not None:
@@ -344,59 +353,47 @@ def _read_live_state() -> tuple[SimulationPhase, datetime | None, float]:
     db = SessionLocal()
     try:
         state = db.query(DemoSimulation).first()
-        value = (
-            (SimulationPhase.IDLE, None, 1.0)
-            if state is None
-            else (state.phase, state.started_at, state.speed_factor or 1.0)
-        )
-        _state_cache_put(value)
-        return value
+        phase = SimulationPhase.IDLE if state is None else state.phase
+        _state_cache_put(phase)
+        return phase
     except Exception:  # noqa: BLE001 — leitura best-effort de estado de demo
-        return SimulationPhase.IDLE, None, 1.0
+        return SimulationPhase.IDLE
     finally:
         db.close()
 
 
 def virtual_now() -> datetime:
     """
-    Tempo do ponto de vista do tráfego simulado.
+    Instante que o gerador de carga usa para posicionar a curva de tráfego.
 
-    Sem simulação ativa, é o tempo real. Com simulação, o tempo desde o início
-    é multiplicado por `speed_factor` — é o que faz a curva diária de conexões
-    se desenhar em minutos em vez de 24 horas.
+    É o tempo REAL — a aceleração 144× foi removida (fazia os pontos saltarem
+    pela curva e o gráfico "subir estranho"). O nome se mantém porque é o ponto
+    único onde a base temporal do tráfego é decidida; hoje ela é simplesmente a
+    hora-do-dia real, e o que move o gráfico no reel é a intensidade da fase.
     """
-    phase, started_at, factor = _read_live_state()
-    if phase == SimulationPhase.IDLE or started_at is None:
-        return _now()
-    # Duração medida no relógio monotônico; o instante de origem continua sendo
-    # o timestamp real do início (é ele que ancora a curva no dia).
-    elapsed = _monotonic_elapsed(_RUN_KEY, started_at) or 0.0
-    return started_at + timedelta(seconds=elapsed * factor)
+    return _now()
 
 
 def traffic_intensity() -> float:
-    """Multiplicador de carga da fase atual (0 = simulador dorme)."""
-    phase, _, _ = _read_live_state()
-    return _TRAFFIC_INTENSITY.get(phase, 0.0)
+    """Multiplicador de carga da fase atual (IDLE = carga-base contínua)."""
+    return _TRAFFIC_INTENSITY.get(_read_live_state(), BASELINE_INTENSITY)
 
 
 def tick_interval(default: int) -> int:
     """
     Intervalo que os loops de coleta/avaliação devem usar agora.
 
-    Acelera durante a simulação e volta ao normal quando ela termina — assim os
-    gráficos acompanham o tempo virtual sem mudar o comportamento em produção.
+    Adensa durante o reel (mais amostras para a rampa da fase aparecer) e volta
+    ao normal quando ele termina — sem mudar o comportamento em produção.
     """
-    phase, _, _ = _read_live_state()
-    if phase == SimulationPhase.IDLE:
+    if _read_live_state() == SimulationPhase.IDLE:
         return default
     return min(default, ACCELERATED_INTERVAL_SECONDS)
 
 
 def workload_interval(default: int) -> int:
-    """Ciclo do gerador de carga: acelerado durante a simulação, normal fora."""
-    phase, _, _ = _read_live_state()
-    if phase == SimulationPhase.IDLE:
+    """Ciclo do gerador de carga: adensado durante o reel, normal fora."""
+    if _read_live_state() == SimulationPhase.IDLE:
         return default
     return min(default, ACCELERATED_WORKLOAD_INTERVAL_SECONDS)
 
@@ -459,35 +456,10 @@ def _audit(
     db.commit()
 
 
-def _phase_backfill(db: Session) -> None:
-    """
-    Semeia o histórico que não dá para produzir ao vivo (uptime de 30 dias,
-    semanas de backup, frota com idade) e guarda os pontos de restauração.
-    """
-    from src.seed import history
-
-    instances = _demo_instances(db)
-    state = db.query(DemoSimulation).with_for_update().first()
-    if state is not None:
-        restore = dict(state.restore_points or {})
-        for inst in instances:
-            restore.setdefault(str(inst.id), inst.created_at.isoformat())
-        state.restore_points = restore
-        state.has_simulated_data = True
-        db.commit()
-
-    history.enrich_fleet(db)
-    log_event_atomic(
-        SimulationPhase.BACKFILL,
-        f"Seeded 24h of metrics, uptime and operational history for "
-        f"{len(instances)} instances",
-    )
-
-
 def _phase_warmup(db: Session) -> None:
     log_event_atomic(
         SimulationPhase.WARMUP,
-        "Traffic ramping up — connection pools follow an accelerated daily curve",
+        "Traffic ramping up above baseline — connection pools grow across the fleet",
     )
 
 
@@ -620,7 +592,6 @@ def _phase_steady(db: Session) -> None:
 
 
 _PHASE_ACTIONS = {
-    SimulationPhase.BACKFILL: _phase_backfill,
     SimulationPhase.WARMUP: _phase_warmup,
     SimulationPhase.ALERT: _phase_alert,
     SimulationPhase.BACKUP: _phase_backup,
@@ -645,7 +616,7 @@ def _latest_metric(db: Session, instance_id: uuid.UUID, name: str) -> float | No
 # --------------------------------------------------------------------------- #
 def start(db: Session) -> DemoSimulation:
     """
-    Inicia o roteiro. Idempotente: se já está rodando, devolve o estado atual
+    Inicia o reel. Idempotente: se já está rodando, devolve o estado atual
     (dois cliques no botão não reiniciam a demo pela metade).
     """
     state = get_state(db)
@@ -657,9 +628,8 @@ def start(db: Session) -> DemoSimulation:
     state.started_at = now
     state.phase_started_at = now
     state.stopped_at = None
-    state.speed_factor = settings.DEMO_SIMULATION_SPEED_FACTOR
     state.events = []
-    _log_event(state, state.phase, "Simulation started")
+    _log_event(state, state.phase, "Live demo started")
     db.commit()
 
     _mark_monotonic(_RUN_KEY)
@@ -670,15 +640,19 @@ def start(db: Session) -> DemoSimulation:
     return state
 
 
-def stop(db: Session, collect: bool = True) -> DemoSimulation:
+def stop(db: Session) -> DemoSimulation:
     """
-    Para o tráfego e o roteiro, PRESERVANDO os dados gerados — o visitante pode
-    continuar navegando pelo que a simulação produziu. `has_simulated_data`
-    segue verdadeiro, então o aviso continua na tela.
+    Encerra o reel e volta à carga-base — a frota continua CHEIA e viva.
+
+    Não fecha os pools nem força coleta: com IDLE = carga-base, o gerador só
+    reduz os pools ao tamanho-base no próximo ciclo e o poller segue medindo
+    números vivos. A queda do pico já aconteceu na fase RECOVER (que roda na
+    base), então não há degrau a "consertar" — foi justamente o fechar-tudo-e-
+    medir-ocioso do modelo antigo que deixava o dashboard parecendo morto.
     """
     state = get_state(db)
     if is_running(state):
-        _log_event(state, state.phase, "Simulation stopped by the user")
+        _log_event(state, state.phase, "Live demo stopped by the user")
     state.phase = SimulationPhase.IDLE
     state.stopped_at = _now()
     state.phase_started_at = None
@@ -687,35 +661,25 @@ def stop(db: Session, collect: bool = True) -> DemoSimulation:
     # Invalida a geração: o que ainda estiver na fila do executor não roda.
     _next_generation()
     invalidate_state_cache()
-
-    from src.services import workload_simulator
-
-    workload_simulator.shutdown_pools()
-    # Com os pools fechados, a frota voltou ao repouso AGORA — mas a última
-    # amostra guardada ainda é a do pico de carga, e o poller só passa de novo
-    # até 60s depois. Sem esta coleta, o dashboard seguia anunciando dezenas de
-    # conexões numa frota que já estava parada: o número certo, do instante
-    # errado. Mesmo motivo da coleta no reset.
-    #
-    # `collect=False` vem do reset, que apaga as métricas logo em seguida e faz
-    # a sua própria coleta — medir duas vezes só gastaria um segundo à toa.
-    if collect:
-        _collect_now(db)
     return state
 
 
 def reset(db: Session) -> DemoSimulation:
     """
-    Devolve a frota ao estado real: para tudo e apaga o que a simulação criou —
-    métricas, alertas, backups (registros e arquivos), manutenção, histórico de
-    status e audit das empresas demo — restaurando o `created_at` original das
-    instâncias. Os containers e o dataset semeado ficam de pé: eles são reais.
+    Restaura a base semeada pristina: encerra o reel, apaga tudo que existe na
+    frota demo (métricas, alertas, backups com arquivos, manutenção, histórico de
+    status e o audit simulado) e RE-SEMEIA o histórico canônico via `enrich_fleet`.
+
+    Diferente do modelo antigo, que devolvia a frota ao estado VAZIO: aqui a frota
+    volta cheia e saudável — é o mesmo estado que o boot entrega. Serve para
+    desfazer o alerta/backup extra que um reel deixou e recomeçar limpo. Os
+    containers e o dataset semeado ficam de pé: eles são reais.
     """
+    from src.seed import history
     from src.services import backup as backup_service
 
-    state = stop(db, collect=False)
+    state = stop(db)
     instances = _demo_instances(db)
-    restore = state.restore_points or {}
 
     for inst in instances:
         db.query(Metric).filter(Metric.instance_id == inst.id).delete(synchronize_session=False)
@@ -737,14 +701,8 @@ def reset(db: Session) -> DemoSimulation:
         db.query(Backup).filter(Backup.instance_id == inst.id).delete(synchronize_session=False)
         db.query(BackupSchedule).filter(BackupSchedule.instance_id == inst.id).delete(synchronize_session=False)
 
-        original = restore.get(str(inst.id))
-        if original:
-            inst.created_at = datetime.fromisoformat(original)
-
     # Audit: só o que a simulação escreveu (marcado com simulated=true), não
-    # tudo da empresa. Antes o reset levava junto os registros das ações que o
-    # próprio visitante fez na UI — os logins dele, os backups que ele pediu —
-    # que são reais e não têm por que sumir.
+    # tudo da empresa — os logins e ações reais do próprio visitante ficam.
     company_ids = {i.company_id for i in instances if i.company_id}
     if company_ids:
         db.query(AuditLog).filter(
@@ -752,26 +710,31 @@ def reset(db: Session) -> DemoSimulation:
             AuditLog.details["simulated"].astext == "true",
         ).delete(synchronize_session=False)
 
-    state.has_simulated_data = False
     state.restore_points = {}
     state.events = []
     state.started_at = None
     db.commit()
 
+    # Reconstrói a base: uma coleta real ancora o backfill no tamanho medido, e
+    # enrich_fleet regenera o histórico canônico (24h, uptime, backups, alertas).
     _collect_now(db)
-    logger.info("Simulação: frota demo devolvida ao estado real.")
+    history.enrich_fleet(db)
+    state.has_simulated_data = True
+    db.commit()
+
+    _collect_now(db)
+    logger.info("Simulação: frota demo restaurada à base semeada.")
     return state
 
 
 def _collect_now(db: Session) -> None:
     """
-    Coleta imediata das instâncias demo no ar, logo após o reset.
+    Coleta imediata das instâncias demo no ar.
 
-    O reset apaga TODAS as métricas, e o poller só passa de novo até 60s depois:
-    nesse intervalo o dashboard ficava literalmente vazio — conexões, cache hit
-    e tamanho em "—", sparklines em branco — como se a frota tivesse sumido, e
-    não como se ela tivesse acabado de ser zerada. Uma coleta aqui custa ~1s e
-    devolve a tela preenchida com medição real no mesmo clique.
+    Usada pelo reset: depois de apagar as métricas, o poller só passaria de novo
+    até 60s depois e o dashboard ficaria vazio nesse intervalo. Uma coleta aqui
+    custa ~1s e devolve a tela preenchida com medição real no mesmo clique — e
+    ancora o backfill do enrich_fleet no tamanho de fato medido.
 
     Best-effort: instância que não responde fica sem amostra até o próximo ciclo
     do poller, o que é exatamente o comportamento normal.
@@ -832,7 +795,6 @@ def status(db: Session) -> dict[str, Any]:
         "phase_progress": round(phase_progress, 3),
         "progress": round(progress, 3),
         "has_simulated_data": state.has_simulated_data,
-        "speed_factor": state.speed_factor,
         "started_at": state.started_at,
         "events": list(state.events or []),
     }
