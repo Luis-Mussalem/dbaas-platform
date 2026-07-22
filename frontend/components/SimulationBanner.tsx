@@ -6,22 +6,21 @@ import { FlaskConical } from "lucide-react";
 import { useSimulation } from "@/context/SimulationProvider";
 import { BTN_GHOST } from "@/lib/ui";
 
-// Aviso honesto, sempre visível enquanto houver dado simulado na frota.
+// Aviso mostrado só enquanto uma demo ao vivo roda.
 //
-// Três estados, e a distinção importa:
+// A frota já nasce semeada (has_simulated_data é sempre True), então dirigir o
+// banner por esse sinal o deixaria permanente — o que não faz sentido: a base
+// populada é o estado NORMAL da demo, não uma exceção a avisar. Dois estados:
 //  - roteiro em curso: mostra a etapa (X de N) e o progresso dela;
-//  - regime (steady): o roteiro acabou, o tráfego continua — sem barra de
-//    progresso, senão parece que ainda está carregando algo;
-//  - parado, mas com dados: o que foi semeado continua no banco, e o visitante
-//    precisa saber disso ao olhar os gráficos, mesmo sem nada acontecendo.
-// Frota limpa (nunca simulada) não renderiza nada: a UI não fala de simulação
-// para quem não pediu uma.
+//  - regime (steady): o roteiro acabou, o tráfego segue na base — sem barra de
+//    progresso, senão parece que ainda está carregando algo.
+// A divulgação "dado de demonstração" fica estática na página /demo e no README.
 export function SimulationBanner() {
   const t = useTranslations("Simulation");
   const { status, stop, isPending } = useSimulation();
 
   if (!status?.enabled) return null;
-  if (!status.running && !status.has_simulated_data) return null;
+  if (!status.running) return null;
 
   const running = status.running;
   const complete = status.phase === "steady";
@@ -41,9 +40,7 @@ export function SimulationBanner() {
               index: status.phase_index + 1,
               count: status.phase_count,
             })
-          : complete
-            ? t("banner.complete")
-            : t("banner.finished")}
+          : t("banner.complete")}
       </span>
 
       {inScript && (

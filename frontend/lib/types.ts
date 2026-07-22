@@ -398,9 +398,11 @@ export interface Replica {
 
 // ─── Demo usage simulation ────────────────────────────────────────────────────
 
+// Espelha o que a API de fato emite. `backfill` continua no enum do backend
+// (vestígio, para não exigir migração), mas saiu do roteiro e nunca é reportado,
+// então não entra aqui.
 export type SimulationPhase =
   | "idle"
-  | "backfill"
   | "warmup"
   | "alert"
   | "backup"
@@ -414,8 +416,8 @@ export interface SimulationEvent {
   message: string;
 }
 
-// `has_simulated_data` é independente de `running`: quando a simulação para,
-// o que ela semeou continua no banco — e o aviso continua na tela.
+// `has_simulated_data` é True desde o boot (a frota já nasce semeada) e independe
+// de `running`: sinaliza que há dado de demonstração na frota.
 export interface SimulationStatus {
   enabled: boolean;
   running: boolean;
@@ -426,7 +428,6 @@ export interface SimulationStatus {
   // Progresso do roteiro inteiro (0-1), monotônico — o da fase zera a cada etapa.
   progress: number;
   has_simulated_data: boolean;
-  speed_factor: number;
   started_at: string | null;
   events: SimulationEvent[];
 }

@@ -20,14 +20,14 @@ import { BTN, BTN_DANGER, BTN_PRIMARY } from "@/lib/ui";
 import { cn } from "@/lib/utils";
 import type { SimulationPhase } from "@/lib/types";
 
-// As etapas do roteiro (services/demo_simulation.py::SCRIPT_PHASES). Duplicadas
-// aqui só para desenhar a timeline antes de a simulação começar — o estado ao
-// vivo (etapa atual, progresso) continua vindo da API.
+// As etapas do reel (services/demo_simulation.py::SCRIPT_PHASES). Duplicadas
+// aqui só para desenhar a timeline antes de o reel começar — o estado ao vivo
+// (etapa atual, progresso) continua vindo da API.
 //
+// `backfill` saiu (o histórico é semeado no boot, não é mais uma etapa) e
 // `steady` NÃO entra: é a conclusão, não uma etapa. Como item da lista, com
 // spinner, parecia que algo ainda estava carregando; virou o card de fim.
 const PHASES: SimulationPhase[] = [
-  "backfill",
   "warmup",
   "alert",
   "backup",
@@ -122,9 +122,7 @@ export default function DemoPage() {
       <section className="rounded-xl border border-border bg-surface p-4">
         <div className="flex items-baseline justify-between">
           <h2 className="text-sm font-semibold">{t("script.title")}</h2>
-          <span className="text-xs text-muted-foreground">
-            {t("script.eta")} · {t("script.speed", { factor: Math.round(status.speed_factor) })}
-          </span>
+          <span className="text-xs text-muted-foreground">{t("script.eta")}</span>
         </div>
 
         {/* Progresso do roteiro inteiro — só enquanto ele corre. */}

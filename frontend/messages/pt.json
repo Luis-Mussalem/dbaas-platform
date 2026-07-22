@@ -611,46 +611,41 @@
   },
   "Simulation": {
     "actions": {
-      "reset": "Limpar dados simulados",
-      "start": "Simular uso",
+      "reset": "Restaurar baseline",
+      "start": "Ver ao vivo",
       "stop": "Parar"
     },
     "banner": {
-      "complete": "Roteiro concluído — a frota segue atendendo tráfego.",
+      "complete": "Demo ao vivo concluída — a frota segue atendendo tráfego.",
       "details": "Detalhes",
       "eta": "leva cerca de 90 segundos",
-      "finished": "A frota ainda contém dados produzidos por uma simulação.",
-      "label": "Uso simulado",
+      "label": "Demo ao vivo",
       "running": "{phase} · etapa {index} de {count}"
     },
     "complete": {
-      "body": "As seis etapas terminaram. O tráfego continua para a frota seguir viva enquanto você explora — pare quando quiser.",
-      "title": "Roteiro concluído"
+      "body": "As cinco etapas terminaram. A frota continua cheia e atendendo tráfego enquanto você explora — pare a demo quando quiser.",
+      "title": "Demo ao vivo concluída"
     },
     "disabled": {
-      "subtitle": "Esta instalação roda com o modo demo desligado, então não há o que simular aqui.",
+      "subtitle": "Esta instalação roda com o modo demo desligado, então não há o que executar aqui.",
       "title": "Modo demo desligado"
     },
-    "loadFailed": "Não foi possível carregar o estado da simulação.",
-    "loading": "Carregando o estado da simulação…",
+    "loadFailed": "Não foi possível carregar o estado da demo.",
+    "loading": "Carregando o estado da demo…",
     "log": {
-      "title": "O que a simulação fez"
+      "title": "O que a demo ao vivo fez"
     },
     "phase": {
       "alert": {
         "description": "Cria uma regra logo abaixo da razão de conexões medida agora, para o avaliador abrir o evento a partir de métrica real.",
         "title": "Um alerta dispara"
       },
-      "backfill": {
-        "description": "Semeia o histórico que não dá para produzir ao vivo: 24h de métricas, uptime de 30 dias, semanas de backups e trilha de auditoria.",
-        "title": "Semear o histórico"
-      },
       "backup": {
         "description": "Roda pg_dump em cada banco de produção — arquivos .dump reais aparecem no disco.",
         "title": "Backup da produção"
       },
       "idle": {
-        "description": "Nada rodando. A frota mostra apenas o que de fato mediu.",
+        "description": "Nenhuma demo ao vivo rodando. A frota segue atendendo o tráfego-base.",
         "title": "Parada"
       },
       "maintenance": {
@@ -658,37 +653,36 @@
         "title": "Rodar manutenção"
       },
       "recover": {
-        "description": "O tráfego volta ao patamar normal; o avaliador resolve o alerta aberto sozinho, a partir das métricas que lê.",
+        "description": "O tráfego volta à base; o avaliador resolve o alerta aberto sozinho, a partir das métricas que lê.",
         "title": "A carga se recupera"
       },
       "steady": {
-        "description": "O roteiro terminou e a frota segue atendendo tráfego até você parar.",
+        "description": "A demo ao vivo terminou e a frota segue atendendo o tráfego-base até você parar.",
         "title": "Regime"
       },
       "warmup": {
-        "description": "Pools de conexão abrem na frota e rodam um mix OLTP — vazão, latência e cache hit começam a se mover.",
+        "description": "Pools de conexão crescem na frota e rodam um mix OLTP — vazão, latência e cache hit sobem.",
         "title": "O tráfego sobe"
       }
     },
     "real": {
-      "body": "A frota é real: seis containers PostgreSQL provisionados por esta plataforma, com dados carregados. Conexões, vazão, latência, queries lentas e crescimento de disco são medidos deles — nunca inventados.",
+      "body": "A frota é real: seis containers PostgreSQL provisionados por esta plataforma, com dados carregados. Conexões, vazão, latência, queries lentas e crescimento de disco são medidos deles — nunca inventados. Uma carga-base leve os mantém vivos.",
       "title": "O que é real"
     },
     "reset": {
-      "description": "Apaga todas as métricas, alertas, backups (registros e arquivos), tarefas de manutenção e entradas de auditoria que a simulação produziu, e restaura as datas de criação originais. Os containers e seus dados permanecem.",
-      "title": "Limpar os dados simulados?"
+      "description": "Limpa tudo na frota demo e re-semeia a base canônica — desfazendo qualquer alerta ou backup extra que uma demo ao vivo deixou. A frota volta cheia, não vazia. Os containers e seus dados permanecem.",
+      "title": "Restaurar a base da demo?"
     },
     "script": {
       "eta": "A execução inteira leva cerca de 90 segundos",
-      "speed": "O tempo corre {factor}× mais rápido durante a execução",
       "title": "O roteiro"
     },
     "seeded": {
-      "body": "Um KPI de uptime de 30 dias ou duas semanas de histórico de backup não acontecem em cinco minutos. A simulação semeia esse histórico explicitamente — e enquanto qualquer parte dele existir, o aviso continua na tela.",
+      "body": "Um KPI de uptime de 30 dias ou duas semanas de histórico de backup não acontecem em cinco minutos, então a frota nasce semeada com esse histórico no boot. É dado de demonstração, claramente rotulado — 'Restaurar baseline' o regenera quando quiser.",
       "title": "O que é semeado"
     },
-    "subtitle": "Inicie o roteiro e veja a plataforma administrando a frota demo de verdade: tráfego, alertas, backups e manutenção. Até você clicar, tudo na tela foi medido.",
-    "title": "Simular uso"
+    "subtitle": "A frota demo já está viva. Clique para ver a plataforma administrá-la de verdade por cerca de um minuto: o tráfego sobe, um alerta abre e resolve, um backup e a manutenção rodam — e então tudo volta à base.",
+    "title": "Demo ao vivo"
   },
   "Sql": {
     "empty": {

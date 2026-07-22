@@ -611,46 +611,41 @@
   },
   "Simulation": {
     "actions": {
-      "reset": "Clear simulated data",
-      "start": "Simulate usage",
+      "reset": "Restore baseline",
+      "start": "Run live demo",
       "stop": "Stop"
     },
     "banner": {
-      "complete": "Run complete — the fleet keeps serving traffic.",
+      "complete": "Live demo complete — the fleet keeps serving traffic.",
       "details": "Details",
       "eta": "takes about 90 seconds",
-      "finished": "The fleet still holds data produced by a simulation.",
-      "label": "Simulated usage",
+      "label": "Live demo",
       "running": "{phase} · step {index} of {count}"
     },
     "complete": {
-      "body": "All six steps finished. Traffic keeps flowing so the fleet stays alive while you explore — stop it whenever you like.",
-      "title": "Run complete"
+      "body": "All five steps finished. The fleet stays full and keeps serving traffic while you explore — stop the demo whenever you like.",
+      "title": "Live demo complete"
     },
     "disabled": {
-      "subtitle": "This deployment runs with demo mode turned off, so there is nothing to simulate here.",
+      "subtitle": "This deployment runs with demo mode turned off, so there is nothing to run here.",
       "title": "Demo mode is off"
     },
-    "loadFailed": "Could not load the simulation state.",
-    "loading": "Loading the simulation state…",
+    "loadFailed": "Could not load the demo state.",
+    "loading": "Loading the demo state…",
     "log": {
-      "title": "What the simulation did"
+      "title": "What the live demo did"
     },
     "phase": {
       "alert": {
         "description": "Creates a rule just below the connection ratio measured right now, so the evaluator opens the event from a real metric.",
         "title": "An alert fires"
       },
-      "backfill": {
-        "description": "Seeds the history that cannot be produced live: 24h of metrics, 30-day uptime, weeks of backups and an audit trail.",
-        "title": "Seed the history"
-      },
       "backup": {
         "description": "Runs pg_dump against each production database — real .dump files land on disk.",
         "title": "Back up production"
       },
       "idle": {
-        "description": "Nothing running. The fleet shows only what it has actually measured.",
+        "description": "No live demo running. The fleet keeps serving its baseline traffic.",
         "title": "Idle"
       },
       "maintenance": {
@@ -662,33 +657,32 @@
         "title": "Load recovers"
       },
       "steady": {
-        "description": "The scripted run is over and the fleet keeps serving traffic until you stop it.",
+        "description": "The live demo is over and the fleet keeps serving its baseline traffic until you stop it.",
         "title": "Steady state"
       },
       "warmup": {
-        "description": "Connection pools open across the fleet and run an OLTP query mix — throughput, latency and cache hit start moving.",
+        "description": "Connection pools grow across the fleet and run an OLTP query mix — throughput, latency and cache hit climb.",
         "title": "Traffic ramps up"
       }
     },
     "real": {
-      "body": "The fleet itself is real: six PostgreSQL containers, provisioned by this platform, with data loaded. Connections, throughput, latency, slow queries and disk growth are measured from them — never faked.",
+      "body": "The fleet is real: six PostgreSQL containers, provisioned by this platform, with data loaded. Connections, throughput, latency, slow queries and disk growth are measured from them — never faked. A light baseline of traffic keeps them alive.",
       "title": "What is real"
     },
     "reset": {
-      "description": "Deletes every metric, alert, backup (records and files), maintenance task and audit entry the simulation produced, and restores the original creation dates. The containers and their data stay.",
-      "title": "Clear the simulated data?"
+      "description": "Clears everything on the demo fleet and re-seeds the canonical baseline — undoing any extra alert or backup a live demo left behind. The fleet comes back full, not empty. The containers and their data stay.",
+      "title": "Restore the demo baseline?"
     },
     "script": {
       "eta": "The whole run takes about 90 seconds",
-      "speed": "Time runs {factor}× faster during the run",
       "title": "The script"
     },
     "seeded": {
-      "body": "A 30-day uptime KPI or two weeks of backup history cannot happen in five minutes. The simulation seeds that history explicitly — and while any of it exists, the warning banner stays on screen.",
+      "body": "A 30-day uptime KPI or two weeks of backup history cannot happen in five minutes, so the fleet is seeded with that history at startup. It is clearly labelled demo data — 'Restore baseline' regenerates it at any time.",
       "title": "What is seeded"
     },
-    "subtitle": "Start a scripted run and watch the platform administer the demo fleet for real: traffic, alerts, backups and maintenance. Until you press it, everything on screen was measured.",
-    "title": "Simulate usage"
+    "subtitle": "The demo fleet is already live. Press to watch the platform administer it for real over about a minute: traffic climbs, an alert fires and resolves, a backup and maintenance run — then it settles back to baseline.",
+    "title": "Live demo"
   },
   "Sql": {
     "empty": {
