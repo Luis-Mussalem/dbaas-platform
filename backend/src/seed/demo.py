@@ -5,10 +5,10 @@ entrega pronta para explorar.
 O que este seed cria é REAL: empresas, usuários e containers PostgreSQL de
 verdade com dados carregados. Além disso, no fim do boot ele deixa a frota VIVA:
 semeia o histórico sintético (24h de métricas, uptime, backups, alertas,
-manutenção, audit — via `seed/history.enrich_fleet`) e o gerador de carga mantém
-uma carga-base contínua, para o dashboard mostrar uma plataforma robusta já no
-primeiro login. O botão "Ver ao vivo" em /demo (`services/demo_simulation.py`) só
-amplifica essa base por ~1 min.
+manutenção, audit — via `seed/history.enrich_fleet`) e o gerador de carga
+(`services/workload_simulator.py`) mantém uma carga-base contínua, para o
+dashboard mostrar uma plataforma robusta e viva já no primeiro login, sem
+ninguém precisar clicar em nada.
 
 Cria, de forma idempotente:
 - 3 empresas fictícias + 5 usuários cada (1 admin de empresa + 4 membros), todos
@@ -424,14 +424,12 @@ def _enrich_boot(db) -> None:
     Uma coleta real primeiro, para o backfill de 24h ancorar no tamanho de fato
     medido (senão `enrich_fleet` cai para uma fração arbitrária da capacidade, e
     a barra de storage não bate com o lastro gravado). Depois `enrich_fleet`
-    (idempotente: reruns não duplicam). Por fim marca o estado singleton para o
-    banner/UI saberem que a frota tem dado de demonstração.
+    (idempotente: reruns não duplicam).
 
     Best-effort: falha de coleta numa instância só a deixa com o backfill de
     fallback — o boot nunca falha por isto.
     """
     from src.models.instance_status_history import InstanceStatusHistory
-    from src.services import demo_simulation
     from src.services.metrics import collect_and_store
     from src.seed import history
 
@@ -465,10 +463,6 @@ def _enrich_boot(db) -> None:
         db.commit()
 
     history.enrich_fleet(db)
-
-    state = demo_simulation.get_state(db)
-    state.has_simulated_data = True
-    db.commit()
 
 
 def clear(db) -> int:

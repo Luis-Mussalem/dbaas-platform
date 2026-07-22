@@ -16,8 +16,6 @@ import pytest
 
 from src.core.encryption import encrypt_value
 from src.models.database_instance import DatabaseInstance, Environment, InstanceStatus
-from src.models.demo_simulation import SimulationPhase
-from src.services import demo_simulation as sim
 from src.services import workload_simulator as ws
 
 DEMO_MARKER = "__demo_fleet__"
@@ -129,24 +127,6 @@ def _clean_pools():
 
 
 @pytest.fixture
-def simulation_running(db):
-    """
-    Em modo demo o gerador roda sempre (carga-base), mas estes testes fixam a
-    fase STEADY para um estado explícito e estável — o roteiro em si tem testes
-    próprios. A intensidade de STEADY é a base (> 0), então o motor trabalha.
-    """
-    state = sim.get_state(db)
-    state.phase = SimulationPhase.STEADY
-    state.started_at = sim._now()
-    db.commit()
-    # O estado é lido através de um cache de 1s pelos loops — sem invalidar,
-    # o gerador de carga ainda enxergaria a simulação parada.
-    sim.invalidate_state_cache()
-    yield state
-    sim.invalidate_state_cache()
-
-
-@pytest.fixture
 def fake_connect(monkeypatch):
     monkeypatch.setattr(ws, "_connect", lambda uri: _FakeConnection())
     return _FakeConnection
@@ -166,11 +146,9 @@ def _instance(db, name, *, marker=DEMO_MARKER, status=InstanceStatus.RUNNING, ur
     return inst
 
 
-def test_baseline_traffic_flows_without_a_reel(db, fake_connect):
-    # A frota demo nunca fica morta: mesmo sem reel rodando (IDLE), há a
-    # carga-base, então o gerador abre conexões. É o que mantém os cards vivos
-    # desde o boot, sem ninguém clicar em nada.
-    sim.invalidate_state_cache()
+def test_baseline_traffic_flows_by_default(db, fake_connect):
+    # A frota demo nunca fica morta: o gerador roda sempre à carga-base, então
+    # abre conexões sozinho. É o que mantém os cards vivos desde o boot.
     inst = _instance(db, "demo-baseline")
     ws.simulate_once()
 
@@ -178,7 +156,7 @@ def test_baseline_traffic_flows_without_a_reel(db, fake_connect):
     assert _FakeConnection.opened
 
 
-def test_simulate_once_opens_connections_for_demo_instances(db, fake_connect, simulation_running):
+def test_simulate_once_opens_connections_for_demo_instances(db, fake_connect):
     inst = _instance(db, "demo-prod")
     ws.simulate_once()
 
@@ -186,7 +164,7 @@ def test_simulate_once_opens_connections_for_demo_instances(db, fake_connect, si
     assert _FakeConnection.opened, "nenhuma conexão aberta"
 
 
-def test_simulate_once_ignores_non_demo_and_stopped_instances(db, fake_connect, simulation_running):
+def test_simulate_once_ignores_non_demo_and_stopped_instances(db, fake_connect):
     _instance(db, "user-owned", marker="notas do usuário")
     _instance(db, "demo-stopped", status=InstanceStatus.STOPPED)
     _instance(db, "demo-no-uri", uri=None)
@@ -197,7 +175,7 @@ def test_simulate_once_ignores_non_demo_and_stopped_instances(db, fake_connect, 
     assert _FakeConnection.opened == []
 
 
-def test_pool_ramps_up_gradually_across_cycles(db, fake_connect, simulation_running):
+def test_pool_ramps_up_gradually_across_cycles(db, fake_connect):
     inst = _instance(db, "demo-ramp")
     sizes = []
     for _ in range(3):
@@ -210,7 +188,7 @@ def test_pool_ramps_up_gradually_across_cycles(db, fake_connect, simulation_runn
     assert all(b - a <= ws._MAX_POOL_STEP for a, b in zip(sizes, sizes[1:]))
 
 
-def test_pool_is_released_when_instance_leaves_the_fleet(db, fake_connect, simulation_running):
+def test_pool_is_released_when_instance_leaves_the_fleet(db, fake_connect):
     inst = _instance(db, "demo-gone")
     ws.simulate_once()
     conns = list(ws._pools[inst.id].conns)
@@ -224,7 +202,7 @@ def test_pool_is_released_when_instance_leaves_the_fleet(db, fake_connect, simul
     assert all(c.closed for c in conns)
 
 
-def test_failing_instance_does_not_break_the_cycle(db, monkeypatch, simulation_running):
+def test_failing_instance_does_not_break_the_cycle(db, monkeypatch):
     broken = _instance(db, "demo-broken")
     healthy = _instance(db, "demo-healthy")
 
@@ -246,7 +224,7 @@ def test_failing_instance_does_not_break_the_cycle(db, monkeypatch, simulation_r
     assert {broken.id, healthy.id} >= set(ws._pools)
 
 
-def test_shutdown_closes_every_connection(db, fake_connect, simulation_running):
+def test_shutdown_closes_every_connection(db, fake_connect):
     _instance(db, "demo-shutdown")
     ws.simulate_once()
     conns = [c for pool in ws._pools.values() for c in pool.conns]

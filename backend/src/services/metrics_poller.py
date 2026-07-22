@@ -122,12 +122,9 @@ async def metrics_polling_loop(stop_event: asyncio.Event) -> None:
         except Exception as exc:
             logger.exception("Erro no ciclo de coleta de métricas: %s", exc)
 
-        # Intervalo dinâmico: durante a simulação de uso da frota demo o relógio
-        # corre acelerado, e coletar de 60 em 60s desenharia uma escada de dois
-        # degraus. Fora dela, continuam os 60s de sempre. A espera é reavaliada
-        # em fatias para a aceleração valer já no ciclo em curso.
-        from src.services.demo_simulation import sleep_until_next_cycle
-
-        await sleep_until_next_cycle(stop_event, _POLL_INTERVAL_SECONDS)
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=_POLL_INTERVAL_SECONDS)
+        except asyncio.TimeoutError:
+            continue
 
     logger.info("Metrics poller encerrado")

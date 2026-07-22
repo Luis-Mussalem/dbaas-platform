@@ -57,10 +57,9 @@ async def alert_evaluation_loop(stop_event: asyncio.Event) -> None:
         except Exception as exc:
             logger.error("Exceção inesperada no alert evaluation loop: %s", exc)
 
-        # Acompanha o metrics_poller: acelera durante a simulação de uso (senão
-        # o alerta abriria minutos depois da métrica que o justifica).
-        from src.services.demo_simulation import sleep_until_next_cycle
-
-        await sleep_until_next_cycle(stop_event, _EVALUATOR_INTERVAL_SECONDS)
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=_EVALUATOR_INTERVAL_SECONDS)
+        except asyncio.TimeoutError:
+            continue
 
     logger.info("Alert evaluation loop encerrado")

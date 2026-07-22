@@ -153,7 +153,7 @@ def _backfill_metrics(db: Session, instance: DatabaseInstance, idx: int) -> None
 
     As conexões vêm da MESMA curva que o simulador de carga usa ao vivo
     (`workload_simulator.target_connections`), e na MESMA intensidade da
-    carga-base (`demo_simulation.BASELINE_INTENSITY`). É isso que faz o histórico
+    carga-base (`workload_simulator.BASELINE_INTENSITY`). É isso que faz o histórico
     emendar com o presente: sem a curva a série mostraria um degrau; sem a
     intensidade-base, o histórico desenharia a curva CHEIA (~14 conexões) e a
     medição ao vivo em repouso (~5) cairia num degrau no ponto "agora". Semeia os
@@ -223,8 +223,8 @@ def _backfill_metrics(db: Session, instance: DatabaseInstance, idx: int) -> None
     )
 
     # Intensidade da carga-base: o histórico tem de bater com o que o gerador de
-    # carga mede em repouso (lazy import — evita ciclo com demo_simulation).
-    from src.services.demo_simulation import BASELINE_INTENSITY
+    # carga mede em repouso.
+    from src.services.workload_simulator import BASELINE_INTENSITY
 
     rows: list[Metric] = []
     steps = int((end - start).total_seconds() // (_BACKFILL_STEP.total_seconds())) + 1
@@ -528,9 +528,8 @@ def _seed_audit(
             action=action,
             resource_type=resource_type,
             resource_id=str(resource_id) if resource_id else None,
-            # `simulated: true` é a marca que o reset usa para saber o que
-            # apagar — sem ela, este histórico sobreviveria ao "restaurar frota
-            # real". É a mesma marca que demo_simulation._audit grava.
+            # `simulated: true` rotula honestamente esta entrada como dado de
+            # demonstração semeado (não uma ação real de usuário).
             details={"method": method, "path": path, "status": 200, "simulated": True},
             ip_address="203.0.113.%d" % (7 + (hash(user.email) % 40) if user else 1),
             timestamp=ts,

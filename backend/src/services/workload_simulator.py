@@ -13,10 +13,9 @@ Tudo o que o resto da plataforma mede passa a ter sinal real — conexões,
 transações/s, cache hit, p95 de latência, queries lentas, crescimento de disco.
 
 Em modo demo ele roda o tempo todo numa **carga-base** leve
-(`demo_simulation.BASELINE_INTENSITY`), para a frota nunca parecer morta. O
-botão "Ver ao vivo" só AMPLIFICA essa base por ~1 min (`demo_simulation` eleva a
-intensidade da fase). Fora do modo demo os loops nem sobem (main.py), então
-instâncias criadas pelo usuário jamais recebem carga.
+(`BASELINE_INTENSITY`), para a frota nunca parecer morta desde o primeiro login.
+Fora do modo demo os loops nem sobem (main.py), então instâncias criadas pelo
+usuário jamais recebem carga.
 
 Escopo e segurança:
 - Só toca instâncias da frota demo (`notes == DEMO_MARKER`), RUNNING e com
@@ -87,6 +86,14 @@ _MAX_POOL_STEP = 4
 # demonstração de query cara — não um teste de carga.
 _HEAVY_QUERY_ROWS = 20_000
 
+# Fração do alvo de conexões que a frota demo mantém em repouso — a carga-base
+# contínua que deixa o dashboard vivo desde o primeiro login (conexões, queries/s,
+# latência e crescimento de disco sempre com sinal real, medido). O backfill de 24h
+# do seed usa a MESMA fração (ver seed/history), para o histórico emendar com a
+# medição ao vivo sem degrau. Tunável: subir deixa a frota em repouso mais
+# movimentada, ao custo de mais conexões abertas por instância.
+BASELINE_INTENSITY = 0.3
+
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
@@ -137,9 +144,8 @@ def target_connections(
     a diferença de porte entre os ambientes é o que faz a frota parecer real
     no dashboard, não só cada card isolado.
 
-    `intensity` é o multiplicador da fase do roteiro (ver demo_simulation): a
-    fase de recuperação a derruba para ~15%, e é essa queda — medida de verdade
-    pelo poller — que faz o avaliador resolver o alerta aberto.
+    `intensity` é o multiplicador da carga (`BASELINE_INTENSITY` ao vivo; 1.0 no
+    pico da curva usado pelo backfill para dimensionar a latência).
     """
     cap = cap or settings.DEMO_WORKLOAD_MAX_CONNECTIONS
     if environment == Environment.PRODUCTION:
@@ -348,22 +354,14 @@ def _demo_instances(db) -> list[DatabaseInstance]:
 
 def simulate_once() -> None:
     """
-    Um ciclo: ajusta o pool de cada instância demo ao alvo da curva e roda o
-    mix de queries. Erro numa instância (container parado, rede) não cancela
-    as demais — o pool dela é fechado e recomeça no ciclo seguinte.
+    Um ciclo: ajusta o pool de cada instância demo ao alvo da carga-base e roda o
+    mix de queries. Erro numa instância (container parado, rede) não cancela as
+    demais — o pool dela é fechado e recomeça no ciclo seguinte.
 
-    Em modo demo a intensidade nunca é 0 (há sempre a carga-base), então os
-    pools ficam abertos continuamente. Só cai a 0 — e os pools são devolvidos —
-    fora do modo demo, quando os loops sequer sobem.
+    Roda sempre à intensidade da carga-base: o loop só sobe em modo demo (main.py),
+    então os pools ficam abertos continuamente enquanto houver instâncias demo, e
+    a frota nunca parece morta.
     """
-    from src.services import demo_simulation
-
-    intensity = demo_simulation.traffic_intensity()
-    if intensity <= 0:
-        if _pools:
-            shutdown_pools()
-        return
-
     db = SessionLocal()
     try:
         instances = _demo_instances(db)
@@ -374,10 +372,8 @@ def simulate_once() -> None:
             if instance_id not in alive:
                 _pools.pop(instance_id).close_all()
 
-        # Hora-do-dia real (a aceleração foi removida): a curva posiciona o alvo
-        # de conexões pelo horário; o que move o gráfico no reel é a intensidade
-        # da fase, não um relógio correndo (ver demo_simulation.virtual_now).
-        now = demo_simulation.virtual_now()
+        # Hora-do-dia real: a curva posiciona o alvo de conexões pelo horário.
+        now = _now()
         for inst in instances:
             pool = _pools.setdefault(inst.id, _InstancePool(inst.name))
             try:
@@ -388,7 +384,7 @@ def simulate_once() -> None:
                     pool,
                     uri,
                     target_connections(
-                        inst.name, inst.environment, now, intensity=intensity
+                        inst.name, inst.environment, now, intensity=BASELINE_INTENSITY
                     ),
                 )
                 executed = _drive(pool, random.Random())
@@ -417,27 +413,21 @@ async def workload_loop(stop_event: asyncio.Event) -> None:
     Loop async do simulador (mesmo padrão do metrics_polling_loop).
 
     O intervalo é bem menor que o do poller de métricas: a curva precisa se
-    mover entre duas coletas, senão o gráfico vira uma escada. Durante a
-    simulação ele encurta ainda mais (ver demo_simulation.workload_interval) —
-    as fases duram ~20s e o pool precisa alcançar o alvo dentro delas.
+    mover entre duas coletas, senão o gráfico de conexões vira uma escada.
     """
-    from src.services.demo_simulation import sleep_until_next_cycle, workload_interval
-
-    default_interval = settings.DEMO_WORKLOAD_INTERVAL_SECONDS
-    logger.info(
-        "Demo workload simulator iniciado (intervalo: %ds em repouso)",
-        default_interval,
-    )
+    interval = settings.DEMO_WORKLOAD_INTERVAL_SECONDS
+    logger.info("Demo workload generator iniciado (intervalo: %ds)", interval)
 
     while not stop_event.is_set():
         try:
             await asyncio.to_thread(simulate_once)
         except Exception as exc:  # noqa: BLE001
-            logger.exception("Erro no ciclo do workload simulator: %s", exc)
+            logger.exception("Erro no ciclo do workload generator: %s", exc)
 
-        await sleep_until_next_cycle(
-            stop_event, default_interval, interval_fn=workload_interval
-        )
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=interval)
+        except asyncio.TimeoutError:
+            continue
 
     await asyncio.to_thread(shutdown_pools)
-    logger.info("Demo workload simulator encerrado.")
+    logger.info("Demo workload generator encerrado.")
