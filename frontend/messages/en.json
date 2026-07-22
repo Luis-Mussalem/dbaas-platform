@@ -1,4 +1,24 @@
 {
+  "AboutDemo": {
+    "title": "About this demo",
+    "subtitle": "This is a portfolio deployment. The platform manages real PostgreSQL instances — but a fresh fleet of empty databases for fictional companies has nothing to monitor. So the demo generates a believable, living fleet on purpose, and this page is upfront about exactly what is real and what is generated.",
+    "real": {
+      "title": "What is real",
+      "body": "Six PostgreSQL 16 containers, provisioned and managed by this platform, each with data loaded. Everything the dashboard measures — connections, throughput, latency, slow queries, disk growth, backups (pg_dump), VACUUM/ANALYZE — runs against these real databases. No number on screen is faked."
+    },
+    "generated": {
+      "title": "What is generated",
+      "body": "The three companies and their users are fictional. A light, continuous synthetic load keeps the fleet alive — its connections identify themselves as 'dbaas-demo-workload' in the active-connections screen, never disguised as user traffic. And 24h of metrics, 30-day uptime, weeks of backups, alerts and maintenance history are seeded at startup, because a KPI like 30-day uptime cannot happen in a five-minute visit."
+    },
+    "howItWorks": {
+      "title": "How it stays alive",
+      "body": "On boot, the seed provisions the fleet, loads data, and writes the historical baseline. From then on a background generator keeps a gentle base load flowing, following a realistic daily curve. So the moment you log in, the platform already looks and behaves like a fleet under management — no button to press, no empty first screen."
+    },
+    "decision": {
+      "title": "Why there is no “Simulate usage” button",
+      "body": "An earlier version gated all of this behind a “Simulate usage” button: a clean clone booted empty, and one click ran a scripted ~90-second demo (traffic climbing, an alert firing, a backup and maintenance running). It was honest, but the first screen looked switched off and most visitors never clicked. So the idea was folded into the product itself — the fleet is now generated and kept alive from the first second, and this notice keeps that transparent. A monitoring platform should be shown monitoring something."
+    }
+  },
   "Actions": {
     "label": {
       "backup_created": "Backup created",
@@ -247,6 +267,10 @@
     "summaryBackups": "{count, plural, one {# backup in the last 24h.} other {# backups in the last 24h.}}",
     "yourDatabases": "Your databases"
   },
+  "DemoNotice": {
+    "message": "Demo environment — these companies, instances, traffic and history are generated so the whole platform can be explored.",
+    "learnMore": "Learn more"
+  },
   "Employees": {
     "actions": {
       "deactivate": "Deactivate",
@@ -471,7 +495,7 @@
   "Nav": {
     "audit": "Logs & Audit",
     "dashboard": "Dashboard",
-    "demo": "Demo",
+    "demo": "About demo",
     "employees": "Employees",
     "help": "Help",
     "instances": "Instances",
@@ -608,81 +632,6 @@
     "subtitle": "Your operator account.",
     "superuser": "Superuser",
     "title": "Settings"
-  },
-  "Simulation": {
-    "actions": {
-      "reset": "Restore baseline",
-      "start": "Run live demo",
-      "stop": "Stop"
-    },
-    "banner": {
-      "complete": "Live demo complete — the fleet keeps serving traffic.",
-      "details": "Details",
-      "eta": "takes about 90 seconds",
-      "label": "Live demo",
-      "running": "{phase} · step {index} of {count}"
-    },
-    "complete": {
-      "body": "All five steps finished. The fleet stays full and keeps serving traffic while you explore — stop the demo whenever you like.",
-      "title": "Live demo complete"
-    },
-    "disabled": {
-      "subtitle": "This deployment runs with demo mode turned off, so there is nothing to run here.",
-      "title": "Demo mode is off"
-    },
-    "loadFailed": "Could not load the demo state.",
-    "loading": "Loading the demo state…",
-    "log": {
-      "title": "What the live demo did"
-    },
-    "phase": {
-      "alert": {
-        "description": "Creates a rule just below the connection ratio measured right now, so the evaluator opens the event from a real metric.",
-        "title": "An alert fires"
-      },
-      "backup": {
-        "description": "Runs pg_dump against each production database — real .dump files land on disk.",
-        "title": "Back up production"
-      },
-      "idle": {
-        "description": "No live demo running. The fleet keeps serving its baseline traffic.",
-        "title": "Idle"
-      },
-      "maintenance": {
-        "description": "Executes VACUUM and ANALYZE on the production databases and records the tasks.",
-        "title": "Run maintenance"
-      },
-      "recover": {
-        "description": "Traffic falls back to baseline; the evaluator resolves the open alert on its own, from the metrics it reads.",
-        "title": "Load recovers"
-      },
-      "steady": {
-        "description": "The live demo is over and the fleet keeps serving its baseline traffic until you stop it.",
-        "title": "Steady state"
-      },
-      "warmup": {
-        "description": "Connection pools grow across the fleet and run an OLTP query mix — throughput, latency and cache hit climb.",
-        "title": "Traffic ramps up"
-      }
-    },
-    "real": {
-      "body": "The fleet is real: six PostgreSQL containers, provisioned by this platform, with data loaded. Connections, throughput, latency, slow queries and disk growth are measured from them — never faked. A light baseline of traffic keeps them alive.",
-      "title": "What is real"
-    },
-    "reset": {
-      "description": "Clears everything on the demo fleet and re-seeds the canonical baseline — undoing any extra alert or backup a live demo left behind. The fleet comes back full, not empty. The containers and their data stay.",
-      "title": "Restore the demo baseline?"
-    },
-    "script": {
-      "eta": "The whole run takes about 90 seconds",
-      "title": "The script"
-    },
-    "seeded": {
-      "body": "A 30-day uptime KPI or two weeks of backup history cannot happen in five minutes, so the fleet is seeded with that history at startup. It is clearly labelled demo data — 'Restore baseline' regenerates it at any time.",
-      "title": "What is seeded"
-    },
-    "subtitle": "The demo fleet is already live. Press to watch the platform administer it for real over about a minute: traffic climbs, an alert fires and resolves, a backup and maintenance run — then it settles back to baseline.",
-    "title": "Live demo"
   },
   "Sql": {
     "empty": {

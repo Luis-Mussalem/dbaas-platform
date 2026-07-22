@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { TriangleAlert, DatabaseBackup, ShieldCheck } from "lucide-react";
 import type { Instance, InstanceSummary } from "@/lib/types";
 import { useMetricHistory } from "@/hooks/use-metric-history";
-import { useSimulation } from "@/context/SimulationProvider";
+import { DASHBOARD_POLL_MS } from "@/lib/constants";
 import { useFormatters } from "@/hooks/use-formatters";
 import { instanceGradient, instanceInitials, instanceLineColor, instanceInk } from "@/lib/identity-color";
 import { HealthBadge } from "@/components/StatusBadge";
@@ -32,7 +32,7 @@ export function InstanceCard({
 
   // Sparkline REAL: histórico de conexões (vem do endpoint de histórico que lê a
   // tabela metrics). Vazio → o Sparkline mostra uma linha-base.
-  const { dataPollMs, dataVersion } = useSimulation();
+  //
   // Janela de 1h em 60 baldes — um balde por minuto, que é a cadência do poller
   // em repouso. Antes eram 24h em 48 baldes de 30 min: cada amostra nova movia
   // a média do último balde em ~1/30, então a linha parecia CONGELADA mesmo com
@@ -42,9 +42,8 @@ export function InstanceCard({
     instance.id,
     "connections_active",
     "1h",
-    dataPollMs,
-    60,
-    dataVersion
+    DASHBOARD_POLL_MS,
+    60
   );
 
   // Todos os valores escalares vêm do agregado da frota: uma requisição serve

@@ -7,7 +7,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useInstances } from "@/hooks/use-instances";
 import { useDashboard } from "@/hooks/use-dashboard";
 import { useFleetSummary } from "@/hooks/use-fleet-summary";
-import { useSimulation } from "@/context/SimulationProvider";
+import { DASHBOARD_POLL_MS } from "@/lib/constants";
 import { InstanceCard } from "@/components/InstanceCard";
 import { EmptyState } from "@/components/EmptyState";
 import { EnvFilterBar } from "@/components/EnvFilterBar";
@@ -22,10 +22,9 @@ export default function InstancesPage() {
   const locale = useLocale();
   // Reaproveita o mesmo hook e o mesmo card do Painel; ganha o filtro de
   // ambiente e a linha de KPIs (via useDashboard) para ficar como no design.
-  const { dataPollMs, dataVersion } = useSimulation();
-  const { instances, isLoading, error } = useInstances(dataPollMs, dataVersion);
-  const { summary } = useDashboard(dataPollMs, dataVersion);
-  const { summaries } = useFleetSummary(dataPollMs, dataVersion);
+  const { instances, isLoading, error } = useInstances(DASHBOARD_POLL_MS);
+  const { summary } = useDashboard(DASHBOARD_POLL_MS);
+  const { summaries } = useFleetSummary(DASHBOARD_POLL_MS);
   const [envFilter, setEnvFilter] = useState<EnvFilter>("all");
 
   const visibleInstances = useMemo(

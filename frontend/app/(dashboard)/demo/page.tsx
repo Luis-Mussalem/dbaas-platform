@@ -1,211 +1,65 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import {
-  Activity,
-  CheckCircle2,
-  Circle,
-  Database,
-  FlaskConical,
-  Loader2,
-  Play,
-  RotateCcw,
-  Square,
-} from "lucide-react";
-import { useSimulation } from "@/context/SimulationProvider";
-import { useConfirm } from "@/context/ConfirmProvider";
-import { useFormatters } from "@/hooks/use-formatters";
-import { EmptyState } from "@/components/EmptyState";
-import { BTN, BTN_DANGER, BTN_PRIMARY } from "@/lib/ui";
-import { cn } from "@/lib/utils";
-import type { SimulationPhase } from "@/lib/types";
+import { Activity, Database, Info, Sparkles } from "lucide-react";
 
-// As etapas do reel (services/demo_simulation.py::SCRIPT_PHASES). Duplicadas
-// aqui só para desenhar a timeline antes de o reel começar — o estado ao vivo
-// (etapa atual, progresso) continua vindo da API.
-//
-// `backfill` saiu (o histórico é semeado no boot, não é mais uma etapa) e
-// `steady` NÃO entra: é a conclusão, não uma etapa. Como item da lista, com
-// spinner, parecia que algo ainda estava carregando; virou o card de fim.
-const PHASES: SimulationPhase[] = [
-  "warmup",
-  "alert",
-  "backup",
-  "maintenance",
-  "recover",
-];
-
-export default function DemoPage() {
-  const t = useTranslations("Simulation");
-  const { status, isLoading, isPending, start, stop, reset } = useSimulation();
-  const { confirm } = useConfirm();
-  const { dateTime } = useFormatters();
-
-  if (isLoading) {
-    return <EmptyState title={t("loading")} icon={<Loader2 size={22} className="animate-spin" />} />;
-  }
-
-  if (!status?.enabled) {
-    return <EmptyState title={t("disabled.title")} subtitle={t("disabled.subtitle")} />;
-  }
-
-  // Em regime (`steady`) o backend devolve phase_index além da última etapa,
-  // então toda a timeline aparece concluída e o card de fim assume.
-  const currentIndex = status.running ? status.phase_index : -1;
-  const complete = status.phase === "steady";
-
-  async function handleReset() {
-    const ok = await confirm({
-      title: t("reset.title"),
-      description: t("reset.description"),
-      confirmText: t("actions.reset"),
-      danger: true,
-    });
-    if (ok) await reset();
-  }
+// Página estática "Sobre esta demo": a divulgação completa de que a frota é
+// gerada de propósito para a plataforma poder ser explorada por inteiro. Não faz
+// chamadas de API nem tem controles — é documentação na tela. A faixa fina do
+// topo (DemoNotice) aponta para cá.
+export default function AboutDemoPage() {
+  const t = useTranslations("AboutDemo");
 
   return (
-    <div className="flex flex-col gap-5">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-            <FlaskConical size={20} className="text-brand" />
-            {t("title")}
-          </h1>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{t("subtitle")}</p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {status.running ? (
-            <button type="button" onClick={stop} disabled={isPending} className={BTN}>
-              <Square size={14} />
-              {t("actions.stop")}
-            </button>
-          ) : (
-            <button type="button" onClick={start} disabled={isPending} className={BTN_PRIMARY}>
-              <Play size={14} />
-              {t("actions.start")}
-            </button>
-          )}
-          {status.has_simulated_data && !status.running && (
-            <button type="button" onClick={handleReset} disabled={isPending} className={BTN_DANGER}>
-              <RotateCcw size={14} />
-              {t("actions.reset")}
-            </button>
-          )}
-        </div>
+    <div className="flex max-w-3xl flex-col gap-5">
+      <header>
+        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+          <Info size={20} className="text-info" />
+          {t("title")}
+        </h1>
+        <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+          {t("subtitle")}
+        </p>
       </header>
 
-      {/* O contrato de honestidade da demo, lado a lado. */}
       <div className="grid gap-3 md:grid-cols-2">
-        <section className="rounded-xl border border-border bg-surface p-4">
-          <h2 className="flex items-center gap-2 text-sm font-semibold">
-            <Database size={15} className="text-ok" />
-            {t("real.title")}
-          </h2>
-          <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
-            {t("real.body")}
-          </p>
-        </section>
-        <section className="rounded-xl border border-warn/25 bg-warn/5 p-4">
-          <h2 className="flex items-center gap-2 text-sm font-semibold">
-            <Activity size={15} className="text-warn" />
-            {t("seeded.title")}
-          </h2>
-          <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
-            {t("seeded.body")}
-          </p>
-        </section>
+        <Section icon={<Database size={15} className="text-ok" />} title={t("real.title")}>
+          {t("real.body")}
+        </Section>
+        <Section icon={<Activity size={15} className="text-info" />} title={t("generated.title")}>
+          {t("generated.body")}
+        </Section>
       </div>
 
-      {/* Timeline do roteiro */}
-      <section className="rounded-xl border border-border bg-surface p-4">
-        <div className="flex items-baseline justify-between">
-          <h2 className="text-sm font-semibold">{t("script.title")}</h2>
-          <span className="text-xs text-muted-foreground">{t("script.eta")}</span>
-        </div>
+      <Section icon={<Sparkles size={15} className="text-brand" />} title={t("howItWorks.title")}>
+        {t("howItWorks.body")}
+      </Section>
 
-        {/* Progresso do roteiro inteiro — só enquanto ele corre. */}
-        {status.running && !complete && (
-          <div className="mt-3 h-1 w-full overflow-hidden rounded-full bg-border">
-            <div
-              className="h-full rounded-full bg-brand transition-[width] duration-1000 ease-linear"
-              style={{ width: `${Math.round(status.progress * 100)}%` }}
-            />
-          </div>
-        )}
-
-        <ol className="mt-3 flex flex-col">
-          {PHASES.map((phase, index) => {
-            const done = currentIndex > index;
-            const active = currentIndex === index;
-            return (
-              <li key={phase} className="flex gap-3 py-2">
-                <div className="flex flex-col items-center">
-                  {done ? (
-                    <CheckCircle2 size={16} className="text-ok" />
-                  ) : active ? (
-                    <Loader2 size={16} className="animate-spin text-brand" />
-                  ) : (
-                    <Circle size={16} className="text-fg-faint" />
-                  )}
-                  {index < PHASES.length - 1 && (
-                    <div className={cn("mt-1 w-px flex-1", done ? "bg-ok/40" : "bg-border")} />
-                  )}
-                </div>
-                <div className="min-w-0 pb-1">
-                  <p
-                    className={cn(
-                      "text-[13px] font-medium",
-                      active ? "text-foreground" : done ? "text-fg-2" : "text-muted-foreground"
-                    )}
-                  >
-                    {t(`phase.${phase}.title`)}
-                  </p>
-                  <p className="text-xs leading-relaxed text-muted-foreground">
-                    {t(`phase.${phase}.description`)}
-                  </p>
-                </div>
-              </li>
-            );
-          })}
-        </ol>
-      </section>
-
-      {/* Conclusão: fora da timeline, e visualmente diferente dela — em regime
-          não há nada carregando, e o usuário precisa ver isso de imediato. */}
-      {complete && (
-        <section className="flex flex-wrap items-center gap-3 rounded-xl border border-ok/30 bg-ok/5 p-4">
-          <CheckCircle2 size={20} className="shrink-0 text-ok" />
-          <div className="min-w-0 flex-1">
-            <h2 className="text-sm font-semibold text-ok">{t("complete.title")}</h2>
-            <p className="mt-0.5 text-[13px] leading-relaxed text-muted-foreground">
-              {t("complete.body")}
-            </p>
-          </div>
-          <button type="button" onClick={stop} disabled={isPending} className={BTN}>
-            <Square size={14} />
-            {t("actions.stop")}
-          </button>
-        </section>
-      )}
-
-      {/* Log do que a simulação fez de fato */}
-      {status.events.length > 0 && (
-        <section className="rounded-xl border border-border bg-surface p-4">
-          <h2 className="text-sm font-semibold">{t("log.title")}</h2>
-          <ul className="mt-2 flex flex-col gap-1.5">
-            {[...status.events].reverse().map((event, index) => (
-              <li key={`${event.at}-${index}`} className="flex gap-3 text-[13px]">
-                <span className="shrink-0 tabular-nums text-muted-foreground">
-                  {dateTime(event.at, "clock")}
-                </span>
-                <span className="min-w-0 text-fg-2">{event.message}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      <Section icon={<Info size={15} className="text-muted-foreground" />} title={t("decision.title")}>
+        {t("decision.body")}
+      </Section>
     </div>
+  );
+}
+
+function Section({
+  icon,
+  title,
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-xl border border-border bg-surface p-4">
+      <h2 className="flex items-center gap-2 text-sm font-semibold">
+        {icon}
+        {title}
+      </h2>
+      <p className="mt-1.5 whitespace-pre-line text-[13px] leading-relaxed text-muted-foreground">
+        {children}
+      </p>
+    </section>
   );
 }

@@ -1,4 +1,24 @@
 {
+  "AboutDemo": {
+    "title": "Sobre esta demo",
+    "subtitle": "Este é um ambiente de portfólio. A plataforma gerencia instâncias PostgreSQL reais — mas uma frota recém-criada, de bancos vazios para empresas fictícias, não tem o que monitorar. Então a demo gera de propósito uma frota crível e viva, e esta página é transparente sobre o que exatamente é real e o que é gerado.",
+    "real": {
+      "title": "O que é real",
+      "body": "Seis containers PostgreSQL 16, provisionados e gerenciados por esta plataforma, cada um com dados carregados. Tudo que o dashboard mede — conexões, vazão, latência, queries lentas, crescimento de disco, backups (pg_dump), VACUUM/ANALYZE — roda contra esses bancos reais. Nenhum número na tela é inventado."
+    },
+    "generated": {
+      "title": "O que é gerado",
+      "body": "As três empresas e seus usuários são fictícios. Uma carga sintética leve e contínua mantém a frota viva — suas conexões se identificam como 'dbaas-demo-workload' na tela de conexões ativas, nunca disfarçadas de tráfego de usuário. E 24h de métricas, uptime de 30 dias, semanas de backups, alertas e histórico de manutenção são semeados no boot, porque um KPI como uptime de 30 dias não acontece numa visita de cinco minutos."
+    },
+    "howItWorks": {
+      "title": "Como ela se mantém viva",
+      "body": "No boot, o seed provisiona a frota, carrega os dados e grava a linha de base histórica. A partir daí um gerador em segundo plano mantém uma carga-base suave fluindo, seguindo uma curva diária realista. Assim, no instante em que você faz login, a plataforma já parece e se comporta como uma frota sob gestão — sem botão para apertar, sem primeira tela vazia."
+    },
+    "decision": {
+      "title": "Por que não há um botão “Simular uso”",
+      "body": "Uma versão anterior colocava tudo isso atrás de um botão “Simular uso”: um clone limpo nascia vazio, e um clique rodava uma demo roteirizada de ~90 segundos (tráfego subindo, um alerta disparando, um backup e a manutenção rodando). Era honesto, mas a primeira tela parecia desligada e a maioria dos visitantes nunca clicava. Então a ideia foi incorporada ao próprio produto — a frota agora é gerada e mantida viva desde o primeiro segundo, e este aviso mantém isso transparente. Uma plataforma de monitoramento tem de ser vista monitorando algo."
+    }
+  },
   "Actions": {
     "label": {
       "backup_created": "Backup criado",
@@ -247,6 +267,10 @@
     "summaryBackups": "{count, plural, one {# backup nas últimas 24h.} other {# backups nas últimas 24h.}}",
     "yourDatabases": "Seus bancos"
   },
+  "DemoNotice": {
+    "message": "Ambiente de demonstração — estas empresas, instâncias, tráfego e histórico são gerados para a plataforma inteira poder ser explorada.",
+    "learnMore": "Saiba mais"
+  },
   "Employees": {
     "actions": {
       "deactivate": "Desativar",
@@ -471,7 +495,7 @@
   "Nav": {
     "audit": "Logs & Auditoria",
     "dashboard": "Painel",
-    "demo": "Demo",
+    "demo": "Sobre a demo",
     "employees": "Funcionários",
     "help": "Ajuda",
     "instances": "Instâncias",
@@ -608,81 +632,6 @@
     "subtitle": "Sua conta de operador.",
     "superuser": "Superusuário",
     "title": "Configurações"
-  },
-  "Simulation": {
-    "actions": {
-      "reset": "Restaurar baseline",
-      "start": "Ver ao vivo",
-      "stop": "Parar"
-    },
-    "banner": {
-      "complete": "Demo ao vivo concluída — a frota segue atendendo tráfego.",
-      "details": "Detalhes",
-      "eta": "leva cerca de 90 segundos",
-      "label": "Demo ao vivo",
-      "running": "{phase} · etapa {index} de {count}"
-    },
-    "complete": {
-      "body": "As cinco etapas terminaram. A frota continua cheia e atendendo tráfego enquanto você explora — pare a demo quando quiser.",
-      "title": "Demo ao vivo concluída"
-    },
-    "disabled": {
-      "subtitle": "Esta instalação roda com o modo demo desligado, então não há o que executar aqui.",
-      "title": "Modo demo desligado"
-    },
-    "loadFailed": "Não foi possível carregar o estado da demo.",
-    "loading": "Carregando o estado da demo…",
-    "log": {
-      "title": "O que a demo ao vivo fez"
-    },
-    "phase": {
-      "alert": {
-        "description": "Cria uma regra logo abaixo da razão de conexões medida agora, para o avaliador abrir o evento a partir de métrica real.",
-        "title": "Um alerta dispara"
-      },
-      "backup": {
-        "description": "Roda pg_dump em cada banco de produção — arquivos .dump reais aparecem no disco.",
-        "title": "Backup da produção"
-      },
-      "idle": {
-        "description": "Nenhuma demo ao vivo rodando. A frota segue atendendo o tráfego-base.",
-        "title": "Parada"
-      },
-      "maintenance": {
-        "description": "Executa VACUUM e ANALYZE nos bancos de produção e registra as tarefas.",
-        "title": "Rodar manutenção"
-      },
-      "recover": {
-        "description": "O tráfego volta à base; o avaliador resolve o alerta aberto sozinho, a partir das métricas que lê.",
-        "title": "A carga se recupera"
-      },
-      "steady": {
-        "description": "A demo ao vivo terminou e a frota segue atendendo o tráfego-base até você parar.",
-        "title": "Regime"
-      },
-      "warmup": {
-        "description": "Pools de conexão crescem na frota e rodam um mix OLTP — vazão, latência e cache hit sobem.",
-        "title": "O tráfego sobe"
-      }
-    },
-    "real": {
-      "body": "A frota é real: seis containers PostgreSQL provisionados por esta plataforma, com dados carregados. Conexões, vazão, latência, queries lentas e crescimento de disco são medidos deles — nunca inventados. Uma carga-base leve os mantém vivos.",
-      "title": "O que é real"
-    },
-    "reset": {
-      "description": "Limpa tudo na frota demo e re-semeia a base canônica — desfazendo qualquer alerta ou backup extra que uma demo ao vivo deixou. A frota volta cheia, não vazia. Os containers e seus dados permanecem.",
-      "title": "Restaurar a base da demo?"
-    },
-    "script": {
-      "eta": "A execução inteira leva cerca de 90 segundos",
-      "title": "O roteiro"
-    },
-    "seeded": {
-      "body": "Um KPI de uptime de 30 dias ou duas semanas de histórico de backup não acontecem em cinco minutos, então a frota nasce semeada com esse histórico no boot. É dado de demonstração, claramente rotulado — 'Restaurar baseline' o regenera quando quiser.",
-      "title": "O que é semeado"
-    },
-    "subtitle": "A frota demo já está viva. Clique para ver a plataforma administrá-la de verdade por cerca de um minuto: o tráfego sobe, um alerta abre e resolve, um backup e a manutenção rodam — e então tudo volta à base.",
-    "title": "Demo ao vivo"
   },
   "Sql": {
     "empty": {

@@ -6,7 +6,7 @@ import { Activity, Cpu } from "lucide-react";
 import { getAuditLogs } from "@/lib/api";
 import type { AuditLog } from "@/lib/types";
 import { useFormatters } from "@/hooks/use-formatters";
-import { useSimulation } from "@/context/SimulationProvider";
+import { DASHBOARD_POLL_MS } from "@/lib/constants";
 import { actorLabel, isAuditAction, toneFor, type Tone } from "@/lib/audit";
 
 // Cor do avatar por tom semântico. O tom vem da fonte única lib/audit.ts —
@@ -31,9 +31,6 @@ export function ActivityFeed() {
   const { ago } = useFormatters();
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  // A simulação de uso gera ações auditadas (backup, manutenção): enquanto ela
-  // roda, a atividade recente se atualiza sozinha em vez de exigir F5.
-  const { dataPollMs, dataVersion } = useSimulation();
 
   useEffect(() => {
     let active = true;
@@ -46,12 +43,12 @@ export function ActivityFeed() {
     }
 
     load();
-    const intervalId = setInterval(load, dataPollMs);
+    const intervalId = setInterval(load, DASHBOARD_POLL_MS);
     return () => {
       active = false;
       clearInterval(intervalId);
     };
-  }, [dataPollMs, dataVersion]);
+  }, []);
 
   return (
     <div className="rounded-lg border border-border bg-surface p-3.5">

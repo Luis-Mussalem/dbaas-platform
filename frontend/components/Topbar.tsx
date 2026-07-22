@@ -8,7 +8,6 @@ import { Plus, Sun, Moon, Files } from "lucide-react";
 import { useTheme } from "@/context/ThemeProvider";
 import { Segmented } from "@/components/Segmented";
 import { InstanceSearch } from "@/components/InstanceSearch";
-import { SimulationButton } from "@/components/SimulationButton";
 import { OPEN_EVENT } from "@/components/CommandPalette";
 import { navKeyFor } from "@/lib/nav";
 import { setLocale } from "@/i18n/locale-action";
@@ -94,9 +93,6 @@ export function Topbar() {
       >
         {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
       </button>
-
-      {/* Simular uso ↔ Parar — só aparece em modo demo */}
-      <SimulationButton />
 
       {/* Nova instância → abre o wizard de criação */}
       <Link

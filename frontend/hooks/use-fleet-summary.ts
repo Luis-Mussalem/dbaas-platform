@@ -7,9 +7,8 @@ import type { InstanceSummary } from "@/lib/types";
 // Estado agregado da frota, indexado por id para o card acessar em O(1).
 // Uma única requisição serve o grid inteiro — ver getFleetSummary.
 //
-// O intervalo default acompanha o do card (10s). Durante a simulação de uso a
-// página passa o `pollMs` acelerado do SimulationProvider, senão os alertas e
-// backups do roteiro só apareceriam no ciclo seguinte.
+// O intervalo default acompanha o do card (10s); os chamadores passam
+// DASHBOARD_POLL_MS para casar a cadência com o resto do dashboard.
 const POLL_INTERVAL_MS = 10_000;
 
 interface UseFleetSummaryResult {

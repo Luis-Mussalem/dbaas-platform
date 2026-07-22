@@ -1,7 +1,7 @@
 import {
   Database,
-  FlaskConical,
   HelpCircle,
+  Info,
   LayoutDashboard,
   ScrollText,
   Settings,
@@ -38,7 +38,7 @@ export const ADMIN_NAV: NavItem[] = [
 ];
 
 export const ACCOUNT_NAV: NavItem[] = [
-  { href: "/demo", key: "demo", icon: FlaskConical },
+  { href: "/demo", key: "demo", icon: Info },
   { href: "/settings", key: "settings", icon: Settings },
   { href: "/help", key: "help", icon: HelpCircle },
 ];

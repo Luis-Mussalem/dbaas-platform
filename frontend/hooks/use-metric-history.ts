@@ -6,10 +6,8 @@ import type { MetricWindow } from "@/lib/types";
 // prontos para o <Sparkline>. Mesmo padrão das outras hooks: fetch no mount,
 // guard `active` para descartar resposta se o componente desmontar.
 //
-// `pollMs` vem do SimulationProvider e nunca é ausente: 5s durante o roteiro,
-// 30s fora dele. Os chamadores que o omitiam ficavam com a série congelada até
-// um F5 — o gráfico continuava mostrando a última busca, sem sinal de que era
-// dado velho.
+// `pollMs` (DASHBOARD_POLL_MS nos chamadores) mantém a série fresca: sem ele, o
+// gráfico ficava congelado na última busca até um F5.
 export function useMetricHistory(
   instanceId: string,
   metric: string,

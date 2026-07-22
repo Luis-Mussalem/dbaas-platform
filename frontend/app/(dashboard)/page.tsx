@@ -5,7 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useInstances } from "@/hooks/use-instances";
 import { useDashboard } from "@/hooks/use-dashboard";
 import { useFleetSummary } from "@/hooks/use-fleet-summary";
-import { useSimulation } from "@/context/SimulationProvider";
+import { DASHBOARD_POLL_MS } from "@/lib/constants";
 import { InstanceCard } from "@/components/InstanceCard";
 import { ActivityFeed } from "@/components/ActivityFeed";
 import { RegionMap } from "@/components/RegionMap";
@@ -28,14 +28,13 @@ export default function PainelPage() {
   //  - useDashboard(): agregados de GET /admin/dashboard
   //  - useInstances(): lista de instâncias
   //  - ActivityFeed:  audit log (busca própria, dentro do componente)
-  // Enquanto a simulação de uso mexe na frota, tudo aqui se refresca sozinho —
-  // antes o painel só mostrava o resultado depois de um F5.
-  const { dataPollMs, dataVersion } = useSimulation();
-  const { instances, isLoading: loadingInstances } = useInstances(dataPollMs, dataVersion);
-  const { summary, isLoading: loadingSummary } = useDashboard(dataPollMs, dataVersion);
+  // Tudo se refresca sozinho a cada DASHBOARD_POLL_MS — a frota tem vida-base
+  // contínua, então há sempre algo novo a mostrar.
+  const { instances, isLoading: loadingInstances } = useInstances(DASHBOARD_POLL_MS);
+  const { summary, isLoading: loadingSummary } = useDashboard(DASHBOARD_POLL_MS);
   // Agregado por instância (alertas, backup, uptime, throughput) para os cards,
   // numa requisição só em vez de quatro por card.
-  const { summaries } = useFleetSummary(dataPollMs, dataVersion);
+  const { summaries } = useFleetSummary(DASHBOARD_POLL_MS);
   const [envFilter, setEnvFilter] = useState<EnvFilter>("all");
 
   const isLoading = loadingInstances || loadingSummary;

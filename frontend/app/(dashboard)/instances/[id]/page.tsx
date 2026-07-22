@@ -19,7 +19,7 @@ import {
 } from "@/lib/api";
 import { useMetrics } from "@/hooks/use-metrics";
 import { useMetricHistory } from "@/hooks/use-metric-history";
-import { useSimulation } from "@/context/SimulationProvider";
+import { DASHBOARD_POLL_MS } from "@/lib/constants";
 import { useToast } from "@/context/ToastProvider";
 import { useConfirm } from "@/context/ConfirmProvider";
 import type { Instance, SlowQuery } from "@/lib/types";
@@ -272,7 +272,6 @@ function OverviewTab({
   const t = useTranslations("InstanceDetail");
   const tc = useTranslations("Common");
   const { bytes, ratio } = useFormatters();
-  const { dataPollMs, dataVersion } = useSimulation();
   const connActive = metrics.connections_active;
   const connMax = metrics.connections_max;
   const cacheHit = metrics.cache_hit_ratio;
@@ -283,9 +282,7 @@ function OverviewTab({
     instance.id,
     "connections_active",
     "24h",
-    dataPollMs,
-    undefined,
-    dataVersion
+    DASHBOARD_POLL_MS
   );
 
   return (

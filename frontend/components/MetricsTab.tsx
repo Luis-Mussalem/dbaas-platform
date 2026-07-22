@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { getMetricHistory } from "@/lib/api";
-import { useSimulation } from "@/context/SimulationProvider";
+import { DASHBOARD_POLL_MS } from "@/lib/constants";
 import type { Instance, MetricWindow } from "@/lib/types";
 import { Segmented } from "@/components/Segmented";
 import { MetricArea, MultiLineChart, type ChartPoint } from "@/components/MetricChart";
@@ -39,11 +39,9 @@ export function MetricsTab({ instance }: { instance: Instance }) {
   const [conns, setConns] = useState<ChartPoint[]>([]);
   const [cache, setCache] = useState<ChartPoint[]>([]);
   const [latency, setLatency] = useState<ChartPoint[]>([]);
-  // Cadência compartilhada: 5s durante o roteiro, 30s fora dele. Estes gráficos
-  // buscavam UMA vez e nunca mais — a página mais "de monitoramento" do produto
-  // era a única que exigia F5 para mostrar dado novo.
-  const { dataPollMs, dataVersion } = useSimulation();
-
+  // Estes gráficos buscavam UMA vez e nunca mais — a página mais "de
+  // monitoramento" do produto era a única que exigia F5 para mostrar dado novo.
+  // Agora se refrescam a cada DASHBOARD_POLL_MS.
   useEffect(() => {
     let active = true;
 
@@ -81,12 +79,12 @@ export function MetricsTab({ instance }: { instance: Instance }) {
     }
 
     load();
-    const intervalId = setInterval(load, dataPollMs);
+    const intervalId = setInterval(load, DASHBOARD_POLL_MS);
     return () => {
       active = false;
       clearInterval(intervalId);
     };
-  }, [instance.id, range, hhmm, dataPollMs, dataVersion]);
+  }, [instance.id, range, hhmm]);
 
   return (
     <div className="flex flex-col gap-4">
