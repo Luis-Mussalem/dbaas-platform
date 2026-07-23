@@ -28,6 +28,13 @@ from src.models.metric import Metric
 from src.schemas.instance import InstanceSummary
 from src.services import status_history
 
+# Janela móvel do queries/s: larga o bastante para cobrir várias rajadas da carga
+# demo (evita aliasing quando o poller amostra num período parecido com o do
+# simulador) e ainda atualizar a cada coleta. _SAMPLES cobre a janela mesmo na
+# cadência rápida da demo (15s → 6 pontos ≈ 90s, limitados a _SECONDS).
+_QPS_WINDOW_SECONDS = 75.0
+_QPS_WINDOW_SAMPLES = 6
+
 # Ordem de gravidade, para o card destacar o pior alerta aberto.
 _SEVERITY_RANK = {
     AlertSeverity.INFO: 0,
@@ -96,19 +103,40 @@ def queries_per_second_by_instance(
     db: Session, instance_ids: list[uuid.UUID]
 ) -> dict[uuid.UUID, float]:
     """
-    Taxa de commits por instância, derivada dos dois pontos mais recentes do
-    contador cumulativo xact_commit: Δcommits / Δsegundos.
+    Taxa de commits por instância — Δcommits/Δsegundos do contador cumulativo
+    xact_commit sobre uma JANELA MÓVEL de ~_QPS_WINDOW_SECONDS, não sobre os dois
+    pontos adjacentes.
 
-    Delta negativo = o Postgres reiniciou e zerou o contador; a amostra é
-    descartada em vez de virar um pico absurdo no card.
+    A janela é maior que a cadência do poller de propósito. A carga demo comita em
+    rajadas (uma por ciclo do simulador); quando o poller amostra num período
+    parecido, derivar de dois pontos adjacentes cai em aliasing — uma janela pega 0
+    rajadas e reporta "0", a seguinte pega 2 e reporta o dobro. Mediar sobre várias
+    rajadas dá um número estável que ainda atualiza a cada coleta. Numa cadência
+    lenta (produção a 60s) a janela cobre ~1 intervalo e o comportamento é o de
+    antes.
+
+    Delta negativo = o Postgres reiniciou e zerou o contador: paramos na fronteira
+    do reset (a amostra mais velha com valor MAIOR que a atual) e medimos só o
+    trecho posterior, em vez de reportar um pico absurdo no card.
     """
     result: dict[uuid.UUID, float] = {}
-    for instance_id, samples in _latest_samples(db, instance_ids, "xact_commit", 2).items():
+    for instance_id, samples in _latest_samples(
+        db, instance_ids, "xact_commit", _QPS_WINDOW_SAMPLES
+    ).items():
         if len(samples) < 2:
             continue
-        (new_val, new_ts), (old_val, old_ts) = samples[0], samples[1]
-        dt = (new_ts - old_ts).total_seconds()
-        delta = new_val - old_val
+        newest_val, newest_ts = samples[0]
+        oldest_val, oldest_ts = samples[0]
+        # Recua no tempo (samples vêm do mais novo p/ o mais velho) até a borda da
+        # janela ou até um valor MAIOR que o atual (reset do contador).
+        for val, ts in samples[1:]:
+            if val > newest_val:
+                break
+            if (newest_ts - ts).total_seconds() > _QPS_WINDOW_SECONDS:
+                break
+            oldest_val, oldest_ts = val, ts
+        dt = (newest_ts - oldest_ts).total_seconds()
+        delta = newest_val - oldest_val
         if dt <= 0 or delta < 0:
             continue
         result[instance_id] = round(delta / dt, 2)

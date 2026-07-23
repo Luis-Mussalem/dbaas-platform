@@ -87,6 +87,29 @@ def test_queries_per_second_from_cumulative_counter(client, auth_headers, instan
     assert body["queries_per_second"] == 50.0  # 3000 commits / 60s
 
 
+def test_queries_per_second_averages_over_the_window_not_adjacent_points(
+    client, auth_headers, instance, db
+):
+    """
+    A carga demo comita em rajadas: dois pontos adjacentes podem cair entre
+    rajadas (Δ=0) mesmo com a frota viva. A janela móvel medeia sobre várias e
+    devolve um número estável e não-zero.
+    """
+    headers, _ = auth_headers()
+    now = datetime.now(timezone.utc)
+    # Rajadas de +180 a cada 30s; o par mais recente (now, -15s) tem Δ=0.
+    db.add_all([
+        Metric(instance_id=instance.id, metric_name="xact_commit", value=v,
+               collected_at=now - timedelta(seconds=s))
+        for v, s in [(1360, 0), (1360, 15), (1180, 30), (1180, 45), (1000, 60)]
+    ])
+    db.commit()
+
+    body = _summary_of(client.get(URL, headers=headers).json(), instance)
+    # Janela inteira: (1360-1000)/60 = 6 q/s — não o "0" dos dois pontos adjacentes.
+    assert body["queries_per_second"] == 6.0
+
+
 def test_counter_reset_is_discarded(client, auth_headers, instance, db):
     """Delta negativo = Postgres reiniciou; melhor não reportar que reportar um pico."""
     headers, _ = auth_headers()

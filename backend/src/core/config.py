@@ -55,6 +55,14 @@ class Settings(BaseSettings):
     # current_value, threshold, message, triggered_at, resolved_at.
     ALERT_WEBHOOK_URL: str | None = None
 
+    # Cadência do poller de métricas: quão frequentemente coletamos e persistimos
+    # métricas de cada instância RUNNING. Produção usa 60s (barato; a maioria das
+    # métricas move devagar). A demo baixa para 15s (ver .env/.env.example) para o
+    # dashboard — queries/s, conexões, latência — atualizar de forma visivelmente
+    # viva em vez de saltar a cada minuto; 15s casa com o ciclo do simulador de
+    # carga, então cada janela cobre uma rodada inteira de commits.
+    METRICS_POLL_INTERVAL_SECONDS: int = 60
+
     # Demo mode — frota de demonstração viva por padrão
     # Expõe /api/v1/demo e sobe o diretor do "demo ao vivo" + o gerador de carga.
     # Ao contrário do modelo antigo (frota nascia vazia), aqui o seed já popula a

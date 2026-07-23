@@ -2,6 +2,7 @@ import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 
+from src.core.config import settings
 from src.core.database import SessionLocal
 from src.models.database_instance import DatabaseInstance, InstanceStatus
 from src.models.metric import Metric
@@ -9,16 +10,13 @@ from src.services.metrics import collect_and_store
 
 logger = logging.getLogger(__name__)
 
-# Intervalo entre ciclos de coleta de métricas
-_POLL_INTERVAL_SECONDS = 60
-
 # Retenção: apagar métricas com mais de N dias (padrão: 30 dias)
 METRICS_RETENTION_DAYS = 30
 
 # Limpeza de métricas antigas: uma vez por dia, medida em TEMPO e não em número
 # de ciclos. Contando ciclos, a periodicidade dependia do intervalo de coleta —
-# durante uma simulação de uso ele cai para 5s e a limpeza passava a rodar a
-# cada ~2h de relógio, gastando um DELETE varrendo a tabela sem nada a apagar.
+# na demo ele cai para 15s e a limpeza passaria a rodar a cada ~6h de relógio,
+# gastando um DELETE varrendo a tabela sem nada a apagar.
 _METRICS_CLEANUP_INTERVAL = timedelta(hours=24)
 _last_metrics_cleanup: datetime | None = None
 
@@ -101,7 +99,8 @@ def poll_metrics_once() -> None:
 
 async def metrics_polling_loop(stop_event: asyncio.Event) -> None:
     """
-    Loop async que executa poll_metrics_once() a cada _POLL_INTERVAL_SECONDS.
+    Loop async que executa poll_metrics_once() a cada
+    settings.METRICS_POLL_INTERVAL_SECONDS.
 
     Padrão idêntico ao status_polling_loop — shutdown limpo via stop_event:
     asyncio.wait_for(stop_event.wait()) retorna imediatamente quando
@@ -112,9 +111,8 @@ async def metrics_polling_loop(stop_event: asyncio.Event) -> None:
     da plataforma + psycopg nos bancos das instâncias). Thread pool mantém
     o event loop livre para processar requests HTTP durante a coleta.
     """
-    logger.info(
-        "Metrics poller iniciado (intervalo: %ds)", _POLL_INTERVAL_SECONDS
-    )
+    interval = settings.METRICS_POLL_INTERVAL_SECONDS
+    logger.info("Metrics poller iniciado (intervalo: %ds)", interval)
 
     while not stop_event.is_set():
         try:
@@ -123,7 +121,7 @@ async def metrics_polling_loop(stop_event: asyncio.Event) -> None:
             logger.exception("Erro no ciclo de coleta de métricas: %s", exc)
 
         try:
-            await asyncio.wait_for(stop_event.wait(), timeout=_POLL_INTERVAL_SECONDS)
+            await asyncio.wait_for(stop_event.wait(), timeout=interval)
         except asyncio.TimeoutError:
             continue
 
