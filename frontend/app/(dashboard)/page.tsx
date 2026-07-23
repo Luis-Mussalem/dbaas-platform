@@ -73,7 +73,7 @@ export default function PainelPage() {
       {/* cabeçalho: saudação + resumo + filtro de ambiente */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
+          <h1 className="text-3xl font-semibold tracking-tight">
             {/* Sem período ainda (primeiro paint) → só a saudação neutra. */}
             {t("greeting", { period: period ?? "other" })}
           </h1>
