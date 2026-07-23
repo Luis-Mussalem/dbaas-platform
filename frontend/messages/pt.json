@@ -2,6 +2,36 @@
   "AboutDemo": {
     "title": "Sobre esta demo",
     "subtitle": "Este é um ambiente de portfólio. A plataforma gerencia instâncias PostgreSQL reais — mas uma frota recém-criada, de bancos vazios para empresas fictícias, não tem o que monitorar. Então a demo gera de propósito uma frota crível e viva, e esta página é transparente sobre o que exatamente é real e o que é gerado.",
+    "explore": {
+      "title": "O que você pode explorar",
+      "subtitle": "Tudo abaixo roda ao vivo contra a frota real — abra uma tela e clique à vontade.",
+      "items": {
+        "fleet": {
+          "title": "Painel da frota",
+          "body": "KPIs ao vivo de toda a frota — queries/s, latência P95, uptime de 30 dias — e um card por instância com vazão, storage usado vs. plano, alertas abertos e último backup."
+        },
+        "instance": {
+          "title": "Detalhe da instância",
+          "body": "Abra qualquer banco para ver conexões em tempo real, percentis de vazão e latência, as queries mais lentas, o crescimento de disco e o histórico de backups e manutenção."
+        },
+        "backups": {
+          "title": "Backups e recuperação",
+          "body": "Backups pg_dump agendados e sob demanda com retenção, além de restauração em uma instância nova — a metade de recuperação do DBA-as-a-service."
+        },
+        "alerts": {
+          "title": "Alertas e manutenção",
+          "body": "Alertas por limite para conexões, disco e atraso de replicação, e VACUUM/ANALYZE automatizados — cada um com um histórico completo para navegar."
+        },
+        "replication": {
+          "title": "Replicação e HA",
+          "body": "Standbys em streaming criados com pg_basebackup, monitoramento ao vivo do atraso de replicação e um fluxo de failover manual."
+        },
+        "tenancy": {
+          "title": "Multi-tenant e bilíngue",
+          "body": "Troque de empresa como superusuário, gerencie funcionários com RBAC por empresa, navegue com ⌘K e alterne a interface entre inglês e português."
+        }
+      }
+    },
     "real": {
       "title": "O que é real",
       "body": "Seis containers PostgreSQL 16, provisionados e gerenciados por esta plataforma, cada um com dados carregados. Tudo que o dashboard mede — conexões, vazão, latência, queries lentas, crescimento de disco, backups (pg_dump), VACUUM/ANALYZE — roda contra esses bancos reais. Nenhum número na tela é inventado."
@@ -17,6 +47,10 @@
     "decision": {
       "title": "Por que não há um botão “Simular uso”",
       "body": "Uma versão anterior colocava tudo isso atrás de um botão “Simular uso”: um clone limpo nascia vazio, e um clique rodava uma demo roteirizada de ~90 segundos (tráfego subindo, um alerta disparando, um backup e a manutenção rodando). Era honesto, mas a primeira tela parecia desligada e a maioria dos visitantes nunca clicava. Então a ideia foi incorporada ao próprio produto — a frota agora é gerada e mantida viva desde o primeiro segundo, e este aviso mantém isso transparente. Uma plataforma de monitoramento tem de ser vista monitorando algo."
+    },
+    "stack": {
+      "title": "Por baixo dos panos",
+      "subtitle": "Um backend FastAPI sobre PostgreSQL real, um dashboard Next.js e o Docker unindo tudo."
     }
   },
   "Actions": {
@@ -268,7 +302,8 @@
     "yourDatabases": "Seus bancos"
   },
   "DemoNotice": {
-    "message": "Ambiente de demonstração — estas empresas, instâncias, tráfego e histórico são gerados para a plataforma inteira poder ser explorada.",
+    "title": "Ambiente de demonstração",
+    "message": "As empresas, instâncias, tráfego e histórico que você vê são gerados de propósito, para que toda a plataforma possa ser explorada de ponta a ponta.",
     "learnMore": "Saiba mais"
   },
   "Employees": {

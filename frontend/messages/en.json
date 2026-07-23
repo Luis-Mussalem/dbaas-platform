@@ -2,6 +2,36 @@
   "AboutDemo": {
     "title": "About this demo",
     "subtitle": "This is a portfolio deployment. The platform manages real PostgreSQL instances — but a fresh fleet of empty databases for fictional companies has nothing to monitor. So the demo generates a believable, living fleet on purpose, and this page is upfront about exactly what is real and what is generated.",
+    "explore": {
+      "title": "What you can explore",
+      "subtitle": "Everything below runs live against the real fleet — open a screen and click around.",
+      "items": {
+        "fleet": {
+          "title": "Fleet dashboard",
+          "body": "Live KPIs across the fleet — queries/s, P95 latency, 30-day uptime — and a card per instance with throughput, storage used vs. plan, open alerts and last backup."
+        },
+        "instance": {
+          "title": "Instance detail",
+          "body": "Open any database for real-time connections, throughput and latency percentiles, the slowest queries, disk growth and its backup and maintenance timeline."
+        },
+        "backups": {
+          "title": "Backups & recovery",
+          "body": "Scheduled and on-demand pg_dump backups with retention, plus restore into a fresh instance — the recovery half of DBA-as-a-service."
+        },
+        "alerts": {
+          "title": "Alerts & maintenance",
+          "body": "Threshold alerts for connections, disk and replication lag, and automated VACUUM/ANALYZE — each with a full history you can browse."
+        },
+        "replication": {
+          "title": "Replication & HA",
+          "body": "Streaming standbys created with pg_basebackup, live replication-lag monitoring and a manual failover flow."
+        },
+        "tenancy": {
+          "title": "Multi-tenant & bilingual",
+          "body": "Switch companies as the superuser, manage employees with per-company RBAC, jump anywhere with ⌘K, and toggle the UI between English and Portuguese."
+        }
+      }
+    },
     "real": {
       "title": "What is real",
       "body": "Six PostgreSQL 16 containers, provisioned and managed by this platform, each with data loaded. Everything the dashboard measures — connections, throughput, latency, slow queries, disk growth, backups (pg_dump), VACUUM/ANALYZE — runs against these real databases. No number on screen is faked."
@@ -17,6 +47,10 @@
     "decision": {
       "title": "Why there is no “Simulate usage” button",
       "body": "An earlier version gated all of this behind a “Simulate usage” button: a clean clone booted empty, and one click ran a scripted ~90-second demo (traffic climbing, an alert firing, a backup and maintenance running). It was honest, but the first screen looked switched off and most visitors never clicked. So the idea was folded into the product itself — the fleet is now generated and kept alive from the first second, and this notice keeps that transparent. A monitoring platform should be shown monitoring something."
+    },
+    "stack": {
+      "title": "Under the hood",
+      "subtitle": "A FastAPI backend over real PostgreSQL, a Next.js dashboard, and Docker tying it together."
     }
   },
   "Actions": {
@@ -268,7 +302,8 @@
     "yourDatabases": "Your databases"
   },
   "DemoNotice": {
-    "message": "Demo environment — these companies, instances, traffic and history are generated so the whole platform can be explored.",
+    "title": "Demo environment",
+    "message": "The companies, instances, traffic and history you see are generated on purpose, so the whole platform can be explored end to end.",
     "learnMore": "Learn more"
   },
   "Employees": {

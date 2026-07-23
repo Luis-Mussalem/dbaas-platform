@@ -19,13 +19,18 @@ export function DemoNotice() {
   return (
     <div
       role="note"
-      className="flex h-10 shrink-0 items-center gap-2.5 border-b border-info/25 bg-info/10 px-6 text-[13px] text-fg-2"
+      className="flex min-h-[8vh] shrink-0 items-center gap-3.5 border-b border-info/25 bg-info/10 px-6 py-3"
     >
-      <Info size={15} className="shrink-0 text-info" />
-      <span className="min-w-0 truncate">{t("message")}</span>
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-info/15 text-info">
+        <Info size={18} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-info">{t("title")}</p>
+        <p className="text-[13px] leading-snug text-fg-2">{t("message")}</p>
+      </div>
       <Link
         href="/demo"
-        className="ml-auto shrink-0 font-medium text-info hover:underline"
+        className="shrink-0 rounded-md border border-info/30 px-3 py-1.5 text-[13px] font-medium text-info transition-colors hover:bg-info/10"
       >
         {t("learnMore")}
       </Link>
