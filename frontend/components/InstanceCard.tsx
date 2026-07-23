@@ -10,6 +10,7 @@ import { useFormatters } from "@/hooks/use-formatters";
 import { instanceGradient, instanceInitials, instanceLineColor, instanceInk } from "@/lib/identity-color";
 import { HealthBadge } from "@/components/StatusBadge";
 import { EnvBadge } from "@/components/EnvBadge";
+import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { RegionTag } from "@/components/RegionTag";
 import { Sparkline } from "@/components/Sparkline";
 
@@ -134,7 +135,12 @@ export function InstanceCard({
           label={t("throughput")}
           value={
             summary?.queries_per_second != null
-              ? number(Math.round(summary.queries_per_second))
+              ? (
+                <AnimatedNumber
+                  value={summary.queries_per_second}
+                  format={(n) => number(Math.round(n))}
+                />
+              )
               : tc("none")
           }
           align="right"
@@ -211,7 +217,7 @@ function Metric({
   align = "left",
 }: {
   label: string;
-  value: string;
+  value: React.ReactNode;
   align?: "left" | "right";
 }) {
   return (

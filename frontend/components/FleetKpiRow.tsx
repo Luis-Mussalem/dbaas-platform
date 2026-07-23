@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { StatCard } from "@/components/StatCard";
+import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { useFormatters } from "@/hooks/use-formatters";
 import type { DashboardSummary } from "@/lib/types";
 
@@ -26,7 +27,11 @@ export function FleetKpiRow({
 
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      <StatCard label={t("qps")} value={number(qps)} sub={t("qpsSub")} />
+      <StatCard
+        label={t("qps")}
+        value={<AnimatedNumber value={qps} format={(n) => number(n)} />}
+        sub={t("qpsSub")}
+      />
       <StatCard
         label={t("p95")}
         value={p95 != null ? `${number(p95)} ms` : tc("none")}
