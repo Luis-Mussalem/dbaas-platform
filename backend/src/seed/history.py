@@ -71,6 +71,11 @@ _FLEET_AGE_DAYS = 45
 # resolvido. Mantém o contador de "alertas ativos" pequeno e crível.
 _OPEN_ALERT_INSTANCES = {"neptune-payments-prod", "saturn-store-staging"}
 
+# Idade máxima do último backup antes de _refresh_backup_anchor reaproximá-lo.
+# Folga sob as 24h da regra `backup_age_hours`: a frota nunca sobe já vencida,
+# e o alerta continua livre para disparar se um backup real falhar.
+_BACKUP_ANCHOR_MAX_AGE = timedelta(hours=20)
+
 # Janela e resolução da série sintética. 24h é o maior intervalo que os
 # gráficos oferecem; 5 min é a cadência que o poller usaria em repouso.
 _BACKFILL_WINDOW = timedelta(hours=24)
@@ -371,22 +376,39 @@ def _seed_alerts(db: Session, instance: DatabaseInstance, is_prod: bool) -> None
 # --------------------------------------------------------------------------- #
 # Backups — schedule + histórico
 # --------------------------------------------------------------------------- #
+def _seed_backup_schedule(
+    db: Session, instance: DatabaseInstance, is_prod: bool
+) -> None:
+    """
+    Agendamento diário de backup — em TODA instância, prod e staging.
+
+    Staging também precisa do seu: a regra `backup_age_hours > 24` é semeada na
+    frota inteira, então uma instância sem agendamento nunca ganha um backup
+    novo e acumula um CRITICAL permanente assim que o marco semeado passa das
+    24h. Difere de produção no horário (04:00, fora da janela de prod) e na
+    retenção (3 dias em vez de 7), que é como uma frota real trata staging.
+    """
+    now = _now()
+    hour = 2 if is_prod else 4
+    run_at = now.replace(hour=hour, minute=0, second=0, microsecond=0)
+
+    db.add(BackupSchedule(
+        instance_id=instance.id,
+        strategy=BackupStrategy.LOGICAL,
+        cron_expression=f"0 {hour} * * *",
+        retention_days=7 if is_prod else 3,
+        is_active=True,
+        created_at=now - timedelta(days=_FLEET_AGE_DAYS - 1),
+        last_run_at=run_at if run_at <= now else run_at - timedelta(days=1),
+        next_run_at=run_at + timedelta(days=1),
+    ))
+    db.commit()
+
+
 def _seed_backups(db: Session, instance: DatabaseInstance, is_prod: bool) -> None:
     rng = _rng(instance)
     now = _now()
     two_am = now.replace(hour=2, minute=0, second=0, microsecond=0)
-
-    if is_prod:
-        db.add(BackupSchedule(
-            instance_id=instance.id,
-            strategy=BackupStrategy.LOGICAL,
-            cron_expression="0 2 * * *",
-            retention_days=7,
-            is_active=True,
-            created_at=now - timedelta(days=_FLEET_AGE_DAYS - 1),
-            last_run_at=two_am if two_am <= now else two_am - timedelta(days=1),
-            next_run_at=two_am + timedelta(days=1),
-        ))
 
     backups: list[Backup] = []
     # ~14 dias de backups diários agendados, COMPLETED, tamanho crescendo devagar.
@@ -455,6 +477,44 @@ def _seed_backups(db: Session, instance: DatabaseInstance, is_prod: bool) -> Non
     ))
 
     db.add_all(backups)
+    db.commit()
+
+
+def _refresh_backup_anchor(db: Session, instance: DatabaseInstance) -> None:
+    """
+    Reaproximar o backup COMPLETED mais recente de "agora", se envelheceu demais.
+
+    Diferente do resto do seed, isto roda em TODO boot. O histórico de backup é
+    semeado uma única vez, com o marco mais novo a 2–9h atrás; a frota demo,
+    porém, passa a maior parte do tempo desligada e esse marco envelhece em tempo
+    de parede. Ao subir depois de um dia parada, toda instância cruza o
+    `backup_age_hours > 24` e o painel abre com CRITICAL em série — que fala do
+    computador ter ficado desligado, não da plataforma.
+
+    Mesma licença que já tomamos ao retroagir `created_at` e o histórico de
+    status para dar 45 dias de idade à frota: a demo é declaradamente sintética
+    (banner + página /demo). Backups REAIS — os que o scheduler acabou de rodar —
+    já entram recentes e a guarda de idade os deixa em paz.
+    """
+    now = _now()
+    newest = (
+        db.query(Backup)
+        .filter(Backup.instance_id == instance.id,
+                Backup.status == BackupStatus.COMPLETED,
+                Backup.completed_at.isnot(None))
+        .order_by(Backup.completed_at.desc())
+        .first()
+    )
+    if newest is None or now - newest.completed_at <= _BACKUP_ANCHOR_MAX_AGE:
+        return
+
+    rng = _rng(instance)
+    started = now - timedelta(hours=rng.uniform(2.0, 9.0))
+    newest.created_at = started
+    newest.started_at = started
+    newest.completed_at = started + timedelta(seconds=rng.randint(40, 180))
+    newest.expires_at = started + timedelta(days=7)
+    db.add(newest)
     db.commit()
 
 
@@ -604,8 +664,12 @@ def enrich_fleet(db: Session) -> None:
             _backdate_status(db, inst, blip=blip)
         if not _has(db, AlertRule, inst):
             _seed_alerts(db, inst, is_prod)
+        if not _has(db, BackupSchedule, inst):
+            _seed_backup_schedule(db, inst, is_prod)
         if not _has(db, Backup, inst):
             _seed_backups(db, inst, is_prod)
+        # Sem guarda: o marco de backup envelhece em tempo de parede entre boots.
+        _refresh_backup_anchor(db, inst)
         if not _has(db, MaintenanceTask, inst):
             _seed_maintenance(db, inst, is_prod, table_by_company.get(inst.company_id))
 

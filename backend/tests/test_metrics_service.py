@@ -137,6 +137,64 @@ def test_collect_and_store_without_pg_stat_statements(db, instance, monkeypatch)
 
 
 # --------------------------------------------------------------------------- #
+# cache_hit_ratio derivado do intervalo
+# --------------------------------------------------------------------------- #
+
+
+def _collect_with_counters(monkeypatch, db, instance, blks_hit, blks_read):
+    """Roda um ciclo de coleta com os contadores de cache dados."""
+    @contextmanager
+    def fake_conn(inst):
+        yield object()
+
+    monkeypatch.setattr(metrics_service, "get_connection", fake_conn)
+    monkeypatch.setattr(metrics_service, "collect_latency_percentiles", lambda conn: {})
+    monkeypatch.setattr(
+        metrics_service, "collect_base_metrics",
+        lambda conn: {"blks_hit": blks_hit, "blks_read": blks_read},
+    )
+    metrics_service.collect_and_store(db, instance)
+    return metrics_service.get_latest_metrics(db, instance.id).get("cache_hit_ratio")
+
+
+def test_cache_hit_ratio_omitted_on_first_collection(db, instance, monkeypatch):
+    """Sem coleta anterior não há intervalo — melhor não reportar que chutar."""
+    assert _collect_with_counters(monkeypatch, db, instance, 100.0, 900.0) is None
+
+
+def test_cache_hit_ratio_uses_interval_not_lifetime(db, instance, monkeypatch):
+    """
+    Acumulado ruim, intervalo bom: a métrica tem de seguir o intervalo.
+
+    Vitalício = 100/(100+900) = 10%. No intervalo entram 900 hits e 100 reads,
+    ou seja 90% — é este o número que responde "está lendo do cache agora?".
+    """
+    _collect_with_counters(monkeypatch, db, instance, 100.0, 900.0)
+    ratio = _collect_with_counters(monkeypatch, db, instance, 1000.0, 1000.0)
+    assert ratio == 90.0
+
+
+def test_cache_hit_ratio_carries_forward_on_counter_reset(db, instance, monkeypatch):
+    """
+    Restart do servidor zera pg_stat_database — o delta viraria negativo.
+
+    Sem isto, todo restart derrubava a métrica para perto de 0% e abria alerta
+    de cache baixo numa frota saudável.
+    """
+    _collect_with_counters(monkeypatch, db, instance, 100.0, 900.0)
+    assert _collect_with_counters(monkeypatch, db, instance, 1000.0, 1000.0) == 90.0
+    # Contadores andam para trás: mantém o último valor conhecido.
+    assert _collect_with_counters(monkeypatch, db, instance, 5.0, 40.0) == 90.0
+
+
+def test_cache_hit_ratio_carries_forward_when_idle(db, instance, monkeypatch):
+    """Banco ocioso: nenhum bloco lido no intervalo, razão indefinida."""
+    _collect_with_counters(monkeypatch, db, instance, 100.0, 900.0)
+    assert _collect_with_counters(monkeypatch, db, instance, 1000.0, 1000.0) == 90.0
+    assert _collect_with_counters(monkeypatch, db, instance, 1000.0, 1000.0) == 90.0
+
+
+# --------------------------------------------------------------------------- #
 # check_health
 # --------------------------------------------------------------------------- #
 

@@ -19,10 +19,18 @@ def collect_base_metrics(conn: psycopg.Connection) -> dict[str, float]:
     Métricas coletadas:
     - connections_active: conexões abertas agora neste banco
     - connections_max: limite total do servidor (max_connections)
-    - cache_hit_ratio: % de blocos lidos do cache vs. disco (meta: > 95%)
+    - blks_hit/blks_read: blocos servidos pelo cache vs. lidos do disco
     - db_size_bytes: tamanho total do banco em bytes
     - tup_inserted/updated/deleted/fetched: volume de operações DML
     - xact_commit/rollback: transações commitadas e abortadas
+
+    Por que blks_hit/blks_read crus, e não o cache_hit_ratio já calculado?
+    Os contadores do pg_stat_database são VITALÍCIOS e o PostgreSQL os descarta
+    ao reiniciar. A razão sobre o acumulado mede "desde que o servidor subiu",
+    então todo restart devolve o banco a ~0% e a métrica leva horas subindo até
+    o valor real — tempo todo disparando alerta de cache baixo. Quem derruba os
+    contadores em razão de intervalo é services.metrics.collect_and_store, que
+    tem o histórico para comparar com a coleta anterior.
     """
     with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
         cur.execute("""
@@ -33,14 +41,8 @@ def collect_base_metrics(conn: psycopg.Connection) -> dict[str, float]:
                     FROM pg_settings
                     WHERE name = 'max_connections'
                 ) AS connections_max,
-                CASE
-                    WHEN (d.blks_hit + d.blks_read) > 0
-                    THEN round(
-                        (d.blks_hit::numeric / (d.blks_hit + d.blks_read)) * 100,
-                        2
-                    )
-                    ELSE 0
-                END AS cache_hit_ratio,
+                d.blks_hit,
+                d.blks_read,
                 pg_database_size(d.datname) AS db_size_bytes,
                 d.tup_inserted,
                 d.tup_updated,

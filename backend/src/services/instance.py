@@ -53,6 +53,45 @@ def sync_connection_port(instance: DatabaseInstance, new_port: int) -> None:
         instance.connection_uri = encrypt_value(new_uri)
 
 
+def reconcile_connection_port(db: Session, instance: DatabaseInstance) -> bool:
+    """
+    Ressincronizar a porta com a que o provisioner publica AGORA, se divergirem.
+
+    O status_poller já reconcilia a cada 30s, mas no startup todos os loops de
+    background sobem juntos: um backup agendado que já venceu roda no primeiro
+    ciclo e pode chegar antes da primeira reconciliação, usando a porta do boot
+    anterior — o Docker republica portas ao religar containers. O pg_dump falha
+    com "connection refused", grava um Backup FAILED e o schedule avança, então
+    o alerta de backup atrasado fica aberto até a próxima janela do cron.
+
+    Chamada antes de operações que dependem da connection_uri e não podem
+    esperar os 30s do poller. Best-effort: falha ao consultar o provisioner só
+    devolve False, deixando a operação seguir com o que está no banco.
+
+    Retorna True se a porta mudou.
+    """
+    try:
+        port = get_provisioner().get_port(instance.id)
+    except Exception as exc:  # noqa: BLE001 — best-effort, a operação segue
+        logger.warning(
+            "Não foi possível conferir a porta da instância %s: %s", instance.id, exc
+        )
+        return False
+
+    if port is None or port == instance.port:
+        return False
+
+    logger.info(
+        "Instância %s: porta divergente (banco=%s, docker=%s) — ressincronizando",
+        instance.id,
+        instance.port,
+        port,
+    )
+    sync_connection_port(instance, port)
+    db.commit()
+    return True
+
+
 def get_instance_by_id(
     db: Session, instance_id: uuid.UUID, current_user: User
 ) -> Optional[DatabaseInstance]:

@@ -11,6 +11,7 @@ from src.services.backup import (
     create_logical_backup,
     create_physical_backup,
 )
+from src.services.instance import reconcile_connection_port
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +71,11 @@ def poll_schedules_once() -> None:
                 # Ainda avança o schedule para não ficar tentando repetidamente
                 advance_schedule(db, schedule)
                 continue
+
+            # O Docker republica portas ao religar containers; um backup que
+            # vence no boot pode correr na frente do status_poller e falhar numa
+            # porta morta. Conferir antes custa uma chamada à API do Docker.
+            reconcile_connection_port(db, instance)
 
             try:
                 if schedule.strategy == BackupStrategy.LOGICAL:

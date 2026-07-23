@@ -54,6 +54,76 @@ def get_connection(
         yield conn
 
 
+def _latest_values(
+    db: Session,
+    instance_id: uuid.UUID,
+    names: tuple[str, ...],
+) -> dict[str, float]:
+    """Último valor de cada métrica em `names` (as ausentes ficam de fora)."""
+    subq = (
+        db.query(
+            Metric.metric_name,
+            func.max(Metric.collected_at).label("max_collected_at"),
+        )
+        .filter(Metric.instance_id == instance_id, Metric.metric_name.in_(names))
+        .group_by(Metric.metric_name)
+        .subquery()
+    )
+    rows = (
+        db.query(Metric.metric_name, Metric.value)
+        .join(
+            subq,
+            (Metric.metric_name == subq.c.metric_name)
+            & (Metric.collected_at == subq.c.max_collected_at),
+        )
+        .filter(Metric.instance_id == instance_id)
+        .all()
+    )
+    return {name: value for name, value in rows}
+
+
+def _interval_cache_hit_ratio(
+    db: Session,
+    instance_id: uuid.UUID,
+    blks_hit: float,
+    blks_read: float,
+) -> float | None:
+    """
+    Cache hit ratio do INTERVALO entre esta coleta e a anterior, em %.
+
+    O pg_stat_database só expõe contadores acumulados; a razão sobre eles mede a
+    vida inteira do servidor e não o presente. Um banco que passou o dia a 99%
+    continuaria reportando ~99% durante uma hora inteira de leituras em disco —
+    e, pior, um restart zera os contadores e a razão desaba para perto de 0%
+    ainda que o banco esteja saudável. Derivar do delta responde à pergunta que
+    o alerta faz de fato: "e agora, está lendo do cache?".
+
+    Retorna None quando o intervalo não permite uma resposta honesta:
+    - sem coleta anterior (primeira da instância) → não há delta;
+    - contador andou para trás → servidor reiniciou e zerou as estatísticas;
+    - nenhum bloco lido no intervalo → banco ocioso, razão indefinida.
+
+    Nos dois últimos casos devolve o valor anterior, se houver: um ciclo de
+    dado repetido é melhor que um falso "0%" que abriria alerta sozinho.
+    """
+    prev = _latest_values(db, instance_id, ("blks_hit", "blks_read", "cache_hit_ratio"))
+    prev_hit = prev.get("blks_hit")
+    prev_read = prev.get("blks_read")
+    carry = prev.get("cache_hit_ratio")
+
+    if prev_hit is None or prev_read is None:
+        return None
+
+    if blks_hit < prev_hit or blks_read < prev_read:
+        return carry
+
+    delta_total = (blks_hit - prev_hit) + (blks_read - prev_read)
+    if delta_total <= 0:
+        return carry
+
+    return round((blks_hit - prev_hit) / delta_total * 100.0, 2)
+
+
 def collect_and_store(db: Session, instance: DatabaseInstance) -> int:
     """
     Coletar métricas base da instância e persistir na tabela metrics.
@@ -74,6 +144,17 @@ def collect_and_store(db: Session, instance: DatabaseInstance) -> int:
 
     if not raw:
         return 0
+
+    # Precisa rodar ANTES do insert: a razão sai do delta contra a coleta anterior,
+    # que deixaria de ser "a anterior" assim que estas linhas entrassem.
+    if "blks_hit" in raw and "blks_read" in raw:
+        ratio = _interval_cache_hit_ratio(
+            db, instance.id, raw["blks_hit"], raw["blks_read"]
+        )
+        if ratio is None:
+            raw.pop("cache_hit_ratio", None)
+        else:
+            raw["cache_hit_ratio"] = ratio
 
     now = datetime.now(timezone.utc)
     metrics = [

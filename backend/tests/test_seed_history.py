@@ -11,7 +11,13 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from src.models.alert import AlertRule
-from src.models.backup import Backup
+from src.models.backup import (
+    Backup,
+    BackupSchedule,
+    BackupStatus,
+    BackupStrategy,
+    BackupType,
+)
 from src.models.database_instance import DatabaseInstance, Environment, InstanceStatus
 from src.models.metric import Metric
 from src.seed import history
@@ -137,6 +143,83 @@ def test_enrich_fleet_still_seeds_backups_when_only_a_rule_exists(db, demo_insta
 
     assert db.query(Backup).filter(Backup.instance_id == demo_instance.id).first()
     assert _series(db, demo_instance)
+
+
+def test_staging_also_gets_a_backup_schedule(db):
+    """
+    REGRESSÃO: só produção ganhava agendamento, mas a regra `backup_age_hours`
+    é semeada na frota inteira. Sem agendamento, staging nunca produzia backup
+    novo e acumulava um CRITICAL permanente 24h depois do primeiro boot.
+    """
+    staging = DatabaseInstance(
+        name="demo-staging",
+        status=InstanceStatus.RUNNING,
+        environment=Environment.STAGING,
+        notes=DEMO_MARKER,
+        storage_gb=1,
+    )
+    db.add(staging)
+    db.commit()
+
+    history.enrich_fleet(db)
+
+    schedule = (
+        db.query(BackupSchedule)
+        .filter(BackupSchedule.instance_id == staging.id)
+        .one()
+    )
+    assert schedule.is_active
+    assert schedule.next_run_at > datetime.now(timezone.utc)
+
+
+def test_backup_anchor_is_refreshed_when_the_fleet_boots_stale(db, demo_instance):
+    """
+    A frota demo passa a maior parte do tempo desligada e o marco de backup
+    envelhece em tempo de parede. Ao subir depois de um dia parada, toda
+    instância cruzava `backup_age_hours > 24` e o painel abria em CRITICAL.
+    """
+    stale = datetime.now(timezone.utc) - timedelta(hours=31)
+    db.add(Backup(
+        instance_id=demo_instance.id,
+        backup_type=BackupType.SCHEDULED,
+        strategy=BackupStrategy.LOGICAL,
+        status=BackupStatus.COMPLETED,
+        created_at=stale,
+        started_at=stale,
+        completed_at=stale,
+    ))
+    db.commit()
+
+    history._refresh_backup_anchor(db, demo_instance)
+
+    newest = (
+        db.query(Backup)
+        .filter(Backup.instance_id == demo_instance.id)
+        .order_by(Backup.completed_at.desc())
+        .first()
+    )
+    age = datetime.now(timezone.utc) - newest.completed_at
+    assert age < timedelta(hours=24)  # não sobe já vencida
+
+
+def test_backup_anchor_leaves_recent_backups_alone(db, demo_instance):
+    """Backup real e recente não pode ser reescrito pelo seed."""
+    recent = datetime.now(timezone.utc) - timedelta(hours=3)
+    db.add(Backup(
+        instance_id=demo_instance.id,
+        backup_type=BackupType.SCHEDULED,
+        strategy=BackupStrategy.LOGICAL,
+        status=BackupStatus.COMPLETED,
+        created_at=recent,
+        started_at=recent,
+        completed_at=recent,
+    ))
+    db.commit()
+
+    history._refresh_backup_anchor(db, demo_instance)
+
+    newest = db.query(Backup).filter(Backup.instance_id == demo_instance.id).one()
+    assert newest.completed_at == recent
 
 
 def test_backfill_seeds_p95_but_never_the_cumulative_counter(db, demo_instance):

@@ -15,6 +15,7 @@ commitado pela sessão do poller.
 """
 import asyncio
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
 import pytest
 
@@ -25,6 +26,7 @@ from src.models.instance_status_history import InstanceStatusHistory
 from src.models.maintenance import MaintenanceSchedule, TaskType
 from src.models.metric import Metric
 from src.services import alert_evaluator, backup_scheduler, maintenance_scheduler, metrics_poller
+from src.services import instance as instance_service
 from src.services.provisioning import status_poller
 from src.services.provisioning.types import ProvisionerStatus
 
@@ -287,6 +289,70 @@ def test_backup_scheduler_runs_due_schedule(db, running_instance, monkeypatch):
     db.expire_all()
     db.refresh(schedule)
     assert schedule.last_run_at is not None  # schedule avançado
+
+
+def test_backup_scheduler_resyncs_port_before_backup(db, running_instance, monkeypatch):
+    """
+    O Docker republica portas ao religar containers. Se o backup vencido rodar
+    antes da primeira passada do status_poller, o pg_dump bate numa porta morta,
+    grava FAILED e o schedule avança — deixando um CRITICAL de backup atrasado
+    aberto até a próxima janela do cron. Por isso confere a porta antes.
+    """
+    stale_port = running_instance.port
+    db.add(BackupSchedule(
+        instance_id=running_instance.id,
+        strategy=BackupStrategy.LOGICAL,
+        cron_expression="*/5 * * * *",
+        retention_days=7,
+        is_active=True,
+        next_run_at=datetime.now(timezone.utc) - timedelta(minutes=1),
+    ))
+    db.commit()
+
+    port_at_backup = {}
+
+    def fake_logical(session, instance, backup_type, retention_days):
+        port_at_backup["port"] = instance.port
+
+    monkeypatch.setattr(backup_scheduler, "create_logical_backup", fake_logical)
+    monkeypatch.setattr(backup_scheduler, "apply_retention", lambda s, iid: 0)
+    monkeypatch.setattr(
+        instance_service, "get_provisioner",
+        lambda: SimpleNamespace(get_port=lambda iid: 54321),
+    )
+
+    backup_scheduler.poll_schedules_once()
+
+    assert stale_port != 54321
+    assert port_at_backup["port"] == 54321  # backup usou a porta viva, não a do banco
+
+
+def test_backup_scheduler_runs_when_port_check_fails(db, running_instance, monkeypatch):
+    """Provisioner indisponível não pode impedir o backup — só best-effort."""
+    db.add(BackupSchedule(
+        instance_id=running_instance.id,
+        strategy=BackupStrategy.LOGICAL,
+        cron_expression="*/5 * * * *",
+        retention_days=7,
+        is_active=True,
+        next_run_at=datetime.now(timezone.utc) - timedelta(minutes=1),
+    ))
+    db.commit()
+
+    called = []
+    monkeypatch.setattr(
+        backup_scheduler, "create_logical_backup",
+        lambda *a, **k: called.append(1),
+    )
+    monkeypatch.setattr(backup_scheduler, "apply_retention", lambda s, iid: 0)
+
+    def boom():
+        raise RuntimeError("docker daemon unreachable")
+
+    monkeypatch.setattr(instance_service, "get_provisioner", boom)
+
+    backup_scheduler.poll_schedules_once()
+    assert called == [1]
 
 
 def test_backup_scheduler_skips_when_no_due(db, monkeypatch):
