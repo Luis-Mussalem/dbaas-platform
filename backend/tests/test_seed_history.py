@@ -240,3 +240,58 @@ def test_seeded_p95_follows_the_traffic_curve(db, demo_instance):
 
     values = [p.value for p in _series(db, demo_instance, "p95_query_latency_ms")]
     assert min(values) < max(values)
+
+
+def test_xact_commit_anchor_dates_the_pair_safely_in_the_past(db, monkeypatch):
+    """
+    O par ancorado nasce no PASSADO (nunca em `now`) e monotônico, para não cruzar
+    com as coletas quase-simultâneas do poller ao vivo — o que derivaria Δ negativo
+    e devolveria o queries/s a "—". Uma coleta viva futura mantém o Δ positivo.
+    """
+    import contextlib
+
+    from src.core.encryption import encrypt_value
+    from src.services.fleet_summary import queries_per_second_by_instance
+
+    inst = DatabaseInstance(
+        name="demo-anchor-prod",
+        status=InstanceStatus.RUNNING,
+        environment=Environment.PRODUCTION,
+        notes=DEMO_MARKER,
+        storage_gb=1,
+        connection_uri=encrypt_value("postgresql://u:p@127.0.0.1:5433/appdb"),
+    )
+    db.add(inst)
+    db.commit()
+    db.refresh(inst)
+
+    # Sample obsoleto de um "boot anterior" (contador maior): tem de ser apagado,
+    # senão o Δ contra o par fresco sairia negativo.
+    _add_live_sample(db, inst, "xact_commit", 99999.0, minutes_ago=30)
+
+    current = 1000.0
+    monkeypatch.setattr(
+        "src.services.metrics.get_connection",
+        lambda instance: contextlib.nullcontext(object()),
+    )
+    monkeypatch.setattr(
+        "src.collectors.pg_stats.collect_base_metrics",
+        lambda conn: {"xact_commit": current},
+    )
+
+    now = datetime.now(timezone.utc)
+    history._seed_xact_commit_anchor(db, inst)
+
+    pair = _series(db, inst, "xact_commit")
+    assert len(pair) == 2  # obsoleto apagado, par fresco no lugar
+    older, newer = pair
+    assert newer.collected_at < now - timedelta(seconds=55)  # datado no passado
+    assert older.collected_at < newer.collected_at
+    # Recuados do contador real (não gravamos `current`), e monotônicos.
+    assert older.value < newer.value < current
+    # O par sozinho — antes de qualquer coleta viva — já rende uma taxa positiva.
+    assert queries_per_second_by_instance(db, [inst.id])[inst.id] > 0
+
+    # E a coleta viva seguinte (mais nova, lê ~o contador atual) mantém Δ positivo.
+    _add_live_sample(db, inst, "xact_commit", current, minutes_ago=0)
+    assert queries_per_second_by_instance(db, [inst.id])[inst.id] > 0

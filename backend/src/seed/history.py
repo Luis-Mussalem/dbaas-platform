@@ -59,7 +59,10 @@ from src.models.maintenance import (
 )
 from src.models.metric import Metric
 from src.models.user import User, UserRole
-from src.services.workload_simulator import target_connections
+from src.services.workload_simulator import (
+    target_connections,
+    target_queries_per_second,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +93,11 @@ _BACKFILL_COVERED_AFTER = _BACKFILL_WINDOW - timedelta(hours=1)
 # Quanto o banco "cresceu" ao longo da janela, em fração do tamanho medido.
 # Modesto de propósito: é o que o card mostra como crescimento em 24h.
 _BACKFILL_GROWTH_RATIO = 0.02
+
+# Distância entre os dois pontos do par de xact_commit ancorado no boot. Igual à
+# cadência do poller (60s), para o par parecer duas coletas normais e o queries/s
+# derivado sair na mesma ordem de grandeza que a medição ao vivo.
+_XACT_ANCHOR_GAP_SECONDS = 60
 
 # Latência base quando a instância nunca reportou percentis (dados-apenas, sem
 # pg_stat_statements) e quanto ela sobe do vale ao pico de carga.
@@ -163,9 +171,11 @@ def _backfill_metrics(db: Session, instance: DatabaseInstance, idx: int) -> None
     intensidade-base, o histórico desenharia a curva CHEIA (~14 conexões) e a
     medição ao vivo em repouso (~5) cairia num degrau no ponto "agora". Semeia os
     percentis de latência (grandezas instantâneas, moduladas pela mesma curva)
-    mas NÃO xact_commit: aquele é um contador cumulativo, e uma série sintética
-    produziria uma taxa falsa de queries/s exatamente na emenda com a medição
-    real — o poller ao vivo o preenche em um ciclo.
+    mas NÃO xact_commit: aquele é um contador cumulativo, e uma série sintética de
+    24h produziria uma taxa falsa de queries/s exatamente na emenda com a medição
+    real. O queries/s do card não fica em branco por isso: `_seed_xact_commit_anchor`
+    semeia um par recente ANCORADO no contador real do container, o que dá a taxa
+    de imediato sem inventar a série inteira.
 
     Guarda: pula só quando JÁ EXISTE medição cobrindo a janela. A guarda antiga
     ("existe qualquer métrica?") tornava o backfill inócuo na prática — o poller
@@ -271,6 +281,76 @@ def _backfill_metrics(db: Session, instance: DatabaseInstance, idx: int) -> None
                 collected_at=ts,
             ))
     db.add_all(rows)
+    db.commit()
+
+
+def _seed_xact_commit_anchor(db: Session, instance: DatabaseInstance) -> None:
+    """
+    Semeia um par recente de `xact_commit` ancorado no contador REAL do container,
+    para o queries/s do card aparecer já no primeiro render.
+
+    Sem isto, o queries/s (Δcommits ÷ Δsegundos sobre os dois samples mais recentes)
+    fica em "—" por até dois ciclos do poller (60s cada) num boot recém-aberto,
+    porque o seed não semeia a série de xact_commit (ver `_backfill_metrics`). Numa
+    demo clonada do GitHub, esse é o único número que nasce vazio — uma primeira
+    impressão ruim para o recrutador que abre o projeto.
+
+    Roda em TODO boot (como `_refresh_backup_anchor`, sem guarda de idempotência):
+    o contador é cumulativo e o Postgres o zera ao reiniciar, então samples de um
+    boot anterior ficariam MAIORES que o atual e o Δ derivaria negativo (descartado
+    → "—"). Por isso apaga o histórico de xact_commit e regrava um par fresco — o
+    contador não é plotado em nenhum gráfico (só alimenta o queries/s dos dois
+    pontos mais recentes), então apagá-lo não perde nada visível.
+
+    O par é datado com FOLGA no passado (`now-2*GAP`, `now-GAP`), nunca em `now`.
+    O seed roda concorrente com o poller ao vivo (que grava xact_commit perto de
+    `now`): se o par mais novo fosse em `now`, ele empataria/cruzaria com a coleta
+    do poller e a série ficaria não-monotônica — um sample do poller com timestamp
+    ligeiramente anterior mas valor maior derivaria Δ negativo. Datando no passado,
+    TODA coleta viva é mais nova por timestamp e o par é só a ponte até ela chegar.
+
+    Os dois pontos representam o contador COMO ELE ESTAVA no passado — recuados da
+    taxa-base modelada (`target_queries_per_second`): `newer = current - taxa*GAP`,
+    `older = current - taxa*2*GAP`. Não gravamos o valor atual: a primeira coleta
+    do poller lê ~`current` no mesmo instante do boot, e se o par mais novo já fosse
+    `current` o Δ contra ela sairia ~0 (queries/s "0"). Recuando o par, a leitura
+    real (≥ current, mais nova) dá Δ ≈ taxa*GAP → a taxa-base viva. O par sozinho
+    (antes da 1ª coleta) já rende a mesma taxa. Só instâncias com container.
+    """
+    if not instance.connection_uri:
+        return
+
+    # Import tardio: o seed é carregado no startup, antes de tudo estar de pé.
+    from src.collectors.pg_stats import collect_base_metrics
+    from src.services.metrics import get_connection
+
+    try:
+        with get_connection(instance) as conn:
+            current = collect_base_metrics(conn).get("xact_commit")
+    except Exception as exc:  # noqa: BLE001 — o boot não pode falhar por isto
+        db.rollback()
+        logger.warning("Seed demo: leitura de xact_commit em %s falhou: %s", instance.name, exc)
+        return
+    if current is None:
+        return
+
+    now = _now()
+    rate = target_queries_per_second(instance.name, instance.environment, now)
+    newer = max(0.0, current - rate * _XACT_ANCHOR_GAP_SECONDS)
+    older = max(0.0, current - rate * 2 * _XACT_ANCHOR_GAP_SECONDS)
+
+    db.query(Metric).filter(
+        Metric.instance_id == instance.id,
+        Metric.metric_name == "xact_commit",
+    ).delete(synchronize_session=False)
+    db.add_all([
+        Metric(instance_id=instance.id, metric_name="xact_commit",
+               value=round(older, 2),
+               collected_at=now - timedelta(seconds=2 * _XACT_ANCHOR_GAP_SECONDS)),
+        Metric(instance_id=instance.id, metric_name="xact_commit",
+               value=round(newer, 2),
+               collected_at=now - timedelta(seconds=_XACT_ANCHOR_GAP_SECONDS)),
+    ])
     db.commit()
 
 
@@ -660,6 +740,9 @@ def enrich_fleet(db: Session) -> None:
         # que cria uma regra — passava a marcar a instância como enriquecida:
         # numa segunda execução nada mais era semeado, nem as métricas.
         _backfill_metrics(db, inst, idx)
+        # Sem guarda: o contador zera a cada restart do Postgres, então o par é
+        # regravado ancorado no valor atual em todo boot.
+        _seed_xact_commit_anchor(db, inst)
         if not _has(db, InstanceStatusHistory, inst):
             _backdate_status(db, inst, blip=blip)
         if not _has(db, AlertRule, inst):
