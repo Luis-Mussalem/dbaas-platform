@@ -79,6 +79,28 @@ def test_production_carries_more_load_than_staging_at_peak():
     assert prod > staging
 
 
+def test_target_queries_per_second_is_alive_and_matches_the_drive_model():
+    """
+    A taxa modelada tem de ser > 0 (senão o card mostra "0") e bater EXATAMENTE
+    com o que `_drive` produz — é o contrato que faz o par ancorado no boot
+    emendar com a medição ao vivo sem degrau.
+    """
+    prod = ws.target_queries_per_second("saturn-store-prod", Environment.PRODUCTION, _at(15))
+    staging = ws.target_queries_per_second("saturn-store-staging", Environment.STAGING, _at(15))
+    assert prod > staging > 0
+
+    conns = ws.target_connections(
+        "saturn-store-prod", Environment.PRODUCTION, _at(15), intensity=ws.BASELINE_INTENSITY
+    )
+    expected = (
+        ws._ACTIVE_FRACTION
+        * conns
+        * ws._QUERIES_PER_ACTIVE_CONN
+        / ws.settings.DEMO_WORKLOAD_INTERVAL_SECONDS
+    )
+    assert prod == pytest.approx(expected)
+
+
 # --------------------------------------------------------------------------- #
 # Ciclo (simulate_once) com psycopg dublê
 # --------------------------------------------------------------------------- #
@@ -270,7 +292,7 @@ def test_heavy_query_scans_the_ballast_table_with_a_bounded_slice():
     pool = _pool_with_ballast(True)
     conn = _FakeConnection()
 
-    ws._run_query(pool, conn, _ScriptedRandom(0.99))
+    ws._run_heavy_query(pool, conn, _ScriptedRandom(0.99))
 
     query = conn.queries[-1]
     assert ws.BALLAST_TABLE in query
@@ -282,7 +304,24 @@ def test_heavy_query_falls_back_to_the_dataset_without_ballast():
     pool = _pool_with_ballast(False)
     conn = _FakeConnection()
 
-    ws._run_query(pool, conn, _ScriptedRandom(0.99))
+    ws._run_heavy_query(pool, conn, _ScriptedRandom(0.99))
 
     assert ws.BALLAST_TABLE not in conn.queries[-1]
     assert "transactions" in conn.queries[-1]
+
+
+def test_drive_bursts_light_queries_on_each_active_connection():
+    """
+    Cada conexão ativa dispara a rajada de `_QUERIES_PER_ACTIVE_CONN` leves — é o
+    volume que dá o queries/s vivo. Com roll=0.1: todas ativas (0.1 ≤ _ACTIVE_FRACTION),
+    ramo de leitura (0.1 < 0.90) e SEM pesada (0.1 ≥ _HEAVY_QUERY_PROB), então a
+    contagem é exata.
+    """
+    pool = _pool_with_ballast(True)
+    pool.conns = [_FakeConnection(), _FakeConnection(), _FakeConnection()]
+
+    executed = ws._drive(pool, _ScriptedRandom(0.1))
+
+    assert executed == len(pool.conns) * ws._QUERIES_PER_ACTIVE_CONN
+    for conn in pool.conns:
+        assert len(conn.queries) == ws._QUERIES_PER_ACTIVE_CONN

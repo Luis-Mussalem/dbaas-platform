@@ -94,6 +94,25 @@ _HEAVY_QUERY_ROWS = 20_000
 # movimentada, ao custo de mais conexões abertas por instância.
 BASELINE_INTENSITY = 0.3
 
+# Fração das conexões do pool que dispara uma query a cada ciclo de _drive. Cada
+# query roda em autocommit (= 1 transação = 1 xact_commit), então esta fração é o
+# que converte "conexões abertas" em "commits por ciclo" — a base do queries/s.
+# Nomeada porque `target_queries_per_second` precisa do MESMO valor que _drive usa
+# para modelar a taxa que o poller vai medir.
+_ACTIVE_FRACTION = 0.45
+
+# Quantas queries LEVES cada conexão ativa dispara por ciclo. É o que dá um
+# queries/s vivo (~6-12/s em prod, ~3-6/s em staging) em vez de ~0.1/s, que o card
+# arredondava para "0". São leituras pontuais indexadas (microssegundos), então o
+# volume é barato — a query PESADA fica de fora da rajada (_HEAVY_QUERY_PROB), para
+# tráfego não virar teste de carga. Tunável: sobe/desce o queries/s proporcional.
+_QUERIES_PER_ACTIVE_CONN = 100
+
+# Probabilidade de uma conexão ativa disparar UMA query pesada no ciclo — a cauda
+# que popula a tela de queries lentas. Rara de propósito (fora da rajada leve): é
+# a mesma cadência esparsa de antes, agora independente do volume de leitura.
+_HEAVY_QUERY_PROB = 0.05
+
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
@@ -154,6 +173,32 @@ def target_connections(
         low, high = 1, max(2, cap // 2)
     value = low + (high - low) * traffic_factor(name, at) + _jitter(name, at)
     return int(max(1, min(high, round(value * intensity))))
+
+
+def target_queries_per_second(
+    name: str,
+    environment: Environment | None,
+    at: datetime,
+    intensity: float = BASELINE_INTENSITY,
+) -> float:
+    """
+    Commits/s que a carga-base produz nesta instância em `at`.
+
+    Modela o que `_drive` faz de fato: ~`_ACTIVE_FRACTION` das conexões abertas
+    dispara uma query — cada uma em autocommit, logo uma transação e um
+    `xact_commit` — a cada ciclo de `DEMO_WORKLOAD_INTERVAL_SECONDS`. Deriva do
+    MESMO `target_connections` da carga viva, então a taxa modelada bate com a que
+    o poller mede. É o que o seed usa para ancorar o par de `xact_commit` no boot
+    (ver `seed/history._seed_xact_commit_anchor`), para o card mostrar queries/s
+    já no primeiro render em vez de "—" por dois ciclos do poller.
+    """
+    conns = target_connections(name, environment, at, intensity=intensity)
+    return (
+        _ACTIVE_FRACTION
+        * conns
+        * _QUERIES_PER_ACTIVE_CONN
+        / settings.DEMO_WORKLOAD_INTERVAL_SECONDS
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -247,27 +292,33 @@ def _resize(pool: _InstancePool, uri: str, target: int) -> None:
                 pass
 
 
-def _run_query(pool: _InstancePool, conn: psycopg.Connection, rng: random.Random) -> None:
+def _run_light_query(pool: _InstancePool, conn: psycopg.Connection, rng: random.Random) -> None:
     """
-    Um passo do mix de queries — proporções de um app OLTP típico: muita
-    leitura pontual, alguma agregação, escrita esporádica e, de vez em quando,
-    uma query pesada (é ela que dá o que investigar na tela de queries lentas).
+    Uma query LEVE do mix OLTP: leitura pontual (dominante), escrita esporádica ou
+    agregação. Cada chamada é uma transação em autocommit (= 1 xact_commit) — é o
+    VOLUME destas, disparado em rajada por `_drive`, que dá o queries/s vivo do
+    card. Leituras dominam de propósito: são microssegundos e não incham a tabela,
+    então o volume alto sai barato. A query PESADA fica fora daqui
+    (`_run_heavy_query`), para a rajada não virar teste de carga.
     """
     table = pool.dataset_table
     roll = rng.random()
 
-    if table and roll < 0.55:  # leitura pontual
-        conn.execute(
-            psql.SQL("SELECT * FROM {} ORDER BY id LIMIT 20 OFFSET %s").format(
-                psql.Identifier(table)
-            ),
-            (rng.randint(0, 80),),
-        ).fetchall()
-    elif table and roll < 0.75:  # agregação
-        conn.execute(
-            psql.SQL("SELECT count(*) FROM {}").format(psql.Identifier(table))
-        ).fetchone()
-    elif roll < 0.95:  # escrita
+    if roll < 0.90:  # leitura pontual (domina o mix)
+        if table:
+            conn.execute(
+                psql.SQL("SELECT * FROM {} ORDER BY id LIMIT 20 OFFSET %s").format(
+                    psql.Identifier(table)
+                ),
+                (rng.randint(0, 80),),
+            ).fetchall()
+        else:  # staging não tem dataset: lê a própria tabela de workload
+            conn.execute(
+                psql.SQL("SELECT count(*), max(created_at) FROM {}").format(
+                    psql.Identifier(WORKLOAD_TABLE)
+                )
+            ).fetchone()
+    elif roll < 0.97:  # escrita esporádica
         conn.execute(
             psql.SQL("INSERT INTO {} (kind, payload) VALUES (%s, %s)").format(
                 psql.Identifier(WORKLOAD_TABLE)
@@ -282,7 +333,20 @@ def _run_query(pool: _InstancePool, conn: psycopg.Connection, rng: random.Random
                 ).format(t=psql.Identifier(WORKLOAD_TABLE)),
                 (_WORKLOAD_TABLE_MAX_ROWS,),
             )
-    elif pool.has_ballast:  # query pesada: agregação sobre uma fatia grande
+    else:  # agregação
+        target = table or WORKLOAD_TABLE
+        conn.execute(
+            psql.SQL("SELECT count(*) FROM {}").format(psql.Identifier(target))
+        ).fetchone()
+
+
+def _run_heavy_query(pool: _InstancePool, conn: psycopg.Connection, rng: random.Random) -> None:
+    """
+    A query cara que popula a tela de queries lentas. Chamada raramente por
+    `_drive` (`_HEAVY_QUERY_PROB`), fora da rajada leve.
+    """
+    table = pool.dataset_table
+    if pool.has_ballast:  # query pesada: agregação sobre uma fatia grande
         # O dataset semeado tem ~100 linhas: um self-join sobre ele terminava em
         # microssegundos e a tela de queries lentas não tinha nada para
         # investigar. A tabela de lastro tem centenas de milhares de linhas —
@@ -318,11 +382,17 @@ def _drive(pool: _InstancePool, rng: random.Random) -> int:
     for conn in list(pool.conns):
         # Nem toda conexão de um app está executando algo a cada instante —
         # as ociosas contam para numbackends e mantêm a curva de conexões.
-        if rng.random() > 0.45:
+        if rng.random() > _ACTIVE_FRACTION:
             continue
         try:
-            _run_query(pool, conn, rng)
-            executed += 1
+            # Rajada de queries leves: o volume que dá o queries/s vivo do card.
+            for _ in range(_QUERIES_PER_ACTIVE_CONN):
+                _run_light_query(pool, conn, rng)
+                executed += 1
+            # Uma pesada de vez em quando, para a tela de queries lentas ter carne.
+            if rng.random() < _HEAVY_QUERY_PROB:
+                _run_heavy_query(pool, conn, rng)
+                executed += 1
         except Exception as exc:  # noqa: BLE001
             logger.debug("Workload: conexão descartada em %s: %s", pool.name, exc)
             try:
