@@ -17,8 +17,9 @@ Cria, de forma idempotente:
 
 Modo de provisionamento:
 - **Docker disponível** (docker compose num host Linux, ou uvicorn no host): cria
-  CONTAINERS PostgreSQL REAIS e carrega ~100 linhas de dados fictícios na DB de
-  produção. SQL Console, logs e métricas ao vivo funcionam de verdade.
+  CONTAINERS PostgreSQL REAIS e carrega um schema de negócio por empresa (catálogo
+  + tabela transacional) em prod e staging. SQL Console, logs e métricas ao vivo
+  funcionam de verdade.
 - **Sem Docker** (ex.: Docker Desktop em Mac/Windows): cai para registros
   dados-apenas (STOPPED), para o dashboard ainda mostrar a frota (mapa de
   regiões, cards) — sem tráfego, porque não há banco para consultar.
@@ -33,7 +34,6 @@ não recria nada. Também roda à mão, a partir de backend/ com a venv ativa:
 import asyncio
 import logging
 import sys
-from pathlib import Path
 
 import psycopg
 
@@ -47,11 +47,9 @@ from src.models.metric import Metric
 from src.models.user import User, UserRole
 from src.schemas.instance import InstanceCreate
 from src.services.instance import create_instance
-from src.services.workload_simulator import BALLAST_TABLE
 
 logger = logging.getLogger(__name__)
 
-_DATA_DIR = Path(__file__).resolve().parent / "data"
 DEMO_MARKER = "__demo_fleet__"  # marca as instâncias deste seed (idempotência/teardown)
 
 # Senha única de demonstração. Atende à política (12+ chars, maiúscula, minúscula,
@@ -60,15 +58,15 @@ DEMO_PASSWORD = "DemoPass123!"
 
 MEMBER_NAMES = ["ana", "bruno", "carla", "diego"]
 
-# Tamanho-alvo do banco POR INSTÂNCIA (total de pg_database_size, não só o
-# lastro), contra o plano de 1 GB declarado em COMPANIES. Alvos VARIADOS de
-# propósito: com um valor único por ambiente, todos os cards mostravam a mesma
-# barra e a frota parecia de brinquedo. Aqui prod ocupa ~37–60% e staging
-# ~14–29% — um espectro que lê como "frota real", ainda sem gravar gigabytes por
-# instância (a opção rejeitada). Tunável: ajuste um número e o card acompanha,
-# porque os bytes são MEDIDOS por pg_database_size, não inventados.
+# Tamanho-alvo do banco POR INSTÂNCIA (total de pg_database_size), contra o plano
+# de 1 GB declarado em COMPANIES. Alvos VARIADOS de propósito: com um valor único
+# por ambiente, todos os cards mostravam a mesma barra e a frota parecia de
+# brinquedo. Aqui prod ocupa ~37–60% e staging ~14–29% — um espectro que lê como
+# "frota real", ainda sem gravar gigabytes por instância. Tunável: ajuste um número
+# e o card acompanha, porque os bytes são MEDIDOS por pg_database_size, não
+# inventados — a tabela-fato de negócio é quem cresce até o alvo.
 _MB = 1024 ** 2
-_BALLAST_TARGET_BYTES = {
+_DB_TARGET_BYTES = {
     "neptune-payments-prod": 620 * _MB,      # ~60%
     "saturn-store-prod": 500 * _MB,          # ~49%
     "jupiter-clothing-prod": 380 * _MB,      # ~37%
@@ -77,34 +75,116 @@ _BALLAST_TARGET_BYTES = {
     "jupiter-clothing-staging": 140 * _MB,   # ~14%
 }
 
-# Linhas por lote. ~640 bytes por linha → ~32 MB por lote; o teto de lotes é a
-# proteção contra um loop infinito se pg_database_size não subir como esperado.
-_BALLAST_BATCH_ROWS = 50_000
-_BALLAST_MAX_BATCHES = 40
+# Linhas de negócio por lote de geração. Linhas realistas são mais estreitas que o
+# BLOB antigo (~150 B vs ~640 B), então cabem mais por MB; 100k/lote mantém a
+# geração rápida e o teto de lotes protege contra loop infinito se pg_database_size
+# não subir como esperado (620 MB ÷ ~150 B ≈ 4,3M linhas ≈ 43 lotes).
+_FILL_BATCH_ROWS = 100_000
+_FILL_MAX_BATCHES = 140
 
-# Configuração por empresa: região, admin, dataset (csv/tabela/DDL) e as 2
-# instâncias (nome, ambiente, cpu, memória MB, storage GB). A ordem das colunas
-# no DDL bate com o cabeçalho do CSV (necessário para o COPY).
+# Tabelas de layouts ANTIGOS do seed, dropadas na migração para o schema de
+# negócio (o BLOB `storage_ballast` e os catálogos antigos).
+_LEGACY_TABLES = ("storage_ballast", "transactions", "inventory")
+
+# Configuração por empresa: região, admin, o SCHEMA de negócio e as 2 instâncias
+# (nome, ambiente, cpu, memória MB, storage GB).
+#
+# Cada base tem um CATÁLOGO pequeno e curado (dimensão) e uma tabela transacional
+# GRANDE (fato) — esta é quem enche o disco até o alvo de `_DB_TARGET_BYTES`,
+# gerando linhas de negócio realistas em vez de um BLOB. Toda tabela-fato tem
+# `amount` e `created_at`, o contrato que a carga (`workload_simulator`) usa para a
+# query pesada "receita por hora". Tudo em inglês (dado de negócio, não UI).
+#
+#   catalog.seed  — INSERT com VALUES curados (roda uma vez).
+#   fact.gen      — INSERT ... SELECT FROM generate_series(1, %s) que referencia o
+#                   catálogo por LATERAL; repetido em lotes até o tamanho-alvo.
 COMPANIES: dict[str, dict] = {
     "Neptune Payments": {
         "slug": "neptune",
         "region": "sa-east-1",
-        "csv": "neptune_transactions.csv",
-        "table": "transactions",
-        "ddl": """
-            CREATE TABLE transactions (
-                id              INTEGER PRIMARY KEY,
-                transaction_ref TEXT UNIQUE NOT NULL,
-                customer_name   TEXT NOT NULL,
-                merchant        TEXT NOT NULL,
-                amount          NUMERIC(12,2) NOT NULL,
-                currency        CHAR(3) NOT NULL,
-                method          TEXT NOT NULL,
-                status          TEXT NOT NULL,
-                fee             NUMERIC(8,2) NOT NULL,
-                created_at      TIMESTAMP NOT NULL
-            )
-        """,
+        "catalog": {
+            "name": "merchants",
+            "ddl": """
+                CREATE TABLE merchants (
+                    id       SERIAL PRIMARY KEY,
+                    name     TEXT NOT NULL,
+                    category TEXT NOT NULL,
+                    country  CHAR(2) NOT NULL,
+                    mcc      INTEGER NOT NULL
+                )
+            """,
+            "seed": """
+                INSERT INTO merchants (name, category, country, mcc) VALUES
+                    ('Skyline Electronics', 'Retail', 'US', 5732),
+                    ('Harbor Grocery', 'Food & Beverage', 'US', 5411),
+                    ('Nimbus Cloud', 'SaaS', 'US', 5734),
+                    ('Coastline Airlines', 'Travel', 'GB', 4511),
+                    ('Meridian Books', 'Retail', 'GB', 5942),
+                    ('Copper Kettle Cafe', 'Food & Beverage', 'BR', 5812),
+                    ('Vertex Gaming', 'Gaming', 'US', 5816),
+                    ('Aurora Pharmacy', 'Healthcare', 'DE', 5912),
+                    ('Ironwood Furniture', 'Retail', 'US', 5712),
+                    ('Solstice Streaming', 'Entertainment', 'US', 4899),
+                    ('Golden Route Transit', 'Travel', 'BR', 4111),
+                    ('Pinecrest Hardware', 'Retail', 'US', 5251),
+                    ('Lumen Utilities', 'Utilities', 'PT', 4900),
+                    ('Fresh Harvest Market', 'Food & Beverage', 'BR', 5411),
+                    ('Quantum Mobile', 'Telecom', 'US', 4814),
+                    ('Verdant Gardens', 'Retail', 'GB', 5261),
+                    ('Blue Orbit Travel', 'Travel', 'DE', 4722),
+                    ('Summit Sports', 'Retail', 'US', 5941),
+                    ('Marble Arch Hotel', 'Hospitality', 'GB', 7011),
+                    ('Riverside Diner', 'Food & Beverage', 'US', 5812),
+                    ('Terrace Apparel', 'Retail', 'BR', 5651),
+                    ('Halcyon Studios', 'SaaS', 'US', 5734),
+                    ('Northgate Motors', 'Automotive', 'DE', 5511),
+                    ('Sable Coffee Roasters', 'Food & Beverage', 'PT', 5499),
+                    ('Willowbrook Toys', 'Retail', 'US', 5945),
+                    ('Cobalt Fitness', 'Health & Fitness', 'GB', 7997),
+                    ('Palermo Trattoria', 'Food & Beverage', 'BR', 5812),
+                    ('Zephyr Airlines', 'Travel', 'US', 4511),
+                    ('Emberline Bakery', 'Food & Beverage', 'US', 5462),
+                    ('Sterling Pay Services', 'Financial', 'GB', 6012)
+            """,
+        },
+        "fact": {
+            "name": "payments",
+            "ddl": """
+                CREATE TABLE payments (
+                    id             BIGSERIAL PRIMARY KEY,
+                    reference      TEXT NOT NULL,
+                    merchant       TEXT NOT NULL,
+                    customer_email TEXT NOT NULL,
+                    amount         NUMERIC(12,2) NOT NULL,
+                    currency       CHAR(3) NOT NULL,
+                    method         TEXT NOT NULL,
+                    status         TEXT NOT NULL,
+                    created_at     TIMESTAMPTZ NOT NULL
+                )
+            """,
+            "gen": """
+                INSERT INTO payments
+                    (reference, merchant, customer_email, amount, currency, method, status, created_at)
+                SELECT
+                    'PAY-' || upper(substr(md5(random()::text), 1, 10)),
+                    m.name,
+                    lower((ARRAY['ava','liam','noah','emma','olivia','ethan','mia','lucas','sophia','leo'])[1 + (random() * 9)::int])
+                        || '.' ||
+                        lower((ARRAY['smith','jones','brown','wilson','taylor','silva','costa','muller','rossi','park'])[1 + (random() * 9)::int])
+                        || (random() * 900 + 100)::int || '@example.com',
+                    round((random() * 490 + 4.90)::numeric, 2),
+                    (ARRAY['USD','BRL','EUR','GBP'])[1 + (random() * 3)::int],
+                    (ARRAY['card','card','card','pix','wallet','boleto','transfer'])[1 + (random() * 6)::int],
+                    (ARRAY['captured','captured','captured','captured','pending','refunded','failed','chargeback'])[1 + (random() * 7)::int],
+                    now() - (random() * interval '365 days')
+                FROM generate_series(1, %s) g
+                JOIN LATERAL (
+                    SELECT name FROM merchants
+                    WHERE id = 1 + ((g + (random() * 1e9)::bigint) %% (SELECT count(*) FROM merchants))::int
+                    LIMIT 1
+                ) m ON true
+            """,
+        },
         "instances": [
             ("neptune-payments-prod", Environment.PRODUCTION, 2, 2048, 1),
             ("neptune-payments-staging", Environment.STAGING, 1, 1024, 1),
@@ -113,21 +193,87 @@ COMPANIES: dict[str, dict] = {
     "Saturn Music Store": {
         "slug": "saturn",
         "region": "us-east-1",
-        "csv": "saturn_products.csv",
-        "table": "products",
-        "ddl": """
-            CREATE TABLE products (
-                id             INTEGER PRIMARY KEY,
-                sku            TEXT UNIQUE NOT NULL,
-                name           TEXT NOT NULL,
-                category       TEXT NOT NULL,
-                brand          TEXT NOT NULL,
-                price          NUMERIC(10,2) NOT NULL,
-                stock_quantity INTEGER NOT NULL,
-                rating         NUMERIC(2,1) NOT NULL,
-                released_year  INTEGER NOT NULL
-            )
-        """,
+        "catalog": {
+            "name": "products",
+            "ddl": """
+                CREATE TABLE products (
+                    id         SERIAL PRIMARY KEY,
+                    sku        TEXT UNIQUE NOT NULL,
+                    name       TEXT NOT NULL,
+                    category   TEXT NOT NULL,
+                    brand      TEXT NOT NULL,
+                    unit_price NUMERIC(10,2) NOT NULL
+                )
+            """,
+            "seed": """
+                INSERT INTO products (sku, name, category, brand, unit_price) VALUES
+                    ('GUI-STRAT-01', 'Fender Player Stratocaster', 'Guitars', 'Fender', 799.00),
+                    ('GUI-LP-STD',   'Gibson Les Paul Standard', 'Guitars', 'Gibson', 2499.00),
+                    ('GUI-TELE-02',  'Fender American Telecaster', 'Guitars', 'Fender', 1149.00),
+                    ('GUI-SG-STD',   'Gibson SG Standard', 'Guitars', 'Gibson', 1499.00),
+                    ('GUI-PRS-SE',   'PRS SE Custom 24', 'Guitars', 'PRS', 899.00),
+                    ('BAS-JAZZ-01',  'Fender Jazz Bass', 'Bass', 'Fender', 949.00),
+                    ('BAS-PREC-01',  'Fender Precision Bass', 'Bass', 'Fender', 899.00),
+                    ('KEY-P125',     'Yamaha P-125 Digital Piano', 'Keyboards', 'Yamaha', 699.00),
+                    ('KEY-STAGE3',   'Nord Stage 3 Compact', 'Keyboards', 'Nord', 4299.00),
+                    ('KEY-JUNO',     'Roland Juno-DS61 Synth', 'Keyboards', 'Roland', 849.00),
+                    ('KEY-MODX',     'Yamaha MODX7 Synth', 'Keyboards', 'Yamaha', 1499.00),
+                    ('DRM-TD17',     'Roland TD-17KVX V-Drums', 'Drums', 'Roland', 1699.00),
+                    ('DRM-EXPORT',   'Pearl Export EXX Kit', 'Drums', 'Pearl', 899.00),
+                    ('DRM-SNARE-01', 'Ludwig Supraphonic Snare', 'Drums', 'Ludwig', 429.00),
+                    ('DRM-CYM-A',    'Zildjian A Custom Cymbal Pack', 'Drums', 'Zildjian', 799.00),
+                    ('WND-SAX-ALT',  'Yamaha YAS-280 Alto Sax', 'Wind', 'Yamaha', 1199.00),
+                    ('WND-TRUMP-01', 'Bach TR300 Trumpet', 'Wind', 'Bach', 649.00),
+                    ('WND-CLAR-01',  'Buffet E11 Clarinet', 'Wind', 'Buffet', 899.00),
+                    ('STU-SM7B',     'Shure SM7B Microphone', 'Studio', 'Shure', 399.00),
+                    ('STU-SM58',     'Shure SM58 Microphone', 'Studio', 'Shure', 99.00),
+                    ('STU-SCARL2',   'Focusrite Scarlett 2i2', 'Studio', 'Focusrite', 199.00),
+                    ('STU-HD280',    'Sennheiser HD 280 Pro', 'Studio', 'Sennheiser', 129.00),
+                    ('STU-KRK5',     'KRK Rokit 5 G4 Monitor', 'Studio', 'KRK', 179.00),
+                    ('ACC-STRAP-01', 'Leather Guitar Strap', 'Accessories', 'Levys', 39.00),
+                    ('ACC-STAND-01', 'Hercules Guitar Stand', 'Accessories', 'Hercules', 45.00),
+                    ('ACC-CABLE-01', 'Mogami Gold 10ft Cable', 'Accessories', 'Mogami', 49.00),
+                    ('ACC-CAPO-01',  'G7th Performance Capo', 'Accessories', 'G7th', 59.00),
+                    ('ACC-TUNER-01', 'Boss TU-3 Chromatic Tuner', 'Accessories', 'Boss', 99.00),
+                    ('AMP-BLUES',    'Fender Blues Junior IV Amp', 'Amplifiers', 'Fender', 699.00),
+                    ('AMP-KATANA',   'Boss Katana-100 MkII Amp', 'Amplifiers', 'Boss', 379.00)
+            """,
+        },
+        "fact": {
+            "name": "sales",
+            "ddl": """
+                CREATE TABLE sales (
+                    id         BIGSERIAL PRIMARY KEY,
+                    order_ref  TEXT NOT NULL,
+                    product    TEXT NOT NULL,
+                    category   TEXT NOT NULL,
+                    brand      TEXT NOT NULL,
+                    quantity   INTEGER NOT NULL,
+                    unit_price NUMERIC(10,2) NOT NULL,
+                    amount     NUMERIC(12,2) NOT NULL,
+                    channel    TEXT NOT NULL,
+                    created_at TIMESTAMPTZ NOT NULL
+                )
+            """,
+            "gen": """
+                INSERT INTO sales
+                    (order_ref, product, category, brand, quantity, unit_price, amount, channel, created_at)
+                SELECT
+                    'SO-' || upper(substr(md5(random()::text), 1, 8)),
+                    r.name, r.category, r.brand, r.qty, r.unit_price,
+                    round((r.qty * r.unit_price)::numeric, 2),
+                    (ARRAY['store','online','online'])[1 + (random() * 2)::int],
+                    now() - (random() * interval '365 days')
+                FROM generate_series(1, %s) g
+                JOIN LATERAL (
+                    SELECT p.name, p.category, p.brand, p.unit_price,
+                           (random() * 2 + 1)::int AS qty
+                    FROM products p
+                    WHERE p.id = 1 + ((g + (random() * 1e9)::bigint) %% (SELECT count(*) FROM products))::int
+                    LIMIT 1
+                ) r ON true
+            """,
+        },
         "instances": [
             ("saturn-store-prod", Environment.PRODUCTION, 2, 2048, 1),
             ("saturn-store-staging", Environment.STAGING, 1, 1024, 1),
@@ -136,21 +282,89 @@ COMPANIES: dict[str, dict] = {
     "Jupiter Clothing": {
         "slug": "jupiter",
         "region": "eu-west-1",
-        "csv": "jupiter_inventory.csv",
-        "table": "inventory",
-        "ddl": """
-            CREATE TABLE inventory (
-                id             INTEGER PRIMARY KEY,
-                sku            TEXT UNIQUE NOT NULL,
-                product_name   TEXT NOT NULL,
-                category       TEXT NOT NULL,
-                size           TEXT NOT NULL,
-                color          TEXT NOT NULL,
-                price          NUMERIC(8,2) NOT NULL,
-                stock_quantity INTEGER NOT NULL,
-                supplier       TEXT NOT NULL
-            )
-        """,
+        "catalog": {
+            "name": "products",
+            "ddl": """
+                CREATE TABLE products (
+                    id         SERIAL PRIMARY KEY,
+                    sku        TEXT UNIQUE NOT NULL,
+                    name       TEXT NOT NULL,
+                    category   TEXT NOT NULL,
+                    size       TEXT NOT NULL,
+                    color      TEXT NOT NULL,
+                    unit_price NUMERIC(10,2) NOT NULL
+                )
+            """,
+            "seed": """
+                INSERT INTO products (sku, name, category, size, color, unit_price) VALUES
+                    ('TOP-CREW-S-NVY',  'Merino Crew Sweater', 'Tops', 'S', 'Navy', 89.00),
+                    ('TOP-CREW-M-GRY',  'Merino Crew Sweater', 'Tops', 'M', 'Grey', 89.00),
+                    ('TOP-OXF-M-WHT',   'Oxford Cotton Shirt', 'Tops', 'M', 'White', 59.00),
+                    ('TOP-OXF-L-BLU',   'Oxford Cotton Shirt', 'Tops', 'L', 'Blue', 59.00),
+                    ('TOP-TEE-S-BLK',   'Pima Cotton T-Shirt', 'Tops', 'S', 'Black', 29.00),
+                    ('TOP-TEE-M-WHT',   'Pima Cotton T-Shirt', 'Tops', 'M', 'White', 29.00),
+                    ('TOP-POLO-L-GRN',  'Pique Polo Shirt', 'Tops', 'L', 'Green', 45.00),
+                    ('TOP-FLAN-M-RED',  'Brushed Flannel Shirt', 'Tops', 'M', 'Red', 65.00),
+                    ('BOT-CHINO-32-KHK','Slim Chino Trousers', 'Bottoms', '32', 'Khaki', 69.00),
+                    ('BOT-CHINO-34-NVY','Slim Chino Trousers', 'Bottoms', '34', 'Navy', 69.00),
+                    ('BOT-JEAN-32-IND', 'Selvedge Denim Jeans', 'Bottoms', '32', 'Indigo', 119.00),
+                    ('BOT-JEAN-34-BLK', 'Selvedge Denim Jeans', 'Bottoms', '34', 'Black', 119.00),
+                    ('BOT-SHORT-M-BEI', 'Linen Blend Shorts', 'Bottoms', 'M', 'Beige', 49.00),
+                    ('BOT-JOG-L-GRY',   'French Terry Joggers', 'Bottoms', 'L', 'Grey', 55.00),
+                    ('OUT-PARKA-M-OLV', 'Waxed Cotton Parka', 'Outerwear', 'M', 'Olive', 199.00),
+                    ('OUT-PARKA-L-BLK', 'Waxed Cotton Parka', 'Outerwear', 'L', 'Black', 199.00),
+                    ('OUT-BOMB-M-NVY',  'Quilted Bomber Jacket', 'Outerwear', 'M', 'Navy', 149.00),
+                    ('OUT-TRENCH-M-TAN','Cotton Trench Coat', 'Outerwear', 'M', 'Tan', 229.00),
+                    ('OUT-PUFF-L-BLK',  'Down Puffer Jacket', 'Outerwear', 'L', 'Black', 179.00),
+                    ('FOO-SNEAK-42-WHT','Leather Court Sneakers', 'Footwear', '42', 'White', 99.00),
+                    ('FOO-SNEAK-44-BLK','Leather Court Sneakers', 'Footwear', '44', 'Black', 99.00),
+                    ('FOO-BOOT-43-BRN', 'Suede Chelsea Boots', 'Footwear', '43', 'Brown', 159.00),
+                    ('FOO-LOAF-42-TAN', 'Penny Loafers', 'Footwear', '42', 'Tan', 139.00),
+                    ('ACC-BELT-M-BRN',  'Full Grain Leather Belt', 'Accessories', 'M', 'Brown', 45.00),
+                    ('ACC-SCARF-U-GRY', 'Lambswool Scarf', 'Accessories', 'One Size', 'Grey', 39.00),
+                    ('ACC-BEAN-U-NVY',  'Ribbed Wool Beanie', 'Accessories', 'One Size', 'Navy', 25.00),
+                    ('ACC-SOCK-U-BLK',  'Merino Sock 3-Pack', 'Accessories', 'One Size', 'Black', 22.00),
+                    ('ACC-CAP-U-KHK',   'Cotton Twill Cap', 'Accessories', 'One Size', 'Khaki', 29.00),
+                    ('OUT-CARD-M-CAM',  'Shawl Collar Cardigan', 'Outerwear', 'M', 'Camel', 99.00),
+                    ('TOP-HOOD-L-GRY',  'Loopback Cotton Hoodie', 'Tops', 'L', 'Grey', 69.00)
+            """,
+        },
+        "fact": {
+            "name": "sales",
+            "ddl": """
+                CREATE TABLE sales (
+                    id         BIGSERIAL PRIMARY KEY,
+                    order_ref  TEXT NOT NULL,
+                    product    TEXT NOT NULL,
+                    category   TEXT NOT NULL,
+                    size       TEXT NOT NULL,
+                    color      TEXT NOT NULL,
+                    quantity   INTEGER NOT NULL,
+                    unit_price NUMERIC(10,2) NOT NULL,
+                    amount     NUMERIC(12,2) NOT NULL,
+                    channel    TEXT NOT NULL,
+                    created_at TIMESTAMPTZ NOT NULL
+                )
+            """,
+            "gen": """
+                INSERT INTO sales
+                    (order_ref, product, category, size, color, quantity, unit_price, amount, channel, created_at)
+                SELECT
+                    'ORD-' || upper(substr(md5(random()::text), 1, 8)),
+                    r.name, r.category, r.size, r.color, r.qty, r.unit_price,
+                    round((r.qty * r.unit_price)::numeric, 2),
+                    (ARRAY['store','online','online'])[1 + (random() * 2)::int],
+                    now() - (random() * interval '365 days')
+                FROM generate_series(1, %s) g
+                JOIN LATERAL (
+                    SELECT p.name, p.category, p.size, p.color, p.unit_price,
+                           (random() * 3 + 1)::int AS qty
+                    FROM products p
+                    WHERE p.id = 1 + ((g + (random() * 1e9)::bigint) %% (SELECT count(*) FROM products))::int
+                    LIMIT 1
+                ) r ON true
+            """,
+        },
         "instances": [
             ("jupiter-clothing-prod", Environment.PRODUCTION, 2, 2048, 1),
             ("jupiter-clothing-staging", Environment.STAGING, 1, 1024, 1),
@@ -231,70 +445,55 @@ def _existing_instance(db, name: str, company_id):
     )
 
 
-def _load_dataset(prod: DatabaseInstance, table: str, ddl: str, csv_name: str) -> int:
-    """Cria a tabela e carrega o CSV via COPY na DB da instância de produção."""
-    uri = decrypt_value(prod.connection_uri)
-    csv_path = _DATA_DIR / csv_name
-    with psycopg.connect(uri, autocommit=True) as conn:
-        with conn.cursor() as cur:
-            cur.execute(f"DROP TABLE IF EXISTS {table}")
-            cur.execute(ddl)
-            with csv_path.open("r", encoding="utf-8") as fh:
-                with cur.copy(f"COPY {table} FROM STDIN WITH (FORMAT csv, HEADER true)") as copy:
-                    copy.write(fh.read())
-            count = cur.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
-    return count
-
-
-def _fill_storage(inst: DatabaseInstance) -> None:
+def _seed_business_data(inst: DatabaseInstance, cfg: dict) -> None:
     """
-    Levar o banco até a ocupação alvo do seu ambiente, gravando dados REAIS.
+    Deixar o banco com um schema de negócio REAL e ocupado até o alvo do ambiente.
 
-    Um PostgreSQL recém-provisionado ocupa ~8 MB. Contra qualquer plano de
-    armazenamento plausível isso arredonda para 0%, e a barra do card fica
-    morta — a instância parece vazia mesmo depois da simulação de uso.
+    Um PostgreSQL recém-provisionado ocupa ~8 MB. Contra qualquer plano plausível
+    isso arredonda para 0%, e a barra do card fica morta. Antes o volume vinha de
+    um BLOB opaco (`storage_ballast`) — que aparecia cru na SQL Console e denunciava
+    a demo. Agora o volume é a própria tabela transacional do negócio (payments /
+    sales): as linhas existem de verdade, `pg_database_size` mede o que está no
+    disco, o backup as carrega e a SQL Console mostra dados que fazem sentido.
 
-    A alternativa seria multiplicar `db_size_bytes` na exibição, mas isso é
-    inventar número: o resto da plataforma (crescimento em 24h, tela de schema,
-    tamanho do backup) passaria a mentir junto. Aqui as linhas existem de
-    verdade, `pg_database_size` mede o que está no disco e o backup as carrega.
-
-    O payload é hex aleatório (~640 B/linha): fica abaixo do limite de TOAST,
-    então é gravado inline e não é comprimido — bytes lógicos ≈ bytes em disco.
-
-    Idempotente: relê o tamanho a cada lote e para ao alcançar o alvo, então
-    reexecutar o seed não engorda o banco.
+    Migração + idempotência pela EXISTÊNCIA da tabela-fato:
+    - Fato ausente → base no layout antigo (ou vazia): dropa o legado (BLOB +
+      catálogos antigos) e quaisquer tabelas do schema novo, recria catálogo + fato
+      e semeia o catálogo curado (uma vez).
+    - Fato presente → só completa o preenchimento até o alvo (relê o tamanho a cada
+      lote e para ao alcançar), então reexecutar o seed não engorda o banco.
     """
-    target = _BALLAST_TARGET_BYTES.get(inst.name)
+    target = _DB_TARGET_BYTES.get(inst.name)
     if target is None or not inst.connection_uri:
         return
 
+    catalog, fact = cfg["catalog"], cfg["fact"]
     with psycopg.connect(decrypt_value(inst.connection_uri), autocommit=True) as conn:
-        conn.execute(
-            f"CREATE TABLE IF NOT EXISTS {BALLAST_TABLE} ("
-            "  id   BIGSERIAL PRIMARY KEY,"
-            "  blob TEXT NOT NULL"
-            ")"
+        fact_exists = conn.execute(
+            "SELECT to_regclass(%s) IS NOT NULL", (fact["name"],)
+        ).fetchone()[0]
+        if not fact_exists:
+            # Estado limpo: derruba o legado (BLOB + catálogos antigos) e o schema
+            # novo (caso um seed anterior tenha parado no meio), depois recria.
+            drop = ", ".join(_LEGACY_TABLES + (catalog["name"], fact["name"]))
+            conn.execute(f"DROP TABLE IF EXISTS {drop} CASCADE")
+            conn.execute(catalog["ddl"])
+            conn.execute(catalog["seed"])
+            conn.execute(fact["ddl"])
+        _fill_to_target(conn, fact["gen"], target, inst.name)
+
+
+def _fill_to_target(conn, gen_sql: str, target: int, inst_name: str) -> None:
+    """Gera linhas de negócio em lotes até `pg_database_size` alcançar o alvo."""
+    for _ in range(_FILL_MAX_BATCHES):
+        size = conn.execute("SELECT pg_database_size(current_database())").fetchone()[0]
+        if size >= target:
+            break
+        conn.execute(gen_sql, (_FILL_BATCH_ROWS,))
+    else:
+        logger.warning(
+            "Seed demo: %s parou no teto de lotes sem atingir %d bytes", inst_name, target
         )
-        for _ in range(_BALLAST_MAX_BATCHES):
-            size = conn.execute(
-                "SELECT pg_database_size(current_database())"
-            ).fetchone()[0]
-            if size >= target:
-                break
-            conn.execute(
-                f"INSERT INTO {BALLAST_TABLE} (blob) "
-                "SELECT (SELECT string_agg(md5(random()::text), '') "
-                "        FROM generate_series(1, 20)) "
-                "FROM generate_series(1, %s)",
-                (_BALLAST_BATCH_ROWS,),
-            )
-        else:
-            logger.warning(
-                "Seed demo: %s parou no teto de lotes sem atingir %d bytes",
-                inst.name,
-                target,
-            )
 
 
 def _reset_query_stats(inst: DatabaseInstance) -> None:
@@ -318,8 +517,7 @@ def _reset_query_stats(inst: DatabaseInstance) -> None:
 
 
 def _seed_real(db, company: Company, admin: User, cfg: dict) -> None:
-    """Provisiona containers reais e carrega o dataset na instância de produção."""
-    prod = None
+    """Provisiona containers reais e carrega o schema de negócio em prod E staging."""
     for name, env, cpu, mem, storage in cfg["instances"]:
         inst = _existing_instance(db, name, company.id)
         if inst is None:
@@ -342,21 +540,10 @@ def _seed_real(db, company: Company, admin: User, cfg: dict) -> None:
             # capacidade que o seed não declara mais.
             inst.storage_gb = storage
             db.commit()
+        # Prod e staging ganham o MESMO schema (staging só com menos linhas): uma
+        # staging que mostrasse só o BLOB não parecia uma cópia do app.
         if inst.status == InstanceStatus.RUNNING:
-            _fill_storage(inst)
-        if env == Environment.PRODUCTION:
-            prod = inst
-
-    # Só carrega o dataset se acabamos de provisionar (evita recarregar em reruns).
-    if prod is not None and prod.connection_uri:
-        table = cfg["table"]
-        with psycopg.connect(decrypt_value(prod.connection_uri)) as conn:
-            exists = conn.execute(
-                "SELECT to_regclass(%s) IS NOT NULL", (table,)
-            ).fetchone()[0]
-        if not exists:
-            n = _load_dataset(prod, table, cfg["ddl"], cfg["csv"])
-            logger.info("Seed demo: %s — %d linhas em '%s' (prod)", company.name, n, table)
+            _seed_business_data(inst, cfg)
 
     # Por último, com o dataset e o lastro já gravados: as estatísticas de query
     # começam do zero, medindo serviço em vez de provisionamento.

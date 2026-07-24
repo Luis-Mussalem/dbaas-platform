@@ -26,7 +26,7 @@ Escopo e segurança:
   identificadas na tela de conexões ativas — nada disso se disfarça de
   tráfego de usuário.
 - Escritas ficam confinadas à tabela `workload_events`, criada por este módulo.
-  O dataset semeado (transactions/products/inventory) é só lido.
+  O schema de negócio semeado (catálogo + tabela-fato payments/sales) é só lido.
 
 A MESMA curva (`target_connections`) alimenta o backfill histórico do seed,
 para o gráfico de 24h emendar sem degrau no ponto em que o histórico sintético
@@ -55,11 +55,6 @@ APPLICATION_NAME = "dbaas-demo-workload"
 # Tabela de escrita do simulador (criada na primeira passagem por instância).
 WORKLOAD_TABLE = "workload_events"
 
-# Tabela de lastro de armazenamento, gravada pelo seed (ver seed/demo.py).
-# A constante vive aqui, e não no seed, porque quem a consulta a cada ciclo é
-# este módulo — importá-la do seed no caminho quente exigiria import tardio.
-BALLAST_TABLE = "storage_ballast"
-
 # Linhas mantidas na tabela de escrita: o insert contínuo faria o banco crescer
 # sem limite, e o gráfico de tamanho viraria uma rampa infinita.
 _WORKLOAD_TABLE_MAX_ROWS = 2_000
@@ -79,11 +74,12 @@ _WEEKEND_FACTOR = 0.55
 # alvo dentro dos 18s da fase WARMUP sem virar um salto instantâneo.
 _MAX_POOL_STEP = 4
 
-# Linhas varridas pela query pesada do mix. ~20k × 640 B = ~13 MB hasheados,
-# medidos em ~170 ms contra ~2 ms de uma leitura pontual: cauda suficiente para
-# aparecer no p95 e no pg_stat_statements, e ainda 60× abaixo do
-# statement_timeout. Sai em ~1 a cada 10s por instância (5% do mix), então é uma
-# demonstração de query cara — não um teste de carga.
+# Linhas varridas pela query pesada do mix: uma agregação "receita por hora" sobre
+# uma FATIA limitada da tabela-fato de negócio (payments/sales). ~20k linhas
+# varridas + agregadas custam dezenas de ms contra ~2 ms de uma leitura pontual:
+# cauda suficiente para aparecer no p95 e no pg_stat_statements, ainda muito abaixo
+# do statement_timeout. Sai em ~1 a cada 10s por instância (5% do mix) — uma query
+# de negócio cara, não um teste de carga.
 _HEAVY_QUERY_ROWS = 20_000
 
 # Fração do alvo de conexões que a frota demo mantém em repouso — a carga-base
@@ -216,12 +212,12 @@ class _InstancePool:
     def __init__(self, name: str) -> None:
         self.name = name
         self.conns: list[psycopg.Connection] = []
-        # Tabela do dataset semeado, descoberta na primeira conexão (staging
-        # não tem dataset — lá o mix roda só sobre workload_events).
+        # Maior tabela de negócio (a fato: payments/sales), descoberta na primeira
+        # conexão. É o alvo das leituras leves e da query pesada.
         self.dataset_table: str | None = None
-        # A tabela de lastro do seed existe? É a única grande o bastante para a
-        # query pesada custar tempo mensurável (ver _run_query).
-        self.has_ballast = False
+        # A tabela-fato tem `amount` + `created_at`? Só então a query pesada roda a
+        # agregação "receita por hora"; senão cai para uma contagem barata.
+        self.bulk_ready = False
         self.prepared = False
 
     def close_all(self) -> None:
@@ -254,7 +250,7 @@ def _connect(uri: str) -> psycopg.Connection:
 
 
 def _prepare(pool: _InstancePool, conn: psycopg.Connection) -> None:
-    """Cria a tabela de escrita e descobre a tabela do dataset (uma vez)."""
+    """Cria a tabela de escrita e descobre a tabela-fato (numa conexão nova)."""
     conn.execute(
         psql.SQL(
             "CREATE TABLE IF NOT EXISTS {} ("
@@ -265,19 +261,36 @@ def _prepare(pool: _InstancePool, conn: psycopg.Connection) -> None:
             ")"
         ).format(psql.Identifier(WORKLOAD_TABLE))
     )
-    # A tabela de lastro do seed é a maior do banco de longe, mas é volume
-    # morto: escolhê-la como dataset faria o self-join "pesado" do mix rodar
-    # sobre centenas de milhares de linhas e travar o backend.
+    _discover(pool, conn)
+
+
+def _discover(pool: _InstancePool, conn: psycopg.Connection) -> None:
+    """
+    (Re)descobre a maior tabela de negócio (payments/sales) e se ela serve à query
+    pesada. Barato — roda de novo a cada ciclo ENQUANTO ainda não achou a fato, e
+    após um erro (ex.: o seed migrou o schema por baixo do pool, dropando a antiga).
+    `prepared` só vira True quando há uma fato, então um boot onde a carga sobe antes
+    do seed terminar continua tentando até a tabela existir.
+    """
+    # A maior tabela (excluída a de escrita) é a fato de negócio (payments/sales):
+    # é onde a leitura pontual busca e onde a query pesada agrega uma fatia.
     row = conn.execute(
         "SELECT relname FROM pg_stat_user_tables "
-        "WHERE relname <> ALL(%s) ORDER BY n_live_tup DESC LIMIT 1",
-        ([WORKLOAD_TABLE, BALLAST_TABLE],),
+        "WHERE relname <> %s ORDER BY n_live_tup DESC LIMIT 1",
+        (WORKLOAD_TABLE,),
     ).fetchone()
     pool.dataset_table = row[0] if row else None
-    pool.has_ballast = bool(
-        conn.execute("SELECT to_regclass(%s) IS NOT NULL", (BALLAST_TABLE,)).fetchone()[0]
+    # A query pesada agrega por `amount`/`created_at`; só a rode se a tabela os tem
+    # (toda tabela-fato do seed tem — mas uma instância a meio de semear, não).
+    pool.bulk_ready = bool(
+        pool.dataset_table
+        and conn.execute(
+            "SELECT count(*) = 2 FROM information_schema.columns "
+            "WHERE table_name = %s AND column_name IN ('amount', 'created_at')",
+            (pool.dataset_table,),
+        ).fetchone()[0]
     )
-    pool.prepared = True
+    pool.prepared = pool.dataset_table is not None
 
 
 def _resize(pool: _InstancePool, uri: str, target: int) -> None:
@@ -318,7 +331,7 @@ def _run_light_query(pool: _InstancePool, conn: psycopg.Connection, rng: random.
                 ),
                 (rng.randint(0, 80),),
             ).fetchall()
-        else:  # staging não tem dataset: lê a própria tabela de workload
+        else:  # sem tabela-fato ainda: lê a própria tabela de workload
             conn.execute(
                 psql.SQL("SELECT count(*), max(created_at) FROM {}").format(
                     psql.Identifier(WORKLOAD_TABLE)
@@ -339,10 +352,14 @@ def _run_light_query(pool: _InstancePool, conn: psycopg.Connection, rng: random.
                 ).format(t=psql.Identifier(WORKLOAD_TABLE)),
                 (_WORKLOAD_TABLE_MAX_ROWS,),
             )
-    else:  # agregação
+    else:  # agregação LEVE: contagem sobre uma cauda recente, não a tabela inteira
+        # (count(*) na fato de milhões de linhas seria um seq scan caro no meio da
+        # rajada; aqui a fatia é limitada pela PK e sai em microssegundos).
         target = table or WORKLOAD_TABLE
         conn.execute(
-            psql.SQL("SELECT count(*) FROM {}").format(psql.Identifier(target))
+            psql.SQL(
+                "SELECT count(*) FROM (SELECT id FROM {} ORDER BY id DESC LIMIT 200) s"
+            ).format(psql.Identifier(target))
         ).fetchone()
 
 
@@ -352,29 +369,21 @@ def _run_heavy_query(pool: _InstancePool, conn: psycopg.Connection, rng: random.
     `_drive` (`_HEAVY_QUERY_PROB`), fora da rajada leve.
     """
     table = pool.dataset_table
-    if pool.has_ballast:  # query pesada: agregação sobre uma fatia grande
-        # O dataset semeado tem ~100 linhas: um self-join sobre ele terminava em
-        # microssegundos e a tela de queries lentas não tinha nada para
-        # investigar. A tabela de lastro tem centenas de milhares de linhas —
-        # hashear uma fatia dela custa dezenas de ms e produz uma cauda de p95
-        # de verdade. A fatia é LIMITADA de propósito: uma query pesada numa
-        # demo tem que ser cara, não perigosa.
+    if pool.bulk_ready and table:
+        # Relatório "receita por hora" sobre uma FATIA limitada da tabela-fato:
+        # varre ~_HEAVY_QUERY_ROWS linhas e agrega por hora — dezenas de ms, uma
+        # cauda de p95 de verdade e uma query que faz sentido de negócio na tela de
+        # slow queries. A fatia é LIMITADA de propósito: cara, não perigosa.
         conn.execute(
             psql.SQL(
-                "SELECT count(DISTINCT md5(blob)) FROM ("
-                "  SELECT blob FROM {} ORDER BY id OFFSET %s LIMIT %s"
-                ") s"
-            ).format(psql.Identifier(BALLAST_TABLE)),
+                "SELECT date_trunc('hour', created_at) AS bucket, count(*), "
+                "round(sum(amount), 2) FROM ("
+                "  SELECT amount, created_at FROM {} ORDER BY id OFFSET %s LIMIT %s"
+                ") s GROUP BY bucket ORDER BY bucket DESC"
+            ).format(psql.Identifier(table)),
             (rng.randint(0, 20_000), _HEAVY_QUERY_ROWS),
-        ).fetchone()
-    elif table:  # sem lastro (instância criada pelo usuário): self-join no dataset
-        conn.execute(
-            psql.SQL(
-                "SELECT count(*) FROM {t} a JOIN {t} b ON a.id <> b.id "
-                "WHERE b.id < 40"
-            ).format(t=psql.Identifier(table))
-        ).fetchone()
-    else:
+        ).fetchall()
+    else:  # tabela-fato ainda não pronta: contagem barata no buffer de escrita
         conn.execute(
             psql.SQL("SELECT count(*), max(created_at) FROM {}").format(
                 psql.Identifier(WORKLOAD_TABLE)
@@ -401,6 +410,9 @@ def _drive(pool: _InstancePool, rng: random.Random) -> int:
                 executed += 1
         except Exception as exc:  # noqa: BLE001
             logger.debug("Workload: conexão descartada em %s: %s", pool.name, exc)
+            # O schema pode ter mudado sob o pool (o seed migrou a tabela-fato):
+            # força a redescoberta no próximo ciclo, contra o schema atual.
+            pool.prepared = False
             try:
                 conn.close()
             except Exception:  # noqa: BLE001
@@ -463,6 +475,11 @@ def simulate_once() -> None:
                         inst.name, inst.environment, now, intensity=BASELINE_INTENSITY
                     ),
                 )
+                # A fato pode surgir DEPOIS de o pool já estar no alvo (o seed ainda
+                # semeando no boot): enquanto não a achamos, redescobre a cada ciclo
+                # numa conexão existente, sem esperar o pool crescer.
+                if not pool.prepared and pool.conns:
+                    _discover(pool, pool.conns[0])
                 executed = _drive(pool, random.Random())
                 logger.debug(
                     "Workload %s: %d conexões, %d queries",

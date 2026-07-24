@@ -130,9 +130,12 @@ class _FakeConnection:
         self.queries.append(str(query))
         if self.fail_on_execute:
             raise RuntimeError("conexão caiu")
-        # _prepare() pergunta qual é a tabela do dataset.
+        # _prepare() pergunta qual é a maior tabela (a fato de negócio)...
         if "pg_stat_user_tables" in str(query):
-            return _FakeCursor(("transactions",))
+            return _FakeCursor(("payments",))
+        # ...e se ela tem as colunas amount/created_at (contrato da query pesada).
+        if "information_schema.columns" in str(query):
+            return _FakeCursor((True,))
         return _FakeCursor((1,))
 
     def close(self):
@@ -274,40 +277,39 @@ class _ScriptedRandom:
         return a
 
 
-def _pool_with_ballast(has_ballast: bool) -> ws._InstancePool:
+def _pool(bulk_ready: bool) -> ws._InstancePool:
     pool = ws._InstancePool("demo-prod")
-    pool.dataset_table = "transactions"
-    pool.has_ballast = has_ballast
+    pool.dataset_table = "payments"
+    pool.bulk_ready = bulk_ready
     pool.prepared = True
     return pool
 
 
-def test_heavy_query_scans_the_ballast_table_with_a_bounded_slice():
+def test_heavy_query_aggregates_a_bounded_slice_of_the_fact_table():
     """
-    A query pesada tem que ser CARA e LIMITADA.
-
-    Antes ela era um self-join sobre o dataset de ~100 linhas: terminava em
-    microssegundos e a tela de queries lentas não tinha o que investigar.
+    A query pesada tem que ser CARA e LIMITADA: uma agregação "receita por hora"
+    sobre uma fatia da tabela-fato, não a tabela inteira.
     """
-    pool = _pool_with_ballast(True)
+    pool = _pool(bulk_ready=True)
     conn = _FakeConnection()
 
     ws._run_heavy_query(pool, conn, _ScriptedRandom(0.99))
 
     query = conn.queries[-1]
-    assert ws.BALLAST_TABLE in query
-    assert "LIMIT" in query.upper()
+    assert "payments" in query           # roda sobre a tabela-fato
+    assert "sum(amount)" in query        # é a agregação de negócio
+    assert "LIMIT" in query.upper()      # e é limitada
 
 
-def test_heavy_query_falls_back_to_the_dataset_without_ballast():
-    """Instância sem lastro (criada pelo usuário) continua com o self-join."""
-    pool = _pool_with_ballast(False)
+def test_heavy_query_falls_back_when_the_fact_table_is_not_ready():
+    """Sem tabela-fato pronta (amount/created_at), cai para uma contagem barata."""
+    pool = _pool(bulk_ready=False)
     conn = _FakeConnection()
 
     ws._run_heavy_query(pool, conn, _ScriptedRandom(0.99))
 
-    assert ws.BALLAST_TABLE not in conn.queries[-1]
-    assert "transactions" in conn.queries[-1]
+    assert "payments" not in conn.queries[-1]
+    assert ws.WORKLOAD_TABLE in conn.queries[-1]
 
 
 def test_drive_bursts_light_queries_on_each_active_connection():
@@ -317,7 +319,7 @@ def test_drive_bursts_light_queries_on_each_active_connection():
     ramo de leitura (0.1 < 0.90) e SEM pesada (0.1 ≥ _HEAVY_QUERY_PROB), então a
     contagem é exata.
     """
-    pool = _pool_with_ballast(True)
+    pool = _pool(bulk_ready=True)
     pool.conns = [_FakeConnection(), _FakeConnection(), _FakeConnection()]
 
     executed = ws._drive(pool, _ScriptedRandom(0.1))

@@ -729,12 +729,13 @@ def enrich_fleet(db: Session) -> None:
     if not instances:
         return
 
-    # Tabela alvo (para ANALYZE/REINDEX) por empresa, via config do demo.
+    # Tabela alvo (para ANALYZE/REINDEX) por empresa, via config do demo: a
+    # tabela-fato de negócio, que é a grande e a que faz sentido manutenir.
     table_by_company: dict[uuid.UUID, str] = {}
     for company_name, cfg in COMPANIES.items():
         comp = db.query(Company).filter(Company.name == company_name).first()
         if comp is not None:
-            table_by_company[comp.id] = cfg["table"]
+            table_by_company[comp.id] = cfg["fact"]["name"]
 
     for idx, inst in enumerate(instances):
         is_prod = inst.environment == Environment.PRODUCTION
