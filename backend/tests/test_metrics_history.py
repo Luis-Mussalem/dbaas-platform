@@ -127,3 +127,106 @@ def test_history_is_downsampled_to_a_stable_number_of_points(client, auth_header
     assert all(10.0 <= p["value"] <= 11.0 for p in points)
     # Ordem cronológica preservada.
     assert [p["collected_at"] for p in points] == sorted(p["collected_at"] for p in points)
+
+
+def test_queries_per_second_is_derived_from_the_xact_commit_counter(
+    client, auth_headers, instance, db
+):
+    """queries/s não é armazenado: a série vem da derivada do contador xact_commit."""
+    headers, _ = auth_headers()
+    now = datetime.now(timezone.utc)
+    # Contador cumulativo crescendo +600 a cada 60s → 10 commits/s.
+    db.add_all([
+        Metric(instance_id=instance.id, metric_name="xact_commit", value=v,
+               collected_at=now - timedelta(seconds=s))
+        for v, s in [(1000, 180), (1600, 120), (2200, 60), (2800, 0)]
+    ])
+    db.commit()
+
+    resp = client.get(
+        f"{_url(instance.id)}?metric=queries_per_second&window=1h&points=60", headers=headers
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["metric_name"] == "queries_per_second"
+    values = [p["value"] for p in body["points"]]
+    assert values, "série derivada veio vazia"
+    assert all(v == 10.0 for v in values)
+
+
+def test_queries_per_second_series_skips_a_counter_reset(
+    client, auth_headers, instance, db
+):
+    """Reset do Postgres reancora e NÃO emite ponto — nunca um pico nem um 0 falso."""
+    headers, _ = auth_headers()
+    now = datetime.now(timezone.utc)
+    db.add_all([
+        Metric(instance_id=instance.id, metric_name="xact_commit", value=v,
+               collected_at=now - timedelta(seconds=s))
+        for v, s in [(9000, 120), (50, 60), (650, 0)]  # reset entre -120s e -60s
+    ])
+    db.commit()
+
+    resp = client.get(
+        f"{_url(instance.id)}?metric=queries_per_second&window=1h&points=60", headers=headers
+    )
+    values = [p["value"] for p in resp.json()["points"]]
+    assert values == [10.0]  # reset pulado; só o par pós-reset (50→650)/60s = 10
+
+
+def test_queries_per_second_series_skips_a_stale_low_read(
+    client, auth_headers, instance, db
+):
+    """
+    Uma leitura stale (mergulho pequeno e transitório) é PULADA em vez de virar 0 e
+    depois um pico: a linha interpola o buraco e o crescimento real reaparece no
+    balde seguinte, medido sobre o intervalo maior.
+    """
+    headers, _ = auth_headers()
+    now = datetime.now(timezone.utc)
+    # +600/60s de crescimento real; o balde de -60s é STALE (2180 < 2200 de antes).
+    db.add_all([
+        Metric(instance_id=instance.id, metric_name="xact_commit", value=v,
+               collected_at=now - timedelta(seconds=s))
+        for v, s in [(1600, 180), (2200, 120), (2180, 60), (2800, 0)]
+    ])
+    db.commit()
+
+    resp = client.get(
+        f"{_url(instance.id)}?metric=queries_per_second&window=1h&points=60", headers=headers
+    )
+    values = [p["value"] for p in resp.json()["points"]]
+    # 1600→2200 = +600/60 = 10; o stale 2180 é pulado; 2200→2800 = +600/120 = 5.
+    # (window=1h/60 → baldes de 60s: a média móvel de 1 min é no-op aqui.)
+    assert values == [10.0, 5.0]
+
+
+def test_queries_per_second_series_is_smoothed_to_one_minute(
+    client, auth_headers, instance, db
+):
+    """
+    Em baldes curtos (15s), a taxa de uma carga em rajadas serrilha muito. A série
+    passa por uma média móvel de ~1 min: um dente-de-serra 0/20 vira uma linha
+    estável em ~10 (a taxa real média), mantendo um ponto por balde.
+    """
+    headers, _ = auth_headers()
+    now = datetime.now(timezone.utc)
+    # Um sample por balde de 15s; o contador cresce +300 a balde SIM, balde NÃO —
+    # taxas cruas alternando 0 e 20 q/s.
+    db.add_all([
+        Metric(instance_id=instance.id, metric_name="xact_commit", value=v,
+               collected_at=now - timedelta(seconds=s))
+        for v, s in [(1900, 0), (1600, 15), (1600, 30), (1300, 45),
+                     (1300, 60), (1000, 75), (1000, 90)]
+    ])
+    db.commit()
+
+    # window=15m/60 → baldes de 15s → média móvel de 4 pontos (1 min).
+    resp = client.get(
+        f"{_url(instance.id)}?metric=queries_per_second&window=15m&points=60", headers=headers
+    )
+    values = [p["value"] for p in resp.json()["points"]]
+    # A serra crua seria [0, 20, 0, 20, 0, 20]; alisada, a cauda assenta em 10 q/s.
+    assert values[-3:] == [10.0, 10.0, 10.0]
+    # E nenhum ponto alisado chega ao pico cru de 20 (o serrilhado sumiu).
+    assert max(values) < 20.0

@@ -36,6 +36,7 @@ export function MetricsTab({ instance }: { instance: Instance }) {
   const hhmm = useCallback((iso: string) => timeFormat.format(new Date(iso)), [timeFormat]);
 
   const [range, setRange] = useState<MetricWindow>("1h");
+  const [throughput, setThroughput] = useState<ChartPoint[]>([]);
   const [conns, setConns] = useState<ChartPoint[]>([]);
   const [cache, setCache] = useState<ChartPoint[]>([]);
   const [latency, setLatency] = useState<ChartPoint[]>([]);
@@ -47,12 +48,14 @@ export function MetricsTab({ instance }: { instance: Instance }) {
 
     function load() {
       Promise.all([
+        getMetricHistory(instance.id, "queries_per_second", range),
         getMetricHistory(instance.id, "connections_active", range),
         getMetricHistory(instance.id, "cache_hit_ratio", range),
         ...LATENCY_SERIES.map((s) => getMetricHistory(instance.id, s.metric, range)),
       ])
-        .then(([c, h, ...percentiles]) => {
+        .then(([q, c, h, ...percentiles]) => {
           if (!active) return;
+          setThroughput(q.points.map((p) => ({ t: hhmm(p.collected_at), v: Number(p.value.toFixed(1)) })));
           setConns(c.points.map((p) => ({ t: hhmm(p.collected_at), v: Math.round(p.value) })));
           setCache(h.points.map((p) => ({ t: hhmm(p.collected_at), v: Number(p.value.toFixed(2)) })));
           // As três séries vêm em requisições separadas mas compartilham os
@@ -71,6 +74,7 @@ export function MetricsTab({ instance }: { instance: Instance }) {
         })
         .catch(() => {
           if (active) {
+            setThroughput([]);
             setConns([]);
             setCache([]);
             setLatency([]);
@@ -92,6 +96,15 @@ export function MetricsTab({ instance }: { instance: Instance }) {
         <h2 className="text-sm font-semibold">{t("title")}</h2>
         <Segmented options={WINDOWS} value={range} onChange={setRange} size="sm" />
       </div>
+
+      {/* queries/s em destaque: é a grandeza-título do card da frota. */}
+      <ChartCard title={t("throughput")}>
+        {throughput.length > 1 ? (
+          <MetricArea data={throughput} color="#a78bfa" />
+        ) : (
+          <Empty />
+        )}
+      </ChartCard>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <ChartCard title={t("connections")}>

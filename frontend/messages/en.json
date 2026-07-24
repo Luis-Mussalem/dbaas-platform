@@ -525,6 +525,7 @@
     "emptySeries": "Not enough data in this window.",
     "latency": "Latency (p50 / p95 / p99)",
     "loadFailed": "Failed to load the metrics",
+    "throughput": "Throughput (queries/s)",
     "title": "Metrics"
   },
   "Nav": {

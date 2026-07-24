@@ -225,6 +225,104 @@ def get_latest_metrics(
 _HISTORY_MAX_POINTS = 120
 
 
+# Métricas "virtuais" que não são armazenadas cruas: são derivadas de um contador
+# cumulativo já coletado. queries_per_second vem da derivada de xact_commit — o
+# mesmo contador que alimenta o número do card (services.fleet_summary), agora
+# exposto como série para o gráfico.
+_DERIVED_RATE_SOURCE = {"queries_per_second": "xact_commit"}
+
+
+def _bucketed_avg(
+    db: Session,
+    instance_id: uuid.UUID,
+    metric_name: str,
+    since: datetime,
+    bucket_seconds: int,
+) -> list[tuple[datetime, float]]:
+    """Série de UMA métrica, reamostrada em baldes de `bucket_seconds` (média por balde)."""
+    # floor(epoch / bucket) * bucket → início do balde; média dentro dele.
+    bucket_start = func.to_timestamp(
+        func.floor(func.extract("epoch", Metric.collected_at) / bucket_seconds)
+        * bucket_seconds
+    ).label("bucket_start")
+
+    rows = (
+        db.query(bucket_start, func.avg(Metric.value).label("value"))
+        .filter(
+            Metric.instance_id == instance_id,
+            Metric.metric_name == metric_name,
+            Metric.collected_at >= since,
+        )
+        .group_by(bucket_start)
+        .order_by(bucket_start.asc())
+        .all()
+    )
+    return [(row.bucket_start, float(row.value)) for row in rows]
+
+
+# Abaixo desta fração do valor "limpo", uma queda do contador é um RESET real
+# (restart do Postgres), não uma leitura stale do pg_stat_database. Mesma regra do
+# fleet_summary, para o gráfico e o número tratarem os mesmos dados igual.
+_RATE_RESET_FRACTION = 0.5
+
+
+def _counter_rate(buckets: list[tuple[datetime, float]]) -> list[tuple[datetime, float]]:
+    """
+    Deriva uma taxa (por segundo) de um contador cumulativo já bucketizado:
+    Δcontador / Δsegundos entre baldes consecutivos, datado no balde mais novo.
+
+    O contador é NÃO-DECRESCENTE, mas o pg_stat_database às vezes devolve uma
+    leitura STALE (snapshot antigo) que faz um balde "mergulhar" de leve. Esse
+    ponto é PULADO (não emite 0 nem pico): mantemos o último valor limpo e o
+    próximo balde real mede o crescimento sobre o intervalo maior — a linha
+    interpola o buraco e fica suave, sem o dente-de-serra que o card mostrava. Uma
+    queda GRANDE (< _RATE_RESET_FRACTION) é um reset de verdade: reancora e segue.
+    """
+    series: list[tuple[datetime, float]] = []
+    if not buckets:
+        return series
+    prev_t, clean = buckets[0]
+    for t_cur, v_cur in buckets[1:]:
+        if v_cur >= clean:  # crescimento real
+            dt = (t_cur - prev_t).total_seconds()
+            if dt > 0:
+                series.append((t_cur, round((v_cur - clean) / dt, 2)))
+            prev_t, clean = t_cur, v_cur
+        elif v_cur < clean * _RATE_RESET_FRACTION:  # reset do contador: reancora
+            prev_t, clean = t_cur, v_cur
+        # senão: leitura stale (mergulho pequeno) → pula o ponto, mantém clean/prev_t
+    return series
+
+
+# Uma taxa derivada de contador é intrinsecamente ruidosa em baldes curtos: uma
+# carga em rajadas medida em 15s salta muito de um balde para o outro (um balde
+# pega a rajada, o vizinho pega o vale). Apresentamos SEMPRE a média corrida da
+# última ~1 min, então cada ponto é a média dos baldes que cobrem 60s. A linha
+# ainda avança a cada balde (segue responsiva, sem virar 1 ponto/min) mas sem o
+# serrilhado. Em janelas onde o balde já é ≥ 60s isto vira no-op (janela de 1
+# ponto). Vale para o GRÁFICO e para o NÚMERO (services.fleet_summary tira a média
+# DESTA série), então os dois seguem contando a mesma história.
+_RATE_SMOOTHING_SECONDS = 60
+
+
+def _trailing_mean(
+    series: list[tuple[datetime, float]], window: int
+) -> list[tuple[datetime, float]]:
+    """
+    Média móvel corrida de `window` pontos, datada no ponto mais novo de cada
+    janela. A janela encolhe no começo da série (o 1º ponto é ele mesmo), então
+    nenhum ponto é descartado — o sparkline mantém a mesma contagem de pontos.
+    """
+    if window <= 1 or len(series) < 2:
+        return series
+    values = [value for _, value in series]
+    smoothed: list[tuple[datetime, float]] = []
+    for i, (t_cur, _) in enumerate(series):
+        chunk = values[max(0, i - window + 1) : i + 1]
+        smoothed.append((t_cur, round(sum(chunk) / len(chunk), 2)))
+    return smoothed
+
+
 def get_metric_history(
     db: Session,
     instance_id: uuid.UUID,
@@ -244,28 +342,22 @@ def get_metric_history(
 
     O balde é derivado da janela (24h ÷ 120 = 12 min), então a resolução é
     estável independentemente de quantas amostras existirem dentro dele.
+
+    `queries_per_second` é uma métrica DERIVADA: não é armazenada crua, então a
+    série sai da derivada do contador `xact_commit` (ver _DERIVED_RATE_SOURCE) e
+    passa por uma média móvel de ~1 min (ver _trailing_mean) — a taxa de uma carga
+    em rajadas é ruidosa demais em baldes de 15s.
     """
     since = datetime.now(timezone.utc) - timedelta(minutes=minutes)
     bucket_seconds = max(1, (minutes * 60) // max(1, max_points))
 
-    # floor(epoch / bucket) * bucket → início do balde; média dentro dele.
-    bucket_start = func.to_timestamp(
-        func.floor(func.extract("epoch", Metric.collected_at) / bucket_seconds)
-        * bucket_seconds
-    ).label("bucket_start")
+    source = _DERIVED_RATE_SOURCE.get(metric_name)
+    if source is not None:
+        rate = _counter_rate(_bucketed_avg(db, instance_id, source, since, bucket_seconds))
+        smoothing = max(1, round(_RATE_SMOOTHING_SECONDS / bucket_seconds))
+        return _trailing_mean(rate, smoothing)
 
-    rows = (
-        db.query(bucket_start, func.avg(Metric.value).label("value"))
-        .filter(
-            Metric.instance_id == instance_id,
-            Metric.metric_name == metric_name,
-            Metric.collected_at >= since,
-        )
-        .group_by(bucket_start)
-        .order_by(bucket_start.asc())
-        .all()
-    )
-    return [(row.bucket_start, float(row.value)) for row in rows]
+    return _bucketed_avg(db, instance_id, metric_name, since, bucket_seconds)
 
 
 def check_health(instance: DatabaseInstance) -> dict:
