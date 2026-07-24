@@ -95,9 +95,13 @@ _BACKFILL_COVERED_AFTER = _BACKFILL_WINDOW - timedelta(hours=1)
 _BACKFILL_GROWTH_RATIO = 0.02
 
 # Distância entre os dois pontos do par de xact_commit ancorado no boot. Igual à
-# cadência do poller (60s), para o par parecer duas coletas normais e o queries/s
-# derivado sair na mesma ordem de grandeza que a medição ao vivo.
-_XACT_ANCHOR_GAP_SECONDS = 60
+# cadência do poller, para o par parecer duas coletas normais e CABER na janela
+# móvel do queries/s (que é relativa ao poll, ver fleet_summary). Definida em
+# tempo de execução para acompanhar METRICS_POLL_INTERVAL_SECONDS.
+def _xact_anchor_gap_seconds() -> int:
+    from src.core.config import settings
+
+    return settings.METRICS_POLL_INTERVAL_SECONDS
 
 # Latência base quando a instância nunca reportou percentis (dados-apenas, sem
 # pg_stat_statements) e quanto ela sobe do vale ao pico de carga.
@@ -335,9 +339,10 @@ def _seed_xact_commit_anchor(db: Session, instance: DatabaseInstance) -> None:
         return
 
     now = _now()
+    gap = _xact_anchor_gap_seconds()
     rate = target_queries_per_second(instance.name, instance.environment, now)
-    newer = max(0.0, current - rate * _XACT_ANCHOR_GAP_SECONDS)
-    older = max(0.0, current - rate * 2 * _XACT_ANCHOR_GAP_SECONDS)
+    newer = max(0.0, current - rate * gap)
+    older = max(0.0, current - rate * 2 * gap)
 
     db.query(Metric).filter(
         Metric.instance_id == instance.id,
@@ -346,10 +351,10 @@ def _seed_xact_commit_anchor(db: Session, instance: DatabaseInstance) -> None:
     db.add_all([
         Metric(instance_id=instance.id, metric_name="xact_commit",
                value=round(older, 2),
-               collected_at=now - timedelta(seconds=2 * _XACT_ANCHOR_GAP_SECONDS)),
+               collected_at=now - timedelta(seconds=2 * gap)),
         Metric(instance_id=instance.id, metric_name="xact_commit",
                value=round(newer, 2),
-               collected_at=now - timedelta(seconds=_XACT_ANCHOR_GAP_SECONDS)),
+               collected_at=now - timedelta(seconds=gap)),
     ])
     db.commit()
 

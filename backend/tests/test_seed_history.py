@@ -285,7 +285,8 @@ def test_xact_commit_anchor_dates_the_pair_safely_in_the_past(db, monkeypatch):
     pair = _series(db, inst, "xact_commit")
     assert len(pair) == 2  # obsoleto apagado, par fresco no lugar
     older, newer = pair
-    assert newer.collected_at < now - timedelta(seconds=55)  # datado no passado
+    # Datado no passado (nunca em `now`), para não cruzar com a coleta viva.
+    assert newer.collected_at <= now - timedelta(seconds=5)
     assert older.collected_at < newer.collected_at
     # Recuados do contador real (não gravamos `current`), e monotônicos.
     assert older.value < newer.value < current

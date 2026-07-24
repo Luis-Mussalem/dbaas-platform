@@ -105,8 +105,14 @@ _ACTIVE_FRACTION = 0.45
 # queries/s vivo (~6-12/s em prod, ~3-6/s em staging) em vez de ~0.1/s, que o card
 # arredondava para "0". São leituras pontuais indexadas (microssegundos), então o
 # volume é barato — a query PESADA fica de fora da rajada (_HEAVY_QUERY_PROB), para
-# tráfego não virar teste de carga. Tunável: sobe/desce o queries/s proporcional.
-_QUERIES_PER_ACTIVE_CONN = 100
+# tráfego não virar teste de carga.
+#
+# Dimensionado JUNTO com DEMO_WORKLOAD_INTERVAL_SECONDS (5s): a taxa-base é
+# `_ACTIVE_FRACTION × conns × este / intervalo`, então rajadas menores e mais
+# frequentes (5s) dão o MESMO queries/s que 100/15s, porém distribuído — cada
+# janela de coleta de 15s cobre ~3 rajadas, o que tira o aliasing do gráfico de
+# queries/s (antes, poll e rajada tinham o mesmo período de 15s e batiam mal).
+_QUERIES_PER_ACTIVE_CONN = 33
 
 # Probabilidade de uma conexão ativa disparar UMA query pesada no ciclo — a cauda
 # que popula a tela de queries lentas. Rara de propósito (fora da rajada leve): é

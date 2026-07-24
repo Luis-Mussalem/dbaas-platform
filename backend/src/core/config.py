@@ -71,7 +71,11 @@ class Settings(BaseSettings):
     # vivo" apenas amplifica isso por ~1 min. Com DEMO_MODE=false os endpoints
     # respondem 404 e os loops não sobem.
     DEMO_MODE: bool = True
-    DEMO_WORKLOAD_INTERVAL_SECONDS: int = 15
+    # Cadência do gerador de carga. 5s (e não 15s) para os commits saírem em
+    # rajadas menores e mais frequentes: cada janela de coleta do poller (15s)
+    # cobre ~3 rajadas, o que evita o aliasing do queries/s (poll e rajada com o
+    # mesmo período batiam mal). Ver _QUERIES_PER_ACTIVE_CONN, dimensionado junto.
+    DEMO_WORKLOAD_INTERVAL_SECONDS: int = 5
     # Teto de conexões simultâneas por instância de produção (staging usa ~metade).
     # Cada conexão é um backend PostgreSQL (~10 MB): 14 × 3 prod + 7 × 3 staging
     # ≈ 60 conexões na frota inteira. Baixe se a máquina for modesta.
