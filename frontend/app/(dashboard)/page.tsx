@@ -14,6 +14,7 @@ import { EnvFilterBar } from "@/components/EnvFilterBar";
 import { FleetKpiRow } from "@/components/FleetKpiRow";
 import { FleetSkeleton } from "@/components/FleetSkeleton";
 import { estimateMonthlyCost } from "@/lib/cost";
+import { qpsScaleMax } from "@/lib/qps-scale";
 import { periodForHour, type Period } from "@/lib/greeting";
 import { filterByEnvironment, type EnvFilter } from "@/lib/environment";
 import { CURRENCY } from "@/i18n/config";
@@ -35,6 +36,12 @@ export default function PainelPage() {
   // Agregado por instância (alertas, backup, uptime, throughput) para os cards,
   // numa requisição só em vez de quatro por card.
   const { summaries } = useFleetSummary(DASHBOARD_POLL_MS);
+  // Teto comum (base zero) dos sparklines de queries/s: régua compartilhada entre
+  // os cards, para a altura da linha codificar magnitude e não só forma.
+  const qpsScale = useMemo(
+    () => qpsScaleMax([...summaries.values()].map((s) => s.queries_per_second)),
+    [summaries],
+  );
   const [envFilter, setEnvFilter] = useState<EnvFilter>("all");
 
   const isLoading = loadingInstances || loadingSummary;
@@ -109,6 +116,7 @@ export default function PainelPage() {
                   key={instance.id}
                   instance={instance}
                   summary={summaries.get(instance.id)}
+                  qpsScaleMax={qpsScale}
                 />
               ))}
             </div>

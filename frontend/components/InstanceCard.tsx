@@ -22,27 +22,34 @@ const MIN_BAR_PCT = 1.5;
 export function InstanceCard({
   instance,
   summary,
+  qpsScaleMax,
 }: {
   instance: Instance;
   // Ausente enquanto o agregado da frota carrega — o card renderiza sem ele.
   summary?: InstanceSummary;
+  // Teto Y comum a todos os cards (base zero) para o sparkline de queries/s: a
+  // altura da linha passa a codificar magnitude, comparável entre cards. Ausente
+  // → o sparkline se auto-escala à própria faixa (fallback).
+  qpsScaleMax?: number;
 }) {
   const t = useTranslations("InstanceCard");
   const tc = useTranslations("Common");
   const { bytes, ratio, number, ago } = useFormatters();
 
-  // Sparkline REAL: histórico de conexões (vem do endpoint de histórico que lê a
-  // tabela metrics). Vazio → o Sparkline mostra uma linha-base.
+  // Sparkline REAL: histórico de queries/s — a MESMA grandeza do número que o
+  // card exibe em destaque, para gráfico e número contarem uma história só
+  // (conexões continua como número no card e como gráfico na tela de detalhe).
+  // queries/s não é armazenado: o endpoint deriva a série do contador xact_commit.
+  // Vazio → o Sparkline mostra uma linha-base.
   //
-  // Janela de 1h em 60 baldes — um balde por minuto, que é a cadência do poller
-  // em repouso. Antes eram 24h em 48 baldes de 30 min: cada amostra nova movia
-  // a média do último balde em ~1/30, então a linha parecia CONGELADA mesmo com
-  // o polling funcionando. O card mostra o presente; a visão de 24h continua na
-  // tela de detalhe, onde há espaço para lê-la.
-  const connHistory = useMetricHistory(
+  // Janela de 15m em 60 baldes = um balde por COLETA (15s): cada escrita do poller
+  // vira um ponto, então a linha reflete a resolução real do dado, sem médias de
+  // 1 min que empastavam a escrita de 15s. O card mostra o presente; a visão de
+  // horas continua na tela de detalhe, onde há espaço para lê-la.
+  const throughputHistory = useMetricHistory(
     instance.id,
-    "connections_active",
-    "1h",
+    "queries_per_second",
+    "15m",
     DASHBOARD_POLL_MS,
     60
   );
@@ -118,8 +125,15 @@ export function InstanceCard({
         )}
       </div>
 
-      {/* sparkline real: conexões na última hora */}
-      <Sparkline data={connHistory} color={sparkColor} className="h-12 w-full" />
+      {/* sparkline real: queries/s na última hora, em régua compartilhada (base
+          zero) para a altura ser comparável entre cards */}
+      <Sparkline
+        data={throughputHistory}
+        color={sparkColor}
+        domainMin={0}
+        domainMax={qpsScaleMax}
+        className="h-14 w-full"
+      />
 
       {/* métricas ao vivo: as três que se movem com a carga */}
       <div className="flex items-center justify-between">

@@ -14,6 +14,7 @@ import { EnvFilterBar } from "@/components/EnvFilterBar";
 import { FleetKpiRow } from "@/components/FleetKpiRow";
 import { FleetSkeleton } from "@/components/FleetSkeleton";
 import { estimateMonthlyCost } from "@/lib/cost";
+import { qpsScaleMax } from "@/lib/qps-scale";
 import { filterByEnvironment, type EnvFilter } from "@/lib/environment";
 import { CURRENCY } from "@/i18n/config";
 
@@ -25,6 +26,12 @@ export default function InstancesPage() {
   const { instances, isLoading, error } = useInstances(DASHBOARD_POLL_MS);
   const { summary } = useDashboard(DASHBOARD_POLL_MS);
   const { summaries } = useFleetSummary(DASHBOARD_POLL_MS);
+  // Teto comum (base zero) dos sparklines de queries/s: régua compartilhada entre
+  // os cards, para a altura da linha codificar magnitude e não só forma.
+  const qpsScale = useMemo(
+    () => qpsScaleMax([...summaries.values()].map((s) => s.queries_per_second)),
+    [summaries],
+  );
   const [envFilter, setEnvFilter] = useState<EnvFilter>("all");
 
   const visibleInstances = useMemo(
@@ -89,6 +96,7 @@ export default function InstancesPage() {
               key={instance.id}
               instance={instance}
               summary={summaries.get(instance.id)}
+              qpsScaleMax={qpsScale}
             />
           ))}
         </div>
