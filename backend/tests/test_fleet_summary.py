@@ -75,16 +75,18 @@ def test_empty_instance_has_all_metrics_null(client, auth_headers, instance):
 def test_queries_per_second_from_cumulative_counter(client, auth_headers, instance, db):
     headers, _ = auth_headers()
     now = datetime.now(timezone.utc)
+    # Dois baldes de 15s a 30s de distância: a série derivada tem um ponto, a taxa
+    # daquele balde; o número é a média dessa série (= o único ponto).
     db.add_all([
         Metric(instance_id=instance.id, metric_name="xact_commit", value=1_000.0,
-               collected_at=now - timedelta(seconds=60)),
+               collected_at=now - timedelta(seconds=30)),
         Metric(instance_id=instance.id, metric_name="xact_commit", value=4_000.0,
                collected_at=now),
     ])
     db.commit()
 
     body = _summary_of(client.get(URL, headers=headers).json(), instance)
-    assert body["queries_per_second"] == 50.0  # 3000 commits / 60s
+    assert body["queries_per_second"] == 100.0  # 3000 commits / 30s
 
 
 def test_queries_per_second_averages_over_the_window_not_adjacent_points(
@@ -92,8 +94,8 @@ def test_queries_per_second_averages_over_the_window_not_adjacent_points(
 ):
     """
     A carga demo comita em rajadas: dois pontos adjacentes podem cair entre
-    rajadas (Δ=0) mesmo com a frota viva. A janela móvel medeia sobre várias e
-    devolve um número estável e não-zero.
+    rajadas (Δ=0) mesmo com a frota viva. O número é a média da série inteira, e
+    não a taxa do último par — então devolve um valor estável e não-zero.
     """
     headers, _ = auth_headers()
     now = datetime.now(timezone.utc)
@@ -106,8 +108,34 @@ def test_queries_per_second_averages_over_the_window_not_adjacent_points(
     db.commit()
 
     body = _summary_of(client.get(URL, headers=headers).json(), instance)
-    # Janela inteira: (1360-1000)/60 = 6 q/s — não o "0" dos dois pontos adjacentes.
-    assert body["queries_per_second"] == 6.0
+    # Baldes de 15s → taxas cruas [12, 0, 12, 0]; a média móvel de 1 min as alisa
+    # para [12, 6, 8, 6] e o número é a média dessa linha (8 q/s) — o ponto é que
+    # não é o "0" do último par, e sim um valor estável que reflete a janela.
+    assert body["queries_per_second"] == 8.0
+
+
+def test_queries_per_second_ignores_a_stale_low_read(client, auth_headers, instance, db):
+    """
+    O pg_stat_database às vezes devolve uma leitura stale (snapshot antigo): o
+    contador "mergulha" de leve por uma amostra. Se essa amostra vira a mais
+    recente, a derivação não pode zerar/anular o card — o mergulho é ignorado e a
+    taxa sai do crescimento real.
+    """
+    headers, _ = auth_headers()
+    now = datetime.now(timezone.utc)
+    # Crescimento real de +180 em 15s; a amostra mais recente é STALE (2100 < 2180
+    # de 15s antes) — um mergulho de ~4%, não um reset.
+    db.add_all([
+        Metric(instance_id=instance.id, metric_name="xact_commit", value=v,
+               collected_at=now - timedelta(seconds=s))
+        for v, s in [(2000, 30), (2180, 15), (2100, 0)]
+    ])
+    db.commit()
+
+    body = _summary_of(client.get(URL, headers=headers).json(), instance)
+    # Um único balde real: (2180-2000)/15 = 12 q/s. A leitura stale de 2100 é
+    # ignorada (não emite ponto), então não zera nem anula o card.
+    assert body["queries_per_second"] == 12.0
 
 
 def test_counter_reset_is_discarded(client, auth_headers, instance, db):

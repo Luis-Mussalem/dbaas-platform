@@ -135,18 +135,19 @@ def test_dashboard_queries_per_second_from_commit_rate(client, auth_headers, db)
     db.commit()
     db.refresh(inst)
 
-    t0 = datetime.now(timezone.utc) - timedelta(seconds=60)
+    # Dois baldes de 15s a 30s de distância → a série derivada tem um ponto.
+    t0 = datetime.now(timezone.utc) - timedelta(seconds=30)
     db.add_all([
         Metric(instance_id=inst.id, metric_name="xact_commit", value=1000.0, collected_at=t0),
         Metric(
-            instance_id=inst.id, metric_name="xact_commit", value=1120.0,
-            collected_at=t0 + timedelta(seconds=60),
+            instance_id=inst.id, metric_name="xact_commit", value=1060.0,
+            collected_at=t0 + timedelta(seconds=30),
         ),
     ])
     db.commit()
 
     body = client.get(DASHBOARD, headers=headers).json()
-    # 120 commits em 60s → 2.0/s.
+    # 60 commits em 30s → 2.0/s.
     assert body["queries_per_second"] == 2.0
 
 

@@ -26,14 +26,18 @@ from src.models.backup import Backup, BackupStatus
 from src.models.database_instance import DatabaseInstance
 from src.models.metric import Metric
 from src.schemas.instance import InstanceSummary
+from src.services import metrics as metrics_service
 from src.services import status_history
 
-# Janela móvel do queries/s: larga o bastante para cobrir várias rajadas da carga
-# demo (evita aliasing quando o poller amostra num período parecido com o do
-# simulador) e ainda atualizar a cada coleta. _SAMPLES cobre a janela mesmo na
-# cadência rápida da demo (15s → 6 pontos ≈ 90s, limitados a _SECONDS).
-_QPS_WINDOW_SECONDS = 75.0
-_QPS_WINDOW_SAMPLES = 6
+# O NÚMERO de queries/s do card é a MÉDIA da mesma série que o sparkline desenha —
+# não um cálculo à parte. O card pede get_metric_history("queries_per_second",
+# "15m", 60 baldes) (InstanceCard.tsx); derivamos a MESMA série aqui e tiramos a
+# média dos pontos. Assim o número é, por construção, a média da linha: ela oscila
+# em torno dele e gráfico e número contam uma história só. A robustez a leituras
+# stale e a resets do contador vive no _counter_rate (services.metrics), que os
+# dois caminhos compartilham. Estes dois valores TÊM de casar com os do card.
+_QPS_SERIES_MINUTES = 15
+_QPS_SERIES_POINTS = 60
 
 # Ordem de gravidade, para o card destacar o pior alerta aberto.
 _SEVERITY_RANK = {
@@ -103,43 +107,32 @@ def queries_per_second_by_instance(
     db: Session, instance_ids: list[uuid.UUID]
 ) -> dict[uuid.UUID, float]:
     """
-    Taxa de commits por instância — Δcommits/Δsegundos do contador cumulativo
-    xact_commit sobre uma JANELA MÓVEL de ~_QPS_WINDOW_SECONDS, não sobre os dois
-    pontos adjacentes.
+    Taxa de commits por instância = MÉDIA da série de queries/s que o card desenha
+    no sparkline. Deriva a MESMA série que o gráfico (get_metric_history sobre o
+    contador xact_commit, mesma janela e baldes) e devolve a média dos pontos.
 
-    A janela é maior que a cadência do poller de propósito. A carga demo comita em
-    rajadas (uma por ciclo do simulador); quando o poller amostra num período
-    parecido, derivar de dois pontos adjacentes cai em aliasing — uma janela pega 0
-    rajadas e reporta "0", a seguinte pega 2 e reporta o dobro. Mediar sobre várias
-    rajadas dá um número estável que ainda atualiza a cada coleta. Numa cadência
-    lenta (produção a 60s) a janela cobre ~1 intervalo e o comportamento é o de
-    antes.
+    Por que a média da série, e não um cálculo próprio: o número e o gráfico têm
+    de bater. Enquanto o número saía de uma janela/derivação diferente (era a média
+    das últimas ~5 amostras cruas), ele nunca coincidia com a linha ao lado. Sendo
+    a média EXATA da série desenhada, a linha oscila em torno do número e os dois
+    contam uma história só.
 
-    Delta negativo = o Postgres reiniciou e zerou o contador: paramos na fronteira
-    do reset (a amostra mais velha com valor MAIOR que a atual) e medimos só o
-    trecho posterior, em vez de reportar um pico absurdo no card.
+    Ausente (série vazia) quando não há dado para uma taxa — o card mostra "—" em
+    vez de um zero inventado. A robustez a leituras stale e a resets do contador
+    está no _counter_rate (services.metrics), que produz a série.
     """
     result: dict[uuid.UUID, float] = {}
-    for instance_id, samples in _latest_samples(
-        db, instance_ids, "xact_commit", _QPS_WINDOW_SAMPLES
-    ).items():
-        if len(samples) < 2:
+    for instance_id in instance_ids:
+        series = metrics_service.get_metric_history(
+            db,
+            instance_id,
+            "queries_per_second",
+            _QPS_SERIES_MINUTES,
+            max_points=_QPS_SERIES_POINTS,
+        )
+        if not series:
             continue
-        newest_val, newest_ts = samples[0]
-        oldest_val, oldest_ts = samples[0]
-        # Recua no tempo (samples vêm do mais novo p/ o mais velho) até a borda da
-        # janela ou até um valor MAIOR que o atual (reset do contador).
-        for val, ts in samples[1:]:
-            if val > newest_val:
-                break
-            if (newest_ts - ts).total_seconds() > _QPS_WINDOW_SECONDS:
-                break
-            oldest_val, oldest_ts = val, ts
-        dt = (newest_ts - oldest_ts).total_seconds()
-        delta = newest_val - oldest_val
-        if dt <= 0 or delta < 0:
-            continue
-        result[instance_id] = round(delta / dt, 2)
+        result[instance_id] = round(sum(value for _, value in series) / len(series), 2)
     return result
 
 
