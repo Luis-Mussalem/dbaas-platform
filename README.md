@@ -130,11 +130,11 @@ the `dev-test@local.dev` superuser above sees and switches between all:
 
 | Company | Users | Password |
 |---|---|---|
-| Neptune Payments | `admin@neptune.example`, `ana@neptune.example`, … | `DemoPass123!` |
-| Saturn Music Store | `admin@saturn.example`, `ana@saturn.example`, … | `DemoPass123!` |
-| Jupiter Clothing | `admin@jupiter.example`, `ana@jupiter.example`, … | `DemoPass123!` |
+| Neptune Payments | `admin@neptune.example`, `user1@neptune.example`, … | `DemoPass123!` |
+| Saturn Music Store | `admin@saturn.example`, `user1@saturn.example`, … | `DemoPass123!` |
+| Jupiter Clothing | `admin@jupiter.example`, `user1@jupiter.example`, … | `DemoPass123!` |
 
-(Members: `ana`, `bruno`, `carla`, `diego` at each company's domain.)
+(Members: `user1`, `user2`, `user3`, `user4` at each company's domain.)
 
 ## Table of Contents
 

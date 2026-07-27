@@ -63,9 +63,9 @@ export function isResourceType(value: string): value is ResourceType {
 }
 
 // Short actor label built from the email, in `name@company` format:
-//   ana@jupiter.example  -> ana@jupiter   (local part + 1st part of the domain)
-//   admin@local.dev      -> admin@dev     (internal accounts: domain becomes "dev",
-//   dev-test@local.dev   -> test@dev       and the "dev-" prefix on the name is dropped)
+//   user1@jupiter.example -> user1@jupiter  (local part + 1st part of the domain)
+//   admin@local.dev       -> admin@dev      (internal accounts: domain becomes "dev",
+//   dev-test@local.dev    -> test@dev        and the "dev-" prefix on the name is dropped)
 // Returns null when there's no email (a system action, or an already-deleted user) —
 // the caller falls back to the generic label.
 export function actorLabel(email: string | null | undefined): string | null {

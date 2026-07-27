@@ -56,7 +56,7 @@ DEMO_MARKER = "__demo_fleet__"  # marks the instances created by this seed (idem
 # digit, and symbol). Mock data — printed to the log to make logging in easier.
 DEMO_PASSWORD = "DemoPass123!"
 
-MEMBER_NAMES = ["ana", "bruno", "carla", "diego"]
+MEMBER_NAMES = ["user1", "user2", "user3", "user4"]
 
 # Target database size PER INSTANCE (total pg_database_size), against the 1 GB
 # plan declared in COMPANIES. VARIED targets on purpose: with a single value
