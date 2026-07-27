@@ -12,10 +12,10 @@ import { SchemaBrowser } from "@/components/sql/SchemaBrowser";
 import { ResultsTable } from "@/components/sql/ResultsTable";
 import { QueryHistory } from "@/components/sql/QueryHistory";
 
-// ─── Histórico (localStorage, por empresa + instância) ──────────────────────
-// Mantido fora do componente: são funções puras de I/O, não dependem de estado.
-// O escopo de empresa evita que o histórico de um tenant apareça para outro no
-// mesmo navegador (troca de workspace do superuser ou de conta).
+// ─── History (localStorage, per company + instance) ──────────────────────
+// Kept outside the component: these are pure I/O functions, not dependent on state.
+// The company scope prevents one tenant's history from showing up for another in
+// the same browser (superuser workspace switch, or account switch).
 const HISTORY_LIMIT = 15;
 const historyKey = (companyScope: string, instanceId: string) =>
   `sql_history:${companyScope}:${instanceId}`;
@@ -42,23 +42,23 @@ export default function SqlPage() {
   const { user } = useAuth();
   const { instances, isLoading, error: instancesError } = useInstances();
 
-  // Empresa ativa: a do WorkspaceSwitcher (superuser) ou a do próprio usuário.
-  // Trocar de workspace recarrega a página, então ler uma vez por render basta.
+  // Active company: the WorkspaceSwitcher's (superuser) or the user's own.
+  // Switching workspaces reloads the page, so reading it once per render is enough.
   const companyScope =
     (typeof window !== "undefined" ? localStorage.getItem("active_company_id") : null) ??
     user?.company_id ??
     "all";
 
-  // Só instâncias RUNNING aceitam query (o backend devolve 409 para as demais).
-  // useMemo estabiliza a referência do array para os efeitos abaixo.
+  // Only RUNNING instances accept queries (the backend returns 409 for the rest).
+  // useMemo stabilizes the array reference for the effects below.
   const runningInstances = useMemo(
     () => instances.filter((i) => i.status === "running"),
     [instances]
   );
 
-  // `selectedId` guarda a escolha EXPLÍCITA do usuário no seletor; pode ficar
-  // inválida (instância parou/saiu da lista). A seleção efetiva é derivada no
-  // render — sem effect — caindo para a primeira RUNNING quando a escolha não vale.
+  // `selectedId` holds the user's EXPLICIT choice in the selector; it can become
+  // invalid (the instance stopped/left the list). The effective selection is derived at
+  // render time — no effect — falling back to the first RUNNING one when the choice is invalid.
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [result, setResult] = useState<QueryResult | null>(null);
@@ -79,9 +79,9 @@ export default function SqlPage() {
     [instances, effectiveId]
   );
 
-  // Reset ao trocar de instância efetiva: carrega o histórico dela e zera a saída.
-  // Padrão "ajustar estado durante o render" (react.dev) em vez de um effect —
-  // evita flash e o set-state-in-effect. `undefined` força o load no 1º render.
+  // Resets when the effective instance changes: loads its history and clears the output.
+  // The "adjust state during render" pattern (react.dev) instead of an effect —
+  // avoids a flash and the set-state-in-effect. `undefined` forces the load on the 1st render.
   const [prevId, setPrevId] = useState<string | null | undefined>(undefined);
   if (prevId !== effectiveId) {
     setPrevId(effectiveId);
@@ -145,7 +145,7 @@ export default function SqlPage() {
     }
   }
 
-  // Ctrl/Cmd + Enter executa — atalho clássico de consoles SQL.
+  // Ctrl/Cmd + Enter runs it — the classic SQL console shortcut.
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
       e.preventDefault();
@@ -160,7 +160,7 @@ export default function SqlPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Cabeçalho + seletor de instância */}
+      {/* Header + instance selector */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
@@ -189,7 +189,7 @@ export default function SqlPage() {
         <EmptyState title={t("empty.title")} subtitle={t("empty.subtitle")} />
       ) : (
         <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
-          {/* Navegador de tabelas (clicável → insere no editor) */}
+          {/* Table browser (clickable → inserts into the editor) */}
           <aside className="order-2 lg:order-1">
             {selectedInstance && (
               <SchemaBrowser
@@ -200,7 +200,7 @@ export default function SqlPage() {
             )}
           </aside>
 
-          {/* Editor + ações + saída */}
+          {/* Editor + actions + output */}
           <section className="order-1 flex flex-col gap-3 lg:order-2">
             <div className="overflow-hidden rounded-xl border border-border bg-surface">
               <textarea
@@ -244,7 +244,7 @@ export default function SqlPage() {
               </div>
             </div>
 
-            {/* Painel de erro: 422 (query barrada pelo guard) ou 400 (erro do Postgres) */}
+            {/* Error panel: 422 (query blocked by the guard) or 400 (Postgres error) */}
             {error && (
               <div className="whitespace-pre-wrap wrap-break-word rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
                 {error}

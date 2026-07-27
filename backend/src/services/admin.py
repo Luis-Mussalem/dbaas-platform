@@ -17,7 +17,7 @@ from src.services import fleet_summary, status_history
 def _running_instance_ids(
     db: Session, company_id: uuid.UUID | None
 ) -> list[uuid.UUID]:
-    """IDs das instâncias RUNNING no escopo (base dos KPIs de throughput/latência)."""
+    """IDs of RUNNING instances in scope (basis for the throughput/latency KPIs)."""
     q = db.query(DatabaseInstance.id).filter(
         DatabaseInstance.status == InstanceStatus.RUNNING,
         DatabaseInstance.deleted_at.is_(None),
@@ -30,7 +30,7 @@ def _running_instance_ids(
 def _compute_fleet_queries_per_second(
     db: Session, company_id: uuid.UUID | None
 ) -> float:
-    """Throughput real da frota: soma das taxas de commit por instância RUNNING."""
+    """Real fleet throughput: sum of commit rates per RUNNING instance."""
     instance_ids = _running_instance_ids(db, company_id)
     rates = fleet_summary.queries_per_second_by_instance(db, instance_ids)
     return round(sum(rates.values()), 2)
@@ -40,8 +40,8 @@ def _compute_fleet_p95_latency(
     db: Session, company_id: uuid.UUID | None
 ) -> float | None:
     """
-    P95 médio de latência da frota: média do último p95_query_latency_ms de cada
-    instância RUNNING que tenha a métrica. None se nenhuma tem (exibe "—").
+    Fleet average P95 latency: average of the latest p95_query_latency_ms of each
+    RUNNING instance that has the metric. None if none has it (shows "—").
     """
     instance_ids = _running_instance_ids(db, company_id)
     values = list(
@@ -81,11 +81,11 @@ def write_audit_log(
 def get_dashboard(
     db: Session, company_id: uuid.UUID | None = None
 ) -> DashboardResponse:
-    # company_id None = superuser (sem filtro). Caso contrário todos os agregados
-    # ficam restritos às instâncias daquela empresa; recursos derivados (alertas,
-    # backups, manutenção) são filtrados via JOIN à instância dona.
+    # company_id None = superuser (no filter). Otherwise all aggregates
+    # are restricted to that company's instances; derived resources (alerts,
+    # backups, maintenance) are filtered via a JOIN to the owning instance.
 
-    # Instâncias agrupadas por status (exceto deletadas por soft delete)
+    # Instances grouped by status (excluding soft-deleted ones)
     inst_q = db.query(DatabaseInstance.status, func.count(DatabaseInstance.id)).filter(
         DatabaseInstance.deleted_at.is_(None)
     )
@@ -95,7 +95,7 @@ def get_dashboard(
     instances_by_status = {status.value: count for status, count in rows}
     total_instances = sum(instances_by_status.values())
 
-    # Alertas ativos (sem resolved_at)
+    # Active alerts (no resolved_at)
     alerts_q = db.query(func.count(AlertEvent.id)).filter(AlertEvent.resolved_at.is_(None))
     if company_id is not None:
         alerts_q = alerts_q.join(
@@ -103,7 +103,7 @@ def get_dashboard(
         ).filter(DatabaseInstance.company_id == company_id)
     active_alerts = alerts_q.scalar() or 0
 
-    # Backups nas últimas 24h
+    # Backups in the last 24h
     since = datetime.now(tz=timezone.utc) - timedelta(hours=24)
     backups_q = (
         db.query(func.count(Backup.id))
@@ -125,7 +125,7 @@ def get_dashboard(
     backups_last_24h = backups_q.scalar() or 0
     failed_backups_last_24h = failed_q.scalar() or 0
 
-    # Tarefas de manutenção pendentes ou em execução
+    # Pending or running maintenance tasks
     maint_q = db.query(func.count(MaintenanceTask.id)).filter(
         MaintenanceTask.status.in_([TaskStatus.PENDING, TaskStatus.RUNNING])
     )
@@ -158,9 +158,9 @@ def list_audit_logs(
     user_id: uuid.UUID | None = None,
     company_id: uuid.UUID | None = None,
 ) -> list[AuditLog]:
-    # LEFT JOIN em users para trazer o email do ator junto (AuditLog só guarda o
-    # user_id). outerjoin: ações sem usuário (login, background) e usuários já
-    # deletados mantêm a linha, com email = None.
+    # LEFT JOIN on users to bring back the actor's email too (AuditLog only stores the
+    # user_id). outerjoin: actions with no user (login, background) and already-
+    # deleted users keep the row, with email = None.
     query = db.query(AuditLog, User.email).outerjoin(User, User.id == AuditLog.user_id)
     if company_id is not None:
         query = query.filter(AuditLog.company_id == company_id)
@@ -170,18 +170,18 @@ def list_audit_logs(
         query = query.filter(AuditLog.resource_type == resource_type)
     if user_id:
         query = query.filter(AuditLog.user_id == user_id)
-    # Desempate por id: com LIMIT/OFFSET, uma ordenação só por timestamp não é
-    # determinística quando duas entradas caem no mesmo instante — o Postgres
-    # pode devolvê-las em ordens diferentes entre páginas, e aí uma linha
-    # aparece duas vezes enquanto outra some. O id não tem significado temporal;
-    # serve só para tornar a ordem estável.
+    # Tiebreak by id: with LIMIT/OFFSET, ordering by timestamp alone isn't
+    # deterministic when two entries land on the same instant — Postgres
+    # can return them in different orders across pages, and then a row
+    # shows up twice while another disappears. id has no temporal meaning;
+    # it's there only to make the order stable.
     rows = (
         query.order_by(AuditLog.timestamp.desc(), AuditLog.id.desc())
         .limit(limit)
         .offset(offset)
         .all()
     )
-    # Anexa o email como atributo transiente para o AuditLogRead (from_attributes).
+    # Attaches the email as a transient attribute for AuditLogRead (from_attributes).
     logs: list[AuditLog] = []
     for log, email in rows:
         log.user_email = email

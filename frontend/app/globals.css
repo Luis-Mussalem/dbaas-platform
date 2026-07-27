@@ -5,7 +5,7 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  /* ── tokens semânticos do shadcn ── */
+  /* ── shadcn semantic tokens ── */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -38,7 +38,7 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  /* ── tokens extras do design DBaaS ── */
+  /* ── extra DBaaS design tokens ── */
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
   --color-bg-2: var(--bg-2);
@@ -53,12 +53,12 @@
   --color-danger: var(--danger);
   --color-info: var(--info);
 
-  /* ── fontes (ver layout.tsx) ── */
+  /* ── fonts (see layout.tsx) ── */
   --font-sans: var(--font-inter);
   --font-mono: var(--font-jetbrains-mono);
   --font-heading: var(--font-inter);
 
-  /* ── raios ── */
+  /* ── radii ── */
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -68,10 +68,10 @@
 
 /* ─────────────────────────────────────────────────────────────
    Light  → :root
-   Definimos os PRIMITIVOS do design (--bg, --surface, --fg...) com os
-   valores do styles.css, e os tokens do shadcn (--background, --card,
-   --primary...) como ALIASES que apontam para esses primitivos.
-   No .dark só trocamos os primitivos; os aliases se resolvem sozinhos.
+   We define the design's PRIMITIVES (--bg, --surface, --fg...) with the
+   values from styles.css, and shadcn's tokens (--background, --card,
+   --primary...) as ALIASES pointing at those primitives.
+   In .dark we only swap the primitives; the aliases resolve on their own.
 ───────────────────────────────────────────────────────────── */
 :root {
   --bg: #fbfaf7;
@@ -91,9 +91,9 @@
   --warn: #f59e0b;
   --ok: #10b981;
   --info: #3b82f6;
-  --radius: 0.875rem; /* 14px do design */
+  --radius: 0.875rem; /* design's 14px */
 
-  /* aliases shadcn → primitivos do design */
+  /* shadcn → design primitives aliases */
   --background: var(--bg);
   --foreground: var(--fg);
   --card: var(--surface);
@@ -126,7 +126,7 @@
   --sidebar-ring: var(--brand);
 }
 
-/* ── Dark → só os primitivos mudam ── */
+/* ── Dark → only the primitives change ── */
 .dark {
   --bg: #0e1311;
   --bg-2: #161c19;

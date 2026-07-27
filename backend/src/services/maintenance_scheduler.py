@@ -9,41 +9,41 @@ from src.schemas.maintenance import MaintenanceTaskCreate
 
 logger = logging.getLogger(__name__)
 
-# Intervalo em segundos entre cada ciclo do agendador
+# Interval in seconds between each scheduler cycle
 _SCHEDULER_INTERVAL_SECONDS = 60
 
-# VACUUM_FULL não pode ser agendado automaticamente:
-# requer lock exclusivo na tabela — bloquearia leitura e escrita.
-# Só deve ser executado manualmente via POST /maintenance/run com
-# janela de manutenção planejada e target_table explícito.
+# VACUUM_FULL cannot be scheduled automatically:
+# it requires an exclusive lock on the table — would block reads and writes.
+# Should only be run manually via POST /maintenance/run with a
+# planned maintenance window and an explicit target_table.
 _UNSCHEDULABLE = {TaskType.VACUUM_FULL}
 
 
 def poll_schedules_once() -> None:
     """
-    Verificar quais MaintenanceSchedules devem ser executados agora.
+    Checks which MaintenanceSchedules should run now.
 
-    Estratégia de despacho:
-    1. Buscar todos os schedules ativos cuja next_run_at <= agora
-    2. Para cada schedule: avançar next_run_at ANTES de executar
-       (evita re-despacho se a execução demorar mais que _SCHEDULER_INTERVAL_SECONDS)
-    3. Verificar se a instância está RUNNING (skip se STOPPED/FAILED/DELETED)
-    4. Executar a tarefa (bloqueante — roda em thread via asyncio.to_thread)
+    Dispatch strategy:
+    1. Fetch all active schedules whose next_run_at <= now
+    2. For each schedule: advance next_run_at BEFORE executing
+       (avoids re-dispatch if execution takes longer than _SCHEDULER_INTERVAL_SECONDS)
+    3. Check whether the instance is RUNNING (skip if STOPPED/FAILED/DELETED)
+    4. Execute the task (blocking — runs in a thread via asyncio.to_thread)
 
-    Por que avançar next_run_at antes de executar?
-    Se avançarmos depois, e a tarefa demorar 2 minutos (REINDEX em tabela grande),
-    o próximo ciclo do poller (60s) encontraria o mesmo schedule com next_run_at
-    ainda no passado e despacharia novamente — duplicando a execução.
-    Avançar antes garante que schedules concorrentes nunca duplicam.
+    Why advance next_run_at before executing?
+    If we advanced it afterward, and the task takes 2 minutes (REINDEX on a large table),
+    the poller's next cycle (60s) would find the same schedule with next_run_at
+    still in the past and dispatch it again — duplicating the execution.
+    Advancing beforehand guarantees concurrent schedules never duplicate.
 
-    Por que checar InstanceStatus.RUNNING?
-    VACUUM/REINDEX em container parado resultaria em ConnectionError e task FAILED.
-    Mais importante: se a instância está STOPPED, não faz sentido manutenção —
-    simplesmente pulamos e o schedule continua agendado para o próximo horário.
+    Why check InstanceStatus.RUNNING?
+    VACUUM/REINDEX on a stopped container would result in a ConnectionError and a FAILED task.
+    More importantly: if the instance is STOPPED, maintenance doesn't make sense —
+    we simply skip it and the schedule stays scheduled for its next time.
 
-    Por que síncrono?
-    Esta função é chamada via asyncio.to_thread() — pode fazer operações
-    bloqueantes (SQL + psycopg) sem travar o event loop dos requests HTTP.
+    Why synchronous?
+    This function is called via asyncio.to_thread() — it can do
+    blocking operations (SQL + psycopg) without blocking the HTTP requests' event loop.
     """
     from src.services.maintenance import advance_schedule, run_task
 
@@ -67,7 +67,7 @@ def poll_schedules_once() -> None:
         )
 
         for schedule in due_schedules:
-            # Avançar next_run_at ANTES de executar
+            # Advance next_run_at BEFORE executing
             advance_schedule(db, schedule)
 
             instance = (
@@ -77,20 +77,20 @@ def poll_schedules_once() -> None:
             )
             if instance is None:
                 logger.warning(
-                    "Schedule %s sem instância correspondente — pulando",
+                    "Schedule %s has no matching instance — skipping",
                     schedule.id,
                 )
                 continue
 
             task_data = MaintenanceTaskCreate(
                 task_type=schedule.task_type,
-                target_table=None,  # schedules automáticos nunca têm target_table
+                target_table=None,  # automatic schedules never have a target_table
             )
 
             try:
                 task = run_task(db, instance, task_data)
                 logger.info(
-                    "Manutenção agendada executada: schedule=%s instance=%s "
+                    "Scheduled maintenance executed: schedule=%s instance=%s "
                     "task_type=%s task_id=%s status=%s",
                     schedule.id,
                     instance.id,
@@ -100,8 +100,8 @@ def poll_schedules_once() -> None:
                 )
             except Exception as exc:
                 logger.error(
-                    "Erro ao executar manutenção agendada: schedule=%s instance=%s "
-                    "task_type=%s erro=%s",
+                    "Error running scheduled maintenance: schedule=%s instance=%s "
+                    "task_type=%s error=%s",
                     schedule.id,
                     instance.id,
                     schedule.task_type.value,
@@ -109,27 +109,27 @@ def poll_schedules_once() -> None:
                 )
 
     except Exception as exc:
-        logger.error("Erro no ciclo do maintenance scheduler: %s", exc)
+        logger.error("Error in maintenance scheduler cycle: %s", exc)
     finally:
         db.close()
 
 
 async def maintenance_scheduling_loop(stop_event: asyncio.Event) -> None:
     """
-    Loop assíncrono do agendador de manutenção.
+    Async loop of the maintenance scheduler.
 
-    Usa o mesmo padrão dos outros pollers (status_poller, metrics_poller,
-    backup_scheduler): asyncio.to_thread() para não bloquear o event loop,
-    asyncio.wait_for() para timeout de segurança.
+    Uses the same pattern as the other pollers (status_poller, metrics_poller,
+    backup_scheduler): asyncio.to_thread() so it doesn't block the event loop,
+    asyncio.wait_for() for a safety timeout.
 
-    O timeout (180s) é maior que _SCHEDULER_INTERVAL_SECONDS (60s) para dar
-    margem a REINDEX em tabelas grandes, mas evitar que um schedule travado
-    bloqueie todos os subsequentes indefinidamente.
+    The timeout (180s) is larger than _SCHEDULER_INTERVAL_SECONDS (60s) to give
+    margin for REINDEX on large tables, while still avoiding a stuck schedule
+    blocking all subsequent ones indefinitely.
 
-    O stop_event vem do lifespan do FastAPI — é setado no shutdown para
-    encerrar o loop graciosamente.
+    stop_event comes from FastAPI's lifespan — it's set on shutdown to
+    end the loop gracefully.
     """
-    logger.info("Maintenance scheduling loop iniciado")
+    logger.info("Maintenance scheduling loop started")
     while not stop_event.is_set():
         try:
             await asyncio.wait_for(
@@ -138,10 +138,10 @@ async def maintenance_scheduling_loop(stop_event: asyncio.Event) -> None:
             )
         except asyncio.TimeoutError:
             logger.warning(
-                "Ciclo do maintenance scheduler excedeu 180s de timeout"
+                "Maintenance scheduler cycle exceeded the 180s timeout"
             )
         except Exception as exc:
-            logger.error("Exceção inesperada no maintenance scheduling loop: %s", exc)
+            logger.error("Unexpected exception in maintenance scheduling loop: %s", exc)
 
         try:
             await asyncio.wait_for(
@@ -151,4 +151,4 @@ async def maintenance_scheduling_loop(stop_event: asyncio.Event) -> None:
         except asyncio.TimeoutError:
             pass
 
-    logger.info("Maintenance scheduling loop encerrado")
+    logger.info("Maintenance scheduling loop stopped")

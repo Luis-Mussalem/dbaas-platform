@@ -9,16 +9,16 @@ from src.services.metrics import get_connection
 
 logger = logging.getLogger(__name__)
 
-# Intervalo entre ciclos de medição de lag
+# Interval between lag measurement cycles
 _POLL_INTERVAL_SECONDS = 30
 
-# Acima deste atraso (1 segmento WAL = 16 MiB) a réplica é considerada em CATCHUP,
-# não em STREAMING estável — sinaliza que ainda está alcançando o primário.
+# Above this delay (1 WAL segment = 16 MiB) the replica is considered in CATCHUP,
+# not stable STREAMING — it signals it's still catching up to the primary.
 _CATCHUP_THRESHOLD_BYTES = 16 * 1024 * 1024
 
-# pg_stat_replication vive no PRIMÁRIO e lista cada standby conectado. Medimos o
-# atraso de replay em bytes (quanto o standby está atrás do WAL atual) e em
-# segundos (replay_lag). Ordena pelo pior atraso primeiro.
+# pg_stat_replication lives on the PRIMARY and lists each connected standby. We measure the
+# replay delay in bytes (how far behind the standby is from the current WAL) and in
+# seconds (replay_lag). Ordered by the worst delay first.
 _LAG_QUERY = """
     SELECT
         pg_wal_lsn_diff(pg_current_wal_lsn(), replay_lsn)::bigint AS lag_bytes,
@@ -30,14 +30,14 @@ _LAG_QUERY = """
 
 def poll_replication_once() -> None:
     """
-    Atualizar estado e lag de cada réplica ativa consultando o primário.
+    Updates the state and lag of each active replica by querying the primary.
 
-    Mesmo padrão dos demais pollers: SessionLocal() próprio, try/rollback por
-    grupo (uma réplica problemática não derruba as outras), finally: close.
+    Same pattern as the other pollers: its own SessionLocal(), try/rollback per
+    group (a problematic replica doesn't take down the others), finally: close.
 
-    Simplificação assumida: um primário costuma ter um standby. Quando há mais de
-    uma réplica no mesmo primário, aplicamos o pior lag observado a todas — sem
-    tentar casar linha↔réplica por application_name (fora do escopo do projeto).
+    Assumed simplification: a primary usually has one standby. When there's more than
+    one replica on the same primary, we apply the worst observed lag to all of them — without
+    trying to match row↔replica by application_name (out of scope for this project).
     """
     db = SessionLocal()
     try:
@@ -66,7 +66,7 @@ def poll_replication_once() -> None:
                     )
                     .first()
                 )
-                # Primário indisponível → não há como medir; marca desconectado.
+                # Primary unavailable → no way to measure; marks disconnected.
                 if not primary or primary.status != InstanceStatus.RUNNING:
                     for replica in group:
                         replica.replication_state = ReplicationState.DISCONNECTED
@@ -92,14 +92,14 @@ def poll_replication_once() -> None:
                         replica.lag_seconds = lag_seconds
                         replica.replication_state = state
                 else:
-                    # Sem linhas no primário → nenhum standby transmitindo.
+                    # No rows on the primary → no standby is streaming.
                     for replica in group:
                         replica.replication_state = ReplicationState.DISCONNECTED
                 db.commit()
             except Exception as exc:
                 db.rollback()
                 logger.exception(
-                    "Erro ao medir replicação do primário %s: %s", primary_id, exc
+                    "Error measuring replication for primary %s: %s", primary_id, exc
                 )
     finally:
         db.close()
@@ -107,25 +107,25 @@ def poll_replication_once() -> None:
 
 async def replication_polling_loop(stop_event: asyncio.Event) -> None:
     """
-    Loop async que executa poll_replication_once() a cada _POLL_INTERVAL_SECONDS.
+    Async loop that runs poll_replication_once() every _POLL_INTERVAL_SECONDS.
 
-    Mesmo shutdown limpo dos demais pollers (asyncio.wait_for sobre o stop_event);
-    o trabalho bloqueante (SQL na plataforma + psycopg no primário) vai para o
-    thread pool via asyncio.to_thread para não travar o event loop.
+    Same clean shutdown as the other pollers (asyncio.wait_for on the stop_event);
+    the blocking work (SQL on the platform + psycopg on the primary) goes to the
+    thread pool via asyncio.to_thread so it doesn't block the event loop.
     """
     logger.info(
-        "Replication poller iniciado (intervalo: %ds)", _POLL_INTERVAL_SECONDS
+        "Replication poller started (interval: %ds)", _POLL_INTERVAL_SECONDS
     )
 
     while not stop_event.is_set():
         try:
             await asyncio.to_thread(poll_replication_once)
         except Exception as exc:
-            logger.exception("Erro no ciclo de medição de replicação: %s", exc)
+            logger.exception("Error in replication measurement cycle: %s", exc)
 
         try:
             await asyncio.wait_for(stop_event.wait(), timeout=_POLL_INTERVAL_SECONDS)
         except asyncio.TimeoutError:
             pass
 
-    logger.info("Replication poller encerrado")
+    logger.info("Replication poller stopped")

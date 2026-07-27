@@ -36,26 +36,26 @@ import type {
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8001/api/v1";
 
-// Os tokens vivem em cookies HttpOnly gravados pelo backend (login/refresh) —
-// JavaScript não lê nem escreve nada de sessão. Todo fetch vai com
-// credentials: "include" e o navegador anexa os cookies sozinho.
+// The tokens live in HttpOnly cookies written by the backend (login/refresh) —
+// JavaScript neither reads nor writes anything about the session. Every fetch goes with
+// credentials: "include" and the browser attaches the cookies on its own.
 
-// Empresa-ativa do superuser (Stage B). Gravada pelo WorkspaceSwitcher em
-// "active_company_id"; enviada no header X-Company-Id para o backend filtrar.
-// Ausente = superuser vê todas; para usuário comum o backend ignora o header.
-// (Não é credencial — pode ficar em localStorage.)
+// Superuser's active company (Stage B). Written by the WorkspaceSwitcher into
+// "active_company_id"; sent in the X-Company-Id header for the backend to filter by.
+// Absent = superuser sees all; for a regular user the backend ignores the header.
+// (Not a credential — it can live in localStorage.)
 function getActiveCompany(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem("active_company_id");
 }
 
-// Dedupe: se várias requisições tomarem 401 ao mesmo tempo, todas reutilizam
-// a MESMA promessa de refresh, em vez de dispararem N refreshes concorrentes.
-// Análogo ao singleton get_provisioner() do backend (@lru_cache).
+// Dedupe: if several requests get a 401 at the same time, they all reuse
+// the SAME refresh promise instead of firing N concurrent refreshes.
+// Analogous to the backend's singleton get_provisioner() (@lru_cache).
 let refreshPromise: Promise<boolean> | null = null;
 
-// Tenta renovar a sessão: o backend lê o refresh token do cookie HttpOnly e,
-// se válido, devolve os novos tokens já gravados em cookies na resposta.
+// Tries to renew the session: the backend reads the refresh token from the HttpOnly
+// cookie and, if valid, returns the new tokens already written to cookies in the response.
 async function refreshAccessToken(): Promise<boolean> {
   if (!refreshPromise) {
     refreshPromise = fetch(`${API_BASE}/auth/refresh`, {
@@ -65,7 +65,7 @@ async function refreshAccessToken(): Promise<boolean> {
       .then((res) => res.ok)
       .catch(() => false)
       .finally(() => {
-        // Libera o "lock" para futuras renovações depois que esta terminar.
+        // Releases the "lock" for future renewals once this one finishes.
         refreshPromise = null;
       });
   }
@@ -73,11 +73,11 @@ async function refreshAccessToken(): Promise<boolean> {
   return refreshPromise;
 }
 
-// Normaliza o corpo de erro do backend para UMA string legível.
-// - HTTPException comum → `detail` é string (ex.: "User not found").
-// - Erro de validação 422 → `detail` é uma LISTA de { loc, msg, type }; sem
-//   isto, `new Error(lista)` viraria "[object Object]" na tela.
-// O prefixo "Value error, " (que o Pydantic adiciona a ValueError) é removido.
+// Normalizes the backend's error body into ONE readable string.
+// - Regular HTTPException → `detail` is a string (e.g.: "User not found").
+// - 422 validation error → `detail` is a LIST of { loc, msg, type }; without
+//   this, `new Error(list)` would show up as "[object Object]" on screen.
+// The "Value error, " prefix (which Pydantic adds to ValueError) is stripped.
 function extractErrorMessage(body: unknown): string {
   if (typeof body === "string") return body;
   if (body && typeof body === "object") {
@@ -103,9 +103,9 @@ async function request<T>(
   options: RequestInit = {},
   retry = true
 ): Promise<T> {
-  // Não fazemos refresh nos próprios endpoints de autenticação:
-  // - /auth/login pode dar 401 por senha errada (não é token expirado)
-  // - /auth/refresh é a própria renovação (evita recursão infinita)
+  // We don't refresh on the auth endpoints themselves:
+  // - /auth/login can 401 for a wrong password (not an expired token)
+  // - /auth/refresh is the renewal itself (avoids infinite recursion)
   const isAuthEndpoint =
     path.startsWith("/auth/login") || path.startsWith("/auth/refresh");
 
@@ -121,16 +121,16 @@ async function request<T>(
     },
   });
 
-  // Coração da correção: token expirou → tenta renovar uma vez e repete.
+  // The heart of the fix: token expired → try to renew once and retry.
   if (response.status === 401 && retry && !isAuthEndpoint) {
     const refreshed = await refreshAccessToken();
     if (refreshed) {
-      // retry=false garante que repetimos a chamada UMA única vez.
+      // retry=false guarantees we repeat the call exactly ONCE.
       return request<T>(path, options, false);
     }
-    // Refresh falhou → sessão morta: manda para o login. (Cookies HttpOnly
-    // não podem ser apagados por JS; o próximo login os sobrescreve.)
-    // Guard contra loop de reload quando o 401 acontece na própria /login.
+    // Refresh failed → session is dead: send to login. (HttpOnly cookies
+    // can't be cleared by JS; the next login overwrites them.)
+    // Guard against a reload loop when the 401 happens on /login itself.
     if (typeof window !== "undefined" && window.location.pathname !== "/login") {
       window.location.href = "/login";
     }
@@ -165,8 +165,8 @@ export async function login(
   });
 }
 
-// O backend lê os tokens dos cookies HttpOnly, blacklista os dois e limpa os
-// cookies na resposta — nenhum token transita pelo corpo.
+// The backend reads the tokens from the HttpOnly cookies, blacklists both and clears
+// the cookies in the response — no token travels through the body.
 export async function logout(): Promise<void> {
   return request<void>("/auth/logout", {
     method: "POST",
@@ -178,9 +178,9 @@ export async function getCurrentUser(): Promise<User> {
   return request<User>("/auth/me");
 }
 
-// Atualiza o próprio usuário (email e/ou senha). O backend só permite alterar a
-// própria conta (PATCH /users/{id} retorna 403 para outro id) — coerente com o
-// modelo single-operator. Campos omitidos não são alterados.
+// Updates the current user (email and/or password). The backend only allows changing
+// one's own account (PATCH /users/{id} returns 403 for another id) — consistent with the
+// single-operator model. Omitted fields are left unchanged.
 export async function updateUser(
   userId: string,
   data: { email?: string; password?: string }
@@ -193,9 +193,9 @@ export async function updateUser(
 
 // ─── Companies (multi-tenant) ─────────────────────────────────────────────────
 
-// Lista todas as empresas. O backend restringe a superuser (403 para os demais),
-// então só o switcher do superuser chama isto. O usuário comum recebe a própria
-// empresa via /auth/me (campo `company`), sem precisar desta lista.
+// Lists all companies. The backend restricts this to a superuser (403 for others),
+// so only the superuser's switcher calls it. A regular user gets their own
+// company via /auth/me (the `company` field), without needing this list.
 export async function listCompanies(): Promise<Company[]> {
   return request<Company[]>("/companies");
 }
@@ -206,9 +206,9 @@ export async function listInstances(): Promise<Instance[]> {
   return request<Instance[]>("/instances");
 }
 
-// Estado agregado de TODAS as instâncias do escopo numa chamada. Existe para
-// o grid de cards: sem ela, cada card puxaria alertas, backups, uptime e
-// métricas por conta própria (N instâncias × 4 requests a cada poll).
+// Aggregated state of ALL instances in scope in one call. Exists for
+// the card grid: without it, each card would pull alerts, backups, uptime and
+// metrics on its own (N instances × 4 requests on every poll).
 export async function getFleetSummary(): Promise<FleetSummary> {
   return request<FleetSummary>("/instances/fleet-summary");
 }
@@ -298,14 +298,14 @@ export async function getHealth(instanceId: string): Promise<HealthCheck> {
   return request<HealthCheck>(`/instances/${instanceId}/health`);
 }
 
-// Série temporal de uma métrica (para sparklines/gráficos). Lê do histórico
-// já coletado pelo poller — funciona mesmo com a instância parada.
+// Time series for a metric (for sparklines/charts). Reads from the history
+// already collected by the poller — works even while the instance is stopped.
 export async function getMetricHistory(
   instanceId: string,
   metric: string,
   window: MetricWindow = "1h",
-  // Resolução pedida ao backend: a série vem reamostrada em até N baldes.
-  // Um sparkline de card pede menos que um gráfico de página inteira.
+  // Resolution requested from the backend: the series comes back resampled into up to N buckets.
+  // A card sparkline asks for fewer than a full page chart.
   points?: number
 ): Promise<MetricHistoryResponse> {
   const qs = new URLSearchParams({ metric, window });
@@ -339,8 +339,8 @@ export async function getLocks(instanceId: string): Promise<LocksResponse> {
   return request<LocksResponse>(`/instances/${instanceId}/locks`);
 }
 
-// Logs do container da instância (stdout/stderr do PostgreSQL). tail = nº de
-// linhas finais. 409 se o container não existir (instância nunca provisionada).
+// Instance container logs (PostgreSQL stdout/stderr). tail = number of
+// trailing lines. 409 if the container doesn't exist (instance never provisioned).
 export async function getInstanceLogs(
   instanceId: string,
   tail = 200
@@ -356,8 +356,8 @@ export async function listReplicas(instanceId: string): Promise<Replica[]> {
   return request<Replica[]>(`/instances/${instanceId}/replicas`);
 }
 
-// Cria um standby em streaming a partir do primário. Operação longa no backend
-// (pg_basebackup + boot do container) — a chamada só resolve ao final.
+// Creates a streaming standby from the primary. Long-running backend operation
+// (pg_basebackup + container boot) — the call only resolves at the end.
 export async function createReplica(instanceId: string): Promise<Replica> {
   return request<Replica>(`/instances/${instanceId}/replicas`, {
     method: "POST",
@@ -374,20 +374,20 @@ export async function promoteReplica(replicaId: string): Promise<Replica> {
 
 // ─── SQL Console ────────────────────────────────────────────────────────────
 
-// Executa um SELECT read-only. O backend rejeita `;`, DML e DDL com 422 e
-// erros do Postgres (tabela inexistente, sintaxe) com 400 — ambos chegam aqui
-// como Error com a mensagem já extraída por extractErrorMessage.
+// Runs a read-only SELECT. The backend rejects `;`, DML and DDL with 422 and
+// Postgres errors (missing table, syntax) with 400 — both arrive here
+// as an Error with the message already extracted by extractErrorMessage.
 export async function runQuery(
   instanceId: string,
   query: string
 ): Promise<QueryResult> {
   return request<QueryResult>(`/instances/${instanceId}/query`, {
     method: "POST",
-    body: JSON.stringify({ query }), // campo "query" espelha o schema QueryRequest
+    body: JSON.stringify({ query }), // "query" field mirrors the QueryRequest schema
   });
 }
 
-// Plano de execução do mesmo SELECT (reusa o endpoint /explain já existente).
+// Execution plan for the same SELECT (reuses the existing /explain endpoint).
 export async function explainQuery(
   instanceId: string,
   query: string
@@ -519,8 +519,8 @@ export async function resolveAlertEvent(eventId: string): Promise<AlertEvent> {
 
 // ─── Users (admin) ────────────────────────────────────────────────────────────
 
-// Usa o query param company_id explícito — independente do WorkspaceSwitcher,
-// pois o admin quer controlar o filtro da tabela manualmente.
+// Uses the explicit company_id query param — independent of the WorkspaceSwitcher,
+// since the admin wants to control the table's filter manually.
 export async function listUsers(companyId?: string): Promise<User[]> {
   const qs = companyId ? `?company_id=${companyId}` : "";
   return request<User[]>(`/users${qs}`);

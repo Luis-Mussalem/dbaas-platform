@@ -1,12 +1,12 @@
 """
-Guard SELECT-only — defesa em profundidade para execução de SQL read-only.
+SELECT-only guard — defense in depth for read-only SQL execution.
 
-Originalmente embutido em ``collect_explain`` (EXPLAIN ANALYZE executa a query
-de verdade). Extraído aqui para ser reusado pelo Console SQL (FRONTEND F7), que
-executa SELECTs arbitrários do usuário contra o banco da instância.
+Originally embedded in ``collect_explain`` (EXPLAIN ANALYZE actually executes the
+query). Extracted here to be reused by the SQL Console (FRONTEND F7), which
+executes arbitrary user SELECTs against the instance's database.
 
-As 4 checagens rodam ANTES de qualquer uso da conexão: numa entrada inválida a
-função levanta ``ValueError`` sem nunca tocar no banco.
+The 4 checks run BEFORE any use of the connection: on invalid input the
+function raises ``ValueError`` without ever touching the database.
 """
 import re
 
@@ -21,13 +21,13 @@ BLOCKED_KEYWORDS = {
 
 def assert_read_only_select(query: str) -> None:
     """
-    Levanta ``ValueError`` se ``query`` não for um único SELECT puro.
+    Raises ``ValueError`` if ``query`` is not a single pure SELECT.
 
-    Defesa em profundidade:
-    1. Tamanho máximo: evita queries enormes que consumam memória excessiva.
-    2. Ponto-e-vírgula proibido: bloqueia múltiplos statements em sequência.
-    3. ``startswith('select')``: verificação primária.
-    4. Blacklist de keywords DML/DDL: bloqueia SELECT ... FROM (DELETE ...) etc.
+    Defense in depth:
+    1. Max length: avoids huge queries that consume excessive memory.
+    2. Semicolon forbidden: blocks multiple statements in sequence.
+    3. ``startswith('select')``: primary check.
+    4. DML/DDL keyword blacklist: blocks SELECT ... FROM (DELETE ...) etc.
     """
     if len(query) > MAX_QUERY_LEN:
         raise ValueError(
@@ -46,8 +46,8 @@ def assert_read_only_select(query: str) -> None:
             f"Received: '{query[:80]}'"
         )
 
-    # Bloquear keywords destrutivos mesmo dentro de SELECT
-    # (ex: SELECT * FROM (DELETE ... RETURNING *) t)
+    # Block destructive keywords even inside a SELECT
+    # (e.g.: SELECT * FROM (DELETE ... RETURNING *) t)
     tokens = set(re.findall(r"[a-z]+", normalized))
     blocked = tokens & BLOCKED_KEYWORDS
     if blocked:

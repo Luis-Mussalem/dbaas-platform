@@ -9,9 +9,9 @@ import { useFormatters } from "@/hooks/use-formatters";
 import { DASHBOARD_POLL_MS } from "@/lib/constants";
 import { actorLabel, isAuditAction, toneFor, type Tone } from "@/lib/audit";
 
-// Cor do avatar por tom semântico. O tom vem da fonte única lib/audit.ts —
-// antes era derivado aqui por substring da ação, e discordava da tela de
-// Auditoria (login saía verde aqui e cinza lá).
+// Avatar color by semantic tone. The tone comes from the single source lib/audit.ts —
+// it used to be derived here by substring-matching the action, and disagreed with the
+// Audit screen (login came out green here and gray there).
 const TONE_CLS: Record<Tone, string> = {
   ok: "text-ok bg-ok/12",
   danger: "text-danger bg-danger/12",
@@ -62,8 +62,8 @@ export function ActivityFeed() {
         <ul className="flex flex-col">
           {logs.map((log) => {
             const isSystem = !log.user_id;
-            // Nome real do ator (nome@empresa); cai em "operator" se o usuário
-            // foi deletado (user_id presente, mas sem email no join).
+            // Actor's real name (name@company); falls back to "operator" if the user
+            // was deleted (user_id present, but no email from the join).
             const actor = isSystem ? t("system") : actorLabel(log.user_email) ?? t("operator");
             return (
               <li
@@ -79,7 +79,7 @@ export function ActivityFeed() {
                 </div>
                 <p className="flex-1 text-[12.5px] leading-snug text-fg-2">
                   <span className="font-medium text-foreground">{actor}</span>{" "}
-                  {/* Ação desconhecida (backend novo) → mostra a chave crua. */}
+                  {/* Unknown action (new backend) → shows the raw key. */}
                   {isAuditAction(log.action) ? tAction(log.action) : log.action}
                   {log.resource_id && (
                     <span className="font-mono text-foreground"> {shortId(log.resource_id)}</span>

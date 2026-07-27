@@ -1,11 +1,11 @@
 """
-Testes do fluxo de autenticação: registro, login, /me, refresh e logout.
+Tests for the authentication flow: register, login, /me, refresh, and logout.
 
-Cobrem o caminho feliz e as regras de segurança principais:
-- registro travado quando já existe usuário (single-operator / lockout)
-- política de senha forte
-- rotação de refresh token (o antigo é blacklistado)
-- logout invalida o access token (blacklist)
+Cover the happy path and the main security rules:
+- registration locked once a user already exists (single-operator / lockout)
+- strong password policy
+- refresh token rotation (the old one is blacklisted)
+- logout invalidates the access token (blacklist)
 """
 from tests.conftest import TEST_PASSWORD
 
@@ -13,7 +13,7 @@ API = "/api/v1/auth"
 
 
 def _login(client, email: str, password: str = TEST_PASSWORD):
-    """Helper: faz login via OAuth2 form e retorna a resposta."""
+    """Helper: logs in via the OAuth2 form and returns the response."""
     return client.post(
         f"{API}/login",
         data={"username": email, "password": password},
@@ -21,12 +21,12 @@ def _login(client, email: str, password: str = TEST_PASSWORD):
 
 
 # --------------------------------------------------------------------------- #
-# Registro
+# Registration
 # --------------------------------------------------------------------------- #
 
 
 def test_register_first_user_succeeds(client):
-    # Sem usuários no banco, o primeiro registro é permitido (setup inicial).
+    # With no users in the database, the first registration is allowed (initial setup).
     resp = client.post(
         f"{API}/register",
         json={"email": "first@example.com", "password": TEST_PASSWORD},
@@ -34,11 +34,11 @@ def test_register_first_user_succeeds(client):
     assert resp.status_code == 201
     body = resp.json()
     assert body["email"] == "first@example.com"
-    assert "hashed_password" not in body  # nunca expor o hash
+    assert "hashed_password" not in body  # never expose the hash
 
 
 def test_register_blocked_when_users_exist(client, make_user):
-    # Já existindo um usuário e REGISTRATION_ENABLED=false, novos registros 403.
+    # With a user already existing and REGISTRATION_ENABLED=false, new registrations get 403.
     make_user(email="existing@example.com")
     resp = client.post(
         f"{API}/register",
@@ -48,7 +48,7 @@ def test_register_blocked_when_users_exist(client, make_user):
 
 
 def test_register_weak_password_rejected(client):
-    # Senha curta/fraca é barrada pelo validador do schema (422).
+    # A short/weak password is blocked by the schema's validator (422).
     resp = client.post(
         f"{API}/register",
         json={"email": "weak@example.com", "password": "weak"},
@@ -89,7 +89,7 @@ def test_inactive_user_cannot_login(client, make_user):
 
 
 # --------------------------------------------------------------------------- #
-# Cookies HttpOnly (frontend usa cookies; header Authorization tem precedência)
+# HttpOnly cookies (frontend uses cookies; the Authorization header takes precedence)
 # --------------------------------------------------------------------------- #
 
 
@@ -108,7 +108,7 @@ def test_login_sets_httponly_cookies(client, make_user):
 
 
 def test_me_authenticates_via_cookie_only(client, make_user):
-    # Sem header Authorization: o cookie gravado no login basta para /me.
+    # Without an Authorization header: the cookie written at login is enough for /me.
     make_user(email="cookie-me@example.com")
     _login(client, "cookie-me@example.com")
 
@@ -121,12 +121,12 @@ def test_refresh_via_cookie_rotates_tokens(client, make_user):
     make_user(email="cookie-refresh@example.com")
     old_refresh = _login(client, "cookie-refresh@example.com").json()["refresh_token"]
 
-    # Sem header nem corpo: o refresh_token vem do cookie.
+    # No header or body: the refresh_token comes from the cookie.
     resp = client.post(f"{API}/refresh")
     assert resp.status_code == 200
     assert resp.json()["access_token"]
 
-    # Rotação também vale no fluxo por cookie: o refresh antigo foi blacklistado.
+    # Rotation also applies to the cookie flow: the old refresh token was blacklisted.
     reuse = client.post(
         f"{API}/refresh",
         headers={"Authorization": f"Bearer {old_refresh}"},
@@ -141,7 +141,7 @@ def test_logout_clears_cookies(client, make_user):
     resp = client.post(f"{API}/logout")
     assert resp.status_code == 200
 
-    # Cookies limpos na resposta (Max-Age=0) e sessão morta para o cliente.
+    # Cookies cleared in the response (Max-Age=0) and the session dead for the client.
     set_cookies = resp.headers.get_list("set-cookie")
     cleared = [c.split("=", 1)[0] for c in set_cookies if 'Max-Age=0' in c]
     assert "access_token" in cleared
@@ -185,7 +185,7 @@ def test_refresh_returns_new_tokens(client, make_user):
 
 
 def test_old_refresh_token_is_blacklisted_after_use(client, make_user):
-    # Rotação: usar o refresh token uma vez deve invalidá-lo para reuso.
+    # Rotation: using the refresh token once should invalidate it for reuse.
     make_user(email="rotate@example.com")
     refresh_token = _login(client, "rotate@example.com").json()["refresh_token"]
 
@@ -195,7 +195,7 @@ def test_old_refresh_token_is_blacklisted_after_use(client, make_user):
     )
     assert first.status_code == 200
 
-    # Reusar o MESMO refresh token agora deve falhar (já está na blacklist).
+    # Reusing the SAME refresh token should now fail (already blacklisted).
     second = client.post(
         f"{API}/refresh",
         headers={"Authorization": f"Bearer {refresh_token}"},
@@ -204,7 +204,7 @@ def test_old_refresh_token_is_blacklisted_after_use(client, make_user):
 
 
 def test_access_token_rejected_on_refresh_endpoint(client, auth_headers):
-    # O endpoint /refresh exige um token do tipo "refresh", não "access".
+    # The /refresh endpoint requires a "refresh"-type token, not "access".
     headers, _ = auth_headers(email="typecheck@example.com")
     resp = client.post(f"{API}/refresh", headers=headers)
     assert resp.status_code == 401
@@ -221,11 +221,11 @@ def test_logout_blacklists_access_token(client, make_user):
     access = tokens["access_token"]
     headers = {"Authorization": f"Bearer {access}"}
 
-    # /me funciona antes do logout
+    # /me works before logout
     assert client.get(f"{API}/me", headers=headers).status_code == 200
 
     logout = client.post(f"{API}/logout", headers=headers)
     assert logout.status_code == 200
 
-    # Após o logout, o mesmo access token está blacklistado → 401
+    # After logout, the same access token is blacklisted → 401
     assert client.get(f"{API}/me", headers=headers).status_code == 401

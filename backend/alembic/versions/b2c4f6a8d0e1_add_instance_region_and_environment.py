@@ -20,12 +20,12 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Cria o tipo enum 'environment' antes de adicionar a coluna que o usa.
-    # checkfirst=True torna a migration idempotente caso o tipo já exista.
+    # Creates the 'environment' enum type before adding the column that uses it.
+    # checkfirst=True makes the migration idempotent if the type already exists.
     #
-    # Os rótulos são os NOMES do enum Python (maiúsculos) — é o que o SQLAlchemy
-    # emite por padrão e a convenção dos enums existentes (instancestatus,
-    # backupstatus...). Usar os values minúsculos aqui quebraria os INSERTs.
+    # The labels are the Python enum's NAMES (uppercase) — that's what SQLAlchemy
+    # emits by default and the convention of the existing enums (instancestatus,
+    # backupstatus...). Using the lowercase values here would break the INSERTs.
     env = postgresql.ENUM(
         'PRODUCTION', 'STAGING', 'DEVELOPMENT', name='environment'
     )
@@ -44,7 +44,7 @@ def upgrade() -> None:
         'database_instances',
         sa.Column(
             'environment',
-            # create_type=False: o tipo já foi criado acima — evita CREATE TYPE duplicado.
+            # create_type=False: the type was already created above — avoids a duplicate CREATE TYPE.
             postgresql.ENUM(
                 'PRODUCTION', 'STAGING', 'DEVELOPMENT',
                 name='environment', create_type=False,

@@ -23,7 +23,7 @@ router = APIRouter(
 @router.post(
     "/{instance_id}/query",
     response_model=QueryResult,
-    summary="Executar um SELECT read-only contra o banco da instância",
+    summary="Run a read-only SELECT against the instance's database",
 )
 async def run_query(
     instance_id: uuid.UUID,
@@ -32,15 +32,15 @@ async def run_query(
     current_user: User = Depends(get_current_user),
 ) -> QueryResult:
     """
-    Console SQL: executa um único SELECT no banco gerenciado e devolve as linhas.
+    SQL Console: runs a single SELECT against the managed database and returns the rows.
 
-    Segurança em camadas (defesa em profundidade):
-    - ``get_instance_if_running`` aplica o scoping multi-tenant (404 entre
-      empresas) e exige status RUNNING (409).
-    - O guard SELECT-only rejeita ``;``, DML e DDL com 422.
-    - A conexão herda ``statement_timeout=30s`` de ``get_connection``.
+    Layered security (defense in depth):
+    - ``get_instance_if_running`` applies multi-tenant scoping (404 across
+      companies) and requires RUNNING status (409).
+    - The SELECT-only guard rejects ``;``, DML, and DDL with 422.
+    - The connection inherits ``statement_timeout=30s`` from ``get_connection``.
     """
-    # get_instance_if_running já garante scoping (404) e status RUNNING (409).
+    # get_instance_if_running already ensures scoping (404) and RUNNING status (409).
     instance = get_instance_if_running(instance_id, db, current_user)
     if not instance.connection_uri:
         raise HTTPException(
@@ -53,14 +53,14 @@ async def run_query(
             query_service.execute_read_only, instance, body.query
         )
     except ValueError as exc:
-        # Guard SELECT-only rejeitou a query (`;`, DML, DDL, não-SELECT, tamanho).
+        # The SELECT-only guard rejected the query (`;`, DML, DDL, non-SELECT, size).
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(exc),
         ) from exc
     except psycopg.Error as exc:
-        # SQL sintaticamente válido para o guard, mas rejeitado pelo Postgres
-        # (tabela inexistente, erro de sintaxe SQL, permissão negada, timeout).
+        # SQL that's syntactically valid for the guard, but rejected by Postgres
+        # (table doesn't exist, SQL syntax error, permission denied, timeout).
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc).strip(),

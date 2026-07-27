@@ -8,8 +8,8 @@ from src.models.backup import BackupStatus, BackupStrategy, BackupType
 
 class BackupRequest(BaseModel):
     """
-    Body para POST /instances/{id}/backups.
-    O operador escolhe apenas a strategy — o tipo é sempre MANUAL neste endpoint.
+    Body for POST /instances/{id}/backups.
+    The operator only chooses the strategy — the type is always MANUAL on this endpoint.
     """
 
     strategy: BackupStrategy = BackupStrategy.LOGICAL
@@ -17,9 +17,9 @@ class BackupRequest(BaseModel):
 
 class BackupRead(BaseModel):
     """
-    Representação de um backup retornada pela API.
-    file_path é o caminho absoluto no host — útil para debug e para restore manual.
-    size_bytes é preenchido apenas após conclusão.
+    Representation of a backup returned by the API.
+    file_path is the absolute path on the host — useful for debugging and manual restores.
+    size_bytes is only filled in after completion.
     """
 
     id: uuid.UUID
@@ -40,10 +40,10 @@ class BackupRead(BaseModel):
 
 class BackupScheduleCreate(BaseModel):
     """
-    Body para POST /instances/{id}/schedules.
-    A cron expression é validada com croniter antes de chegar ao banco.
-    Exemplo de cron: "0 2 * * *" (2 AM todo dia), "*/30 * * * *" (a cada 30 min).
-    retention_days: quantos dias manter os backups criados por este schedule.
+    Body for POST /instances/{id}/schedules.
+    The cron expression is validated with croniter before reaching the database.
+    Cron example: "0 2 * * *" (2 AM every day), "*/30 * * * *" (every 30 min).
+    retention_days: how many days to keep backups created by this schedule.
     """
 
     strategy: BackupStrategy = BackupStrategy.LOGICAL
@@ -66,8 +66,8 @@ class BackupScheduleCreate(BaseModel):
 
 class BackupScheduleUpdate(BaseModel):
     """
-    Body para PATCH /instances/{id}/schedules/{schedule_id}.
-    Todos os campos são opcionais — apenas os fornecidos são atualizados.
+    Body for PATCH /instances/{id}/schedules/{schedule_id}.
+    All fields are optional — only the ones provided are updated.
     """
 
     cron_expression: str | None = None
@@ -91,8 +91,8 @@ class BackupScheduleUpdate(BaseModel):
 
 class BackupScheduleRead(BaseModel):
     """
-    Representação de um BackupSchedule retornada pela API.
-    next_run_at é calculado ao criar e após cada execução.
+    Representation of a BackupSchedule returned by the API.
+    next_run_at is computed on creation and after each run.
     """
 
     id: uuid.UUID

@@ -10,32 +10,32 @@ from src.services.metrics import collect_and_store
 
 logger = logging.getLogger(__name__)
 
-# Retenção: apagar métricas com mais de N dias (padrão: 30 dias)
+# Retention: delete metrics older than N days (default: 30 days)
 METRICS_RETENTION_DAYS = 30
 
-# Limpeza de métricas antigas: uma vez por dia, medida em TEMPO e não em número
-# de ciclos. Contando ciclos, a periodicidade dependia do intervalo de coleta —
-# na demo ele cai para 15s e a limpeza passaria a rodar a cada ~6h de relógio,
-# gastando um DELETE varrendo a tabela sem nada a apagar.
+# Old-metrics cleanup: once a day, measured in TIME rather than in cycle
+# count. Counting cycles, the periodicity would depend on the collection interval —
+# in the demo it drops to 15s and cleanup would end up running every ~6h of wall clock,
+# spending a DELETE that scans the table with nothing to delete.
 _METRICS_CLEANUP_INTERVAL = timedelta(hours=24)
 _last_metrics_cleanup: datetime | None = None
 
 
 def poll_metrics_once() -> None:
     """
-    Coletar e persistir métricas de todas as instâncias RUNNING.
+    Collects and persists metrics for all RUNNING instances.
 
-    Padrão idêntico ao poll_once() do status_poller:
-    - SessionLocal() direto (task de background — fora de contexto HTTP)
-    - Filtro connection_uri IS NOT NULL: garantia defensiva de que o
-      provisionamento foi concluído antes de tentar conectar
-    - Exceção por instância: uma instância problemática não cancela as demais
-    - finally: db.close() sempre executa
+    Identical pattern to status_poller's poll_once():
+    - Direct SessionLocal() (background task — outside HTTP context)
+    - connection_uri IS NOT NULL filter: defensive guarantee that
+      provisioning completed before attempting to connect
+    - Exception per instance: a problematic instance doesn't cancel the rest
+    - finally: db.close() always runs
 
-    Retenção de métricas:
-    - Uma vez a cada _METRICS_CLEANUP_INTERVAL, apaga métricas com mais de
-      METRICS_RETENTION_DAYS dias. Sem retenção, a tabela metrics cresceria
-      ~864.000 linhas/dia com 10 instâncias RUNNING.
+    Metrics retention:
+    - Once every _METRICS_CLEANUP_INTERVAL, deletes metrics older than
+      METRICS_RETENTION_DAYS days. Without retention, the metrics table would grow
+      ~864,000 rows/day with 10 RUNNING instances.
     """
     global _last_metrics_cleanup
 
@@ -55,21 +55,21 @@ def poll_metrics_once() -> None:
             try:
                 count = collect_and_store(db, instance)
                 logger.debug(
-                    "Instância %s: %d métricas coletadas e persistidas",
+                    "Instance %s: %d metrics collected and persisted",
                     instance.id,
                     count,
                 )
             except Exception as exc:
-                # Sem rollback, um commit falho deixa a sessão compartilhada em
-                # PendingRollbackError e derruba as instâncias seguintes do ciclo.
+                # Without a rollback, a failed commit leaves the shared session in
+                # PendingRollbackError and takes down the remaining instances in the cycle.
                 db.rollback()
                 logger.exception(
-                    "Erro ao coletar métricas da instância %s: %s",
+                    "Error collecting metrics for instance %s: %s",
                     instance.id,
                     exc,
                 )
 
-        # Limpeza periódica de métricas antigas
+        # Periodic cleanup of old metrics
         now = datetime.now(timezone.utc)
         if (
             _last_metrics_cleanup is None
@@ -99,30 +99,30 @@ def poll_metrics_once() -> None:
 
 async def metrics_polling_loop(stop_event: asyncio.Event) -> None:
     """
-    Loop async que executa poll_metrics_once() a cada
+    Async loop that runs poll_metrics_once() every
     settings.METRICS_POLL_INTERVAL_SECONDS.
 
-    Padrão idêntico ao status_polling_loop — shutdown limpo via stop_event:
-    asyncio.wait_for(stop_event.wait()) retorna imediatamente quando
-    stop_event.set() é chamado no lifespan do FastAPI, garantindo que
-    a task termina antes do processo encerrar.
+    Identical pattern to status_polling_loop — clean shutdown via stop_event:
+    asyncio.wait_for(stop_event.wait()) returns immediately when
+    stop_event.set() is called in FastAPI's lifespan, ensuring
+    the task finishes before the process exits.
 
-    asyncio.to_thread(): poll_metrics_once() faz I/O bloqueante (SQL no banco
-    da plataforma + psycopg nos bancos das instâncias). Thread pool mantém
-    o event loop livre para processar requests HTTP durante a coleta.
+    asyncio.to_thread(): poll_metrics_once() does blocking I/O (SQL on the
+    platform database + psycopg on the instances' databases). The thread pool keeps
+    the event loop free to process HTTP requests during collection.
     """
     interval = settings.METRICS_POLL_INTERVAL_SECONDS
-    logger.info("Metrics poller iniciado (intervalo: %ds)", interval)
+    logger.info("Metrics poller started (interval: %ds)", interval)
 
     while not stop_event.is_set():
         try:
             await asyncio.to_thread(poll_metrics_once)
         except Exception as exc:
-            logger.exception("Erro no ciclo de coleta de métricas: %s", exc)
+            logger.exception("Error in metrics collection cycle: %s", exc)
 
         try:
             await asyncio.wait_for(stop_event.wait(), timeout=interval)
         except asyncio.TimeoutError:
             continue
 
-    logger.info("Metrics poller encerrado")
+    logger.info("Metrics poller stopped")

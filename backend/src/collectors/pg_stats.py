@@ -5,7 +5,7 @@ import psycopg
 import psycopg.rows
 from psycopg import sql as psql
 
-# Re-export mantém o nome _EXPLAIN_MAX_LEN usado por tests/test_explain_guard.py.
+# Re-export keeps the name _EXPLAIN_MAX_LEN used by tests/test_explain_guard.py.
 from src.core.sql_guard import MAX_QUERY_LEN as _EXPLAIN_MAX_LEN  # noqa: F401
 from src.core.sql_guard import assert_read_only_select
 
@@ -14,23 +14,23 @@ logger = logging.getLogger(__name__)
 
 def collect_base_metrics(conn: psycopg.Connection) -> dict[str, float]:
     """
-    Coletar métricas escalares do banco via pg_stat_database e pg_settings.
+    Collects scalar metrics from the database via pg_stat_database and pg_settings.
 
-    Métricas coletadas:
-    - connections_active: conexões abertas agora neste banco
-    - connections_max: limite total do servidor (max_connections)
-    - blks_hit/blks_read: blocos servidos pelo cache vs. lidos do disco
-    - db_size_bytes: tamanho total do banco em bytes
-    - tup_inserted/updated/deleted/fetched: volume de operações DML
-    - xact_commit/rollback: transações commitadas e abortadas
+    Metrics collected:
+    - connections_active: connections currently open on this database
+    - connections_max: the server's total limit (max_connections)
+    - blks_hit/blks_read: blocks served from cache vs. read from disk
+    - db_size_bytes: total database size in bytes
+    - tup_inserted/updated/deleted/fetched: volume of DML operations
+    - xact_commit/rollback: committed and aborted transactions
 
-    Por que blks_hit/blks_read crus, e não o cache_hit_ratio já calculado?
-    Os contadores do pg_stat_database são VITALÍCIOS e o PostgreSQL os descarta
-    ao reiniciar. A razão sobre o acumulado mede "desde que o servidor subiu",
-    então todo restart devolve o banco a ~0% e a métrica leva horas subindo até
-    o valor real — tempo todo disparando alerta de cache baixo. Quem derruba os
-    contadores em razão de intervalo é services.metrics.collect_and_store, que
-    tem o histórico para comparar com a coleta anterior.
+    Why raw blks_hit/blks_read, and not the already-computed cache_hit_ratio?
+    pg_stat_database's counters are LIFETIME ones and PostgreSQL discards them
+    on restart. The ratio over the cumulative total measures "since the server came up",
+    so every restart brings the database back to ~0% and the metric takes hours to climb
+    back to the real value — the whole time firing a low-cache alert. What derives the
+    counters as a ratio over an interval is services.metrics.collect_and_store,
+    which has the history to compare against the previous collection.
     """
     with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
         cur.execute("""
@@ -62,17 +62,17 @@ def collect_base_metrics(conn: psycopg.Connection) -> dict[str, float]:
 
 def collect_latency_percentiles(conn: psycopg.Connection) -> dict[str, float]:
     """
-    P50/P95/P99 do tempo médio de execução (ms) entre as queries monitoradas.
+    P50/P95/P99 of mean execution time (ms) across the monitored queries.
 
-    Aproximação honesta: percentis sobre o mean_exec_time por *fingerprint* de
-    query — o pg_stat_statements agrega por query normalizada e não guarda
-    amostras por execução individual. Os três percentis saem da MESMA query
-    (percentile_cont aceita um array), então medir p50 e p99 além do p95 não
-    custa nenhuma ida extra ao banco.
+    An honest approximation: percentiles over mean_exec_time per query
+    *fingerprint* — pg_stat_statements aggregates by normalized query and doesn't keep
+    per-execution samples. All three percentiles come from the SAME query
+    (percentile_cont accepts an array), so measuring p50 and p99 alongside p95 costs
+    no extra trip to the database.
 
-    Requer a extensão instalada; instâncias sem ela devolvem {} (mesmo degrade
-    gracioso de collect_slow_queries), caso em que as métricas simplesmente não
-    são persistidas naquele ciclo.
+    Requires the extension to be installed; instances without it return {} (same
+    graceful degradation as collect_slow_queries), in which case the metrics simply
+    aren't persisted that cycle.
     """
     try:
         with conn.cursor() as cur:
@@ -91,7 +91,7 @@ def collect_latency_percentiles(conn: psycopg.Connection) -> dict[str, float]:
                 "p99_query_latency_ms": round(float(p99), 2),
             }
     except Exception as exc:
-        logger.warning("Percentis de latência não disponíveis nesta instância: %s", exc)
+        logger.warning("Latency percentiles not available on this instance: %s", exc)
         return {}
 
 
@@ -100,14 +100,14 @@ def collect_slow_queries(
     limit: int = 20,
 ) -> list[dict[str, Any]]:
     """
-    Retornar as queries mais lentas via pg_stat_statements.
+    Returns the slowest queries via pg_stat_statements.
 
-    Requer a extensão pg_stat_statements instalada no banco da instância.
-    Em instâncias sem a extensão (provisionadas antes do Passo 1 da FASE 4),
-    retorna lista vazia com log de aviso em vez de levantar exceção.
+    Requires the pg_stat_statements extension to be installed on the instance's database.
+    On instances without the extension (provisioned before PHASE 4 Step 1),
+    returns an empty list with a warning log instead of raising an exception.
 
-    Ordenadas por total_exec_time DESC — queries com maior impacto acumulado
-    de CPU são mais relevantes para otimização que queries lentas unitárias raras.
+    Ordered by total_exec_time DESC — queries with the highest accumulated CPU
+    impact are more relevant for optimization than rare, unit-slow queries.
     """
     try:
         with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
@@ -136,17 +136,17 @@ def collect_slow_queries(
             return cur.fetchall()
     except Exception as exc:
         logger.warning(
-            "pg_stat_statements não disponível nesta instância: %s", exc
+            "pg_stat_statements not available on this instance: %s", exc
         )
         return []
 
 
 def collect_index_stats(conn: psycopg.Connection) -> list[dict[str, Any]]:
     """
-    Retornar estatísticas de uso de índices via pg_stat_user_indexes.
+    Returns index usage statistics via pg_stat_user_indexes.
 
-    unused=True (idx_scan == 0) indica índice nunca utilizado — candidato a DROP.
-    Índices desnecessários aumentam tempo de escrita e consomem espaço em disco.
+    unused=True (idx_scan == 0) indicates an index that's never been used — a candidate for DROP.
+    Unnecessary indexes increase write time and consume disk space.
     """
     with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
         cur.execute("""
@@ -167,12 +167,12 @@ def collect_index_stats(conn: psycopg.Connection) -> list[dict[str, Any]]:
 
 def collect_locks(conn: psycopg.Connection) -> list[dict[str, Any]]:
     """
-    Retornar locks ativos em relações (tabelas) via pg_locks.
+    Returns active locks on relations (tables) via pg_locks.
 
-    granted=False indica query bloqueada aguardando lock ser liberado.
-    Múltiplos False podem indicar deadlock iminente.
-    Filtro locktype='relation' exibe apenas contenção em tabelas (relevante
-    para o operador), excluindo locks internos do PostgreSQL (page, tuple, etc.).
+    granted=False indicates a query blocked waiting for a lock to be released.
+    Multiple False entries can indicate an imminent deadlock.
+    The locktype='relation' filter shows only contention on tables (relevant
+    to the operator), excluding PostgreSQL's internal locks (page, tuple, etc.).
     """
     with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
         cur.execute("""
@@ -192,14 +192,14 @@ def collect_locks(conn: psycopg.Connection) -> list[dict[str, Any]]:
 
 def collect_bloat(conn: psycopg.Connection) -> list[dict[str, Any]]:
     """
-    Estimar bloat de tabelas via pg_stat_user_tables.
+    Estimates table bloat via pg_stat_user_tables.
 
-    dead_ratio > 20% indica que o VACUUM está atrasado ou desabilitado.
-    A FASE 6 (Manutenção Automatizada) usará este dado para disparar
-    VACUUM automaticamente quando dead_ratio exceder o threshold.
+    dead_ratio > 20% indicates VACUUM is running behind or disabled.
+    PHASE 6 (Automated Maintenance) will use this data to trigger
+    VACUUM automatically when dead_ratio exceeds the threshold.
 
-    Usa contadores acumulados (leve, sem lock) — suficiente para detecção
-    de tendências sem impacto na performance do banco monitorado.
+    Uses cumulative counters (lightweight, no lock) — sufficient for detecting
+    trends without impacting the monitored database's performance.
     """
     with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
         cur.execute("""
@@ -228,12 +228,12 @@ def collect_active_connections(
     limit: int = 100,
 ) -> list[dict[str, Any]]:
     """
-    Retornar as conexões (backends) ativas no banco via pg_stat_activity.
+    Returns the active connections (backends) on the database via pg_stat_activity.
 
-    Exclui o próprio backend de monitoramento (pg_backend_pid) e backends
-    internos sem estado (state IS NULL). wait_event combina tipo:evento para
-    leitura direta ("Lock:transactionid"). duration_seconds é o tempo desde o
-    início da query atual — None para conexões idle (query_start nulo).
+    Excludes the monitoring backend itself (pg_backend_pid) and stateless
+    internal backends (state IS NULL). wait_event combines type:event for
+    direct reading ("Lock:transactionid"). duration_seconds is the time since the
+    start of the current query — None for idle connections (query_start is null).
     """
     with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
         cur.execute(
@@ -261,12 +261,12 @@ def collect_active_connections(
 
 def collect_schema(conn: psycopg.Connection) -> list[dict[str, Any]]:
     """
-    Retornar as tabelas de usuário com estimativa de linhas via pg_class.
+    Returns user tables with an estimated row count via pg_class.
 
-    Usa c.reltuples (estimativa mantida pelo ANALYZE) em vez de COUNT(*) —
-    barato e sem varrer as tabelas. Exclui schemas internos do PostgreSQL.
-    Retorna linhas planas (schema_name, table, estimated_rows); o agrupamento
-    por schema é feito na camada de cima.
+    Uses c.reltuples (an estimate maintained by ANALYZE) instead of COUNT(*) —
+    cheap and without scanning the tables. Excludes PostgreSQL's internal schemas.
+    Returns flat rows (schema_name, table, estimated_rows); grouping
+    by schema is done in the layer above.
     """
     with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
         cur.execute(
@@ -288,15 +288,15 @@ def collect_schema(conn: psycopg.Connection) -> list[dict[str, Any]]:
 
 def collect_explain(conn: psycopg.Connection, query: str) -> list:
     """
-    Executar EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) para uma query SELECT.
+    Runs EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) for a SELECT query.
 
-    Restrito a SELECTs: EXPLAIN ANALYZE executa a query de verdade.
-    Um DELETE com EXPLAIN ANALYZE causaria modificação real dos dados — por isso
-    a validação SELECT-only (defesa em profundidade) roda antes via sql_guard.
+    Restricted to SELECTs: EXPLAIN ANALYZE actually executes the query.
+    A DELETE with EXPLAIN ANALYZE would cause real modification of the data — that's why
+    the SELECT-only validation (defense in depth) runs beforehand via sql_guard.
 
-    FORMAT JSON retorna o plano como estrutura navegável.
-    BUFFERS expõe cache hits/misses por nó — essencial para identificar
-    quais partes da query forçam I/O de disco.
+    FORMAT JSON returns the plan as a navigable structure.
+    BUFFERS exposes cache hits/misses per node — essential for identifying
+    which parts of the query force disk I/O.
     """
     assert_read_only_select(query)
 

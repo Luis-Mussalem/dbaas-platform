@@ -3,17 +3,17 @@ import { DEMO_EMAIL, DEMO_PASSWORD } from "./helpers";
 
 const AUTH_FILE = "e2e/.auth/user.json";
 
-// Faz login uma única vez e persiste a sessão. Os tokens vivem em cookies
-// HttpOnly (invisíveis ao JS), mas o storageState do Playwright os captura do
-// contexto do navegador — então os demais specs herdam a sessão sem repetir o
-// fluxo de login a cada teste.
+// Logs in exactly once and persists the session. The tokens live in HttpOnly
+// cookies (invisible to JS), but Playwright's storageState captures them from the
+// browser context — so the other specs inherit the session without repeating the
+// login flow on every test.
 setup("authenticate", async ({ page }) => {
   await page.goto("/login");
   await page.locator("#username").fill(DEMO_EMAIL);
   await page.locator("#password").fill(DEMO_PASSWORD);
   await page.getByRole("button", { name: /sign in/i }).click();
 
-  // Login bem-sucedido redireciona para o painel (raiz).
+  // A successful login redirects to the dashboard (root).
   await page.waitForURL("**/");
   await expect(page.getByText("DBaaS").first()).toBeVisible();
 

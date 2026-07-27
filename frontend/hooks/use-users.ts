@@ -25,15 +25,15 @@ export function useUsers(companyId?: string): UseUsersResult {
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
 
-  // Abort guard: se companyId mudar antes do fetch terminar, descartamos o
-  // resultado stale (mesmo padrão do use-audit.ts).
+  // Abort guard: if companyId changes before the fetch finishes, we discard the
+  // stale result (same pattern as use-audit.ts).
   const activeRef = useRef(true);
 
   useEffect(() => {
     activeRef.current = true;
-    // Reset síncrono para "carregando" antes do refetch (troca de companyId /
-    // reload). É intencional e abort-guarded; set-state-in-effect é conservadora
-    // demais para este caso legítimo de data-fetching.
+    // Synchronous reset to "loading" before the refetch (companyId change /
+    // reload). It's intentional and abort-guarded; set-state-in-effect is too
+    // conservative for this legitimate data-fetching case.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsLoading(true);
     setError(null);
@@ -53,8 +53,8 @@ export function useUsers(companyId?: string): UseUsersResult {
     return () => {
       activeRef.current = false;
     };
-    // `t` só muda ao trocar de idioma (é memoizado pelo next-intl); refetch nesse
-    // caso é aceitável e mantém a mensagem de erro no idioma corrente.
+    // `t` only changes when the language changes (it's memoized by next-intl); refetching in
+    // that case is acceptable and keeps the error message in the current language.
   }, [companyId, tick, t]);
 
   async function create(data: UserAdminCreate): Promise<void> {

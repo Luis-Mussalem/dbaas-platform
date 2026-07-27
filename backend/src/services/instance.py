@@ -31,17 +31,17 @@ VALID_TRANSITIONS: dict[InstanceStatus, list[InstanceStatus]] = {
 
 def sync_connection_port(instance: DatabaseInstance, new_port: int) -> None:
     """
-    Ressincronizar a porta e a connection_uri cifrada após um restart.
+    Resyncs the port and the encrypted connection_uri after a restart.
 
-    Usada tanto pelo transition_status (start manual) quanto pelo status_poller
-    (reconciliação automática após restart do Docker).
+    Used both by transition_status (manual start) and by the status_poller
+    (automatic reconciliation after a Docker restart).
 
-    Portas publicadas dinamicamente pelo Docker NÃO são preservadas entre
-    stop/start — cada start pode receber uma porta nova. Sem isto, a
-    connection_uri salva aponta para a porta velha e métricas/backups quebram.
+    Ports dynamically published by Docker are NOT preserved across
+    stop/start — each start can get a new port. Without this, the saved
+    connection_uri would point to the old port and metrics/backups would break.
 
-    Decripta a URI, troca apenas a porta e re-cifra. O db_password permanece
-    somente em memória durante esta função.
+    Decrypts the URI, swaps only the port, and re-encrypts. db_password stays
+    in memory only for the duration of this function.
     """
     instance.port = new_port
     if instance.connection_uri:
@@ -55,26 +55,26 @@ def sync_connection_port(instance: DatabaseInstance, new_port: int) -> None:
 
 def reconcile_connection_port(db: Session, instance: DatabaseInstance) -> bool:
     """
-    Ressincronizar a porta com a que o provisioner publica AGORA, se divergirem.
+    Resyncs the port with whatever the provisioner publishes NOW, if they diverge.
 
-    O status_poller já reconcilia a cada 30s, mas no startup todos os loops de
-    background sobem juntos: um backup agendado que já venceu roda no primeiro
-    ciclo e pode chegar antes da primeira reconciliação, usando a porta do boot
-    anterior — o Docker republica portas ao religar containers. O pg_dump falha
-    com "connection refused", grava um Backup FAILED e o schedule avança, então
-    o alerta de backup atrasado fica aberto até a próxima janela do cron.
+    The status_poller already reconciles every 30s, but at startup all background
+    loops come up together: a scheduled backup that's already due can run on the first
+    cycle and arrive before the first reconciliation, using the port from the previous
+    boot — Docker republishes ports when containers restart. pg_dump fails
+    with "connection refused", writes a FAILED Backup, and the schedule advances, so
+    the overdue-backup alert stays open until the next cron window.
 
-    Chamada antes de operações que dependem da connection_uri e não podem
-    esperar os 30s do poller. Best-effort: falha ao consultar o provisioner só
-    devolve False, deixando a operação seguir com o que está no banco.
+    Called before operations that depend on connection_uri and can't
+    wait for the poller's 30s. Best-effort: a failure querying the provisioner just
+    returns False, letting the operation proceed with what's in the database.
 
-    Retorna True se a porta mudou.
+    Returns True if the port changed.
     """
     try:
         port = get_provisioner().get_port(instance.id)
-    except Exception as exc:  # noqa: BLE001 — best-effort, a operação segue
+    except Exception as exc:  # noqa: BLE001 — best-effort, the operation proceeds
         logger.warning(
-            "Não foi possível conferir a porta da instância %s: %s", instance.id, exc
+            "Could not check the port of instance %s: %s", instance.id, exc
         )
         return False
 
@@ -82,7 +82,7 @@ def reconcile_connection_port(db: Session, instance: DatabaseInstance) -> bool:
         return False
 
     logger.info(
-        "Instância %s: porta divergente (banco=%s, docker=%s) — ressincronizando",
+        "Instance %s: port diverged (db=%s, docker=%s) — resyncing",
         instance.id,
         instance.port,
         port,
@@ -115,23 +115,23 @@ async def create_instance(
     db: Session, data: InstanceCreate, current_user: User
 ) -> DatabaseInstance:
     """
-    Criar um registro DatabaseInstance e provisionar um container PostgreSQL real.
+    Creates a DatabaseInstance record and provisions a real PostgreSQL container.
 
-    Fluxo completo:
-    1. Criar registro no banco em status PENDING (visível ao operador imediatamente)
-    2. Transicionar para PROVISIONING e commitar (poller sabe ignorar este estado)
-    3. Rodar provisioner em thread pool — Docker API + psycopg são bloqueantes
-       (asyncio.to_thread evita travar o event loop durante os ~10-30s de setup)
-    4. Sucesso: popular host/port/db_name/db_user, cifrar connection_uri com
-       Fernet e armazenar, marcar RUNNING
-    5. Falha: marcar FAILED, levantar HTTP 503
+    Full flow:
+    1. Create the record in the database with PENDING status (visible to the operator immediately)
+    2. Transition to PROVISIONING and commit (the poller knows to ignore this state)
+    3. Run the provisioner in a thread pool — the Docker API + psycopg are blocking
+       (asyncio.to_thread avoids blocking the event loop during the ~10-30s setup)
+    4. On success: populate host/port/db_name/db_user, encrypt connection_uri with
+       Fernet and store it, mark RUNNING
+    5. On failure: mark FAILED, raise HTTP 503
 
-    Por que asyncio.to_thread()?
-    provisioner.create() faz polling de até 90s esperando o PostgreSQL iniciar.
-    Se rodasse diretamente numa rota sync, bloquearia o único worker thread do
-    uvicorn durante todo esse tempo, impedindo qualquer outro request de ser
-    atendido. Com to_thread(), o trabalho vai para o thread pool do SO e o
-    event loop continua livre.
+    Why asyncio.to_thread()?
+    provisioner.create() polls for up to 90s waiting for PostgreSQL to start.
+    If it ran directly on a sync route, it would block uvicorn's single worker
+    thread for that entire time, preventing any other request from being
+    served. With to_thread(), the work goes to the OS thread pool and the
+    event loop stays free.
     """
     instance = DatabaseInstance(
         name=data.name,
@@ -143,19 +143,19 @@ async def create_instance(
         environment=data.environment,
         notes=data.notes,
         status=InstanceStatus.PENDING,
-        # A instância nasce na empresa de quem a criou. Superuser sem empresa
-        # cria com company_id NULL (até a Stage B permitir escolher a empresa-ativa).
+        # The instance is born in the company of whoever created it. A superuser with no company
+        # creates it with company_id NULL (until Stage B allows choosing the active company).
         company_id=current_user.company_id,
     )
     db.add(instance)
     db.commit()
     db.refresh(instance)
 
-    # Semear o histórico com o status inicial (instance.id já existe após o
-    # refresh) para o cálculo de uptime ter um ponto de partida desde a criação.
+    # Seed the history with the initial status (instance.id already exists after the
+    # refresh) so the uptime calculation has a starting point from creation onward.
     record_status_change(db, instance, InstanceStatus.PENDING)
 
-    # Marcar como PROVISIONING antes de chamar o provisioner
+    # Mark as PROVISIONING before calling the provisioner
     record_status_change(db, instance, InstanceStatus.PROVISIONING)
     db.commit()
 
@@ -171,17 +171,17 @@ async def create_instance(
     except Exception as exc:
         record_status_change(db, instance, InstanceStatus.FAILED)
         db.commit()
-        # Loga o detalhe internamente; ao cliente vai só mensagem genérica —
-        # str(exc) pode expor hostnames/portas/erros do Docker.
+        # Logs the detail internally; the client only gets a generic message —
+        # str(exc) could expose Docker hostnames/ports/errors.
         logger.error("Provisioning failed for instance %s: %s", instance.id, exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Provisioning failed. See server logs for details.",
         ) from exc
 
-    # Construir URI de conexão e cifrá-la com Fernet antes de persistir.
-    # O db_password existe APENAS neste scope — após o commit ele é coletado
-    # pelo GC e nunca mais acessível pelo código da aplicação.
+    # Build the connection URI and encrypt it with Fernet before persisting.
+    # db_password exists ONLY in this scope — after the commit it's collected
+    # by the GC and never again accessible to the application's code.
     connection_uri = (
         f"postgresql://{result.db_user}:{result.db_password}"
         f"@{result.host}:{result.port}/{result.db_name}"
@@ -224,15 +224,15 @@ async def transition_status(
     new_status: InstanceStatus,
 ) -> DatabaseInstance:
     """
-    Validar e aplicar uma transição de status, chamando o provisioner para
-    operações de start/stop.
+    Validates and applies a status transition, calling the provisioner for
+    start/stop operations.
 
-    O provisioner é invocado apenas para RUNNING ↔ STOPPED:
-    - RUNNING → STOPPED: provisioner.stop() — para o container Docker graciosamente
-    - STOPPED → RUNNING: provisioner.start() — reinicia o container existente
+    The provisioner is invoked only for RUNNING ↔ STOPPED:
+    - RUNNING → STOPPED: provisioner.stop() — gracefully stops the Docker container
+    - STOPPED → RUNNING: provisioner.start() — restarts the existing container
 
-    Outras transições (→ FAILED, → DELETING) apenas atualizam o status no banco,
-    sem interagir com o Docker. O DELETING→DELETED é exclusivo do soft_delete_instance.
+    Other transitions (→ FAILED, → DELETING) only update the status in the database,
+    without interacting with Docker. DELETING→DELETED is exclusive to soft_delete_instance.
     """
     allowed = VALID_TRANSITIONS.get(instance.status, [])
     if new_status not in allowed:
@@ -270,8 +270,8 @@ async def transition_status(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Failed to start the instance. See server logs for details.",
             ) from exc
-        # O Docker pode publicar uma porta diferente a cada start — ressincroniza
-        # a porta e a connection_uri para métricas/backups continuarem válidos.
+        # Docker can publish a different port on each start — resyncs
+        # the port and connection_uri so metrics/backups stay valid.
         sync_connection_port(instance, new_port)
 
     record_status_change(db, instance, new_status)
@@ -282,16 +282,16 @@ async def transition_status(
 
 async def soft_delete_instance(db: Session, instance: DatabaseInstance) -> DatabaseInstance:
     """
-    Remover uma instância do uso ativo com cleanup completo do container.
+    Removes an instance from active use with full container cleanup.
 
-    Fluxo:
-    1. Validar pré-condições (não deletada, não rodando)
-    2. Transicionar para DELETING e commitar (poller ignora este estado)
-    3. Chamar provisioner.delete() — remove o container Docker (idempotente)
-    4. Finalizar: marcar deleted_at + status DELETED
+    Flow:
+    1. Validate preconditions (not deleted, not running)
+    2. Transition to DELETING and commit (the poller ignores this state)
+    3. Call provisioner.delete() — removes the Docker container (idempotent)
+    4. Finalize: mark deleted_at + status DELETED
 
-    O provisioner.delete() é idempotente: se o container não existir (ex: foi
-    removido manualmente), ele não levanta erro — apenas continua.
+    provisioner.delete() is idempotent: if the container doesn't exist (e.g. it was
+    removed manually), it doesn't raise an error — it just continues.
     """
     if instance.deleted_at is not None:
         raise HTTPException(

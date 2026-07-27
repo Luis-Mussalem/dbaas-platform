@@ -36,7 +36,7 @@ def _guard_last_superuser(db: Session, target_user_id: uuid.UUID) -> None:
 
 
 def _guard_last_company_admin(db: Session, target_user: User) -> None:
-    """Bloqueia demover/desativar o último admin ativo de uma empresa."""
+    """Blocks demoting/deactivating the last active admin of a company."""
     if target_user.company_id is None:
         return
     active_admins = (
@@ -58,7 +58,7 @@ def _guard_last_company_admin(db: Session, target_user: User) -> None:
 def list_users(
     db: Session, acting_user: User, company_id: Optional[uuid.UUID] = None
 ) -> list[User]:
-    """Lista usuários, com scoping automático para company admins."""
+    """Lists users, with automatic scoping for company admins."""
     q = db.query(User)
     if not acting_user.is_superuser:
         q = q.filter(User.company_id == acting_user.company_id)
@@ -66,9 +66,9 @@ def list_users(
         q = q.filter(User.company_id == company_id)
     users = q.order_by(User.email).all()
 
-    # "Última atividade" = MAX(timestamp) por usuário em audit_logs. Uma query
-    # agregada só para os user_ids já escopados (sem N+1, sem tocar audit_logs de
-    # outra empresa). Setado como atributo transiente lido por UserListItem.
+    # "Last activity" = MAX(timestamp) per user in audit_logs. A single aggregate
+    # query only for the already-scoped user_ids (no N+1, no touching another
+    # company's audit_logs). Set as a transient attribute read by UserListItem.
     user_ids = [u.id for u in users]
     if user_ids:
         last_seen = dict(
@@ -86,7 +86,7 @@ def create_user_admin(db: Session, data: UserAdminCreate, acting_user: User) -> 
     if get_user_by_email(db, data.email):
         raise HTTPException(status_code=400, detail="Email already registered")
 
-    # Company admin guards — antes de permitir criar qualquer coisa
+    # Company admin guards — before allowing anything to be created
     if not acting_user.is_superuser:
         if acting_user.company_id is None:
             raise HTTPException(status_code=403, detail="Admin has no company")
@@ -119,7 +119,7 @@ def create_user_admin(db: Session, data: UserAdminCreate, acting_user: User) -> 
 
 
 def update_user_self(db: Session, user: User, email: Optional[str], password: Optional[str]) -> User:
-    """Atualização self-service de email/senha do próprio usuário."""
+    """Self-service update of the user's own email/password."""
     if email is not None and email != user.email:
         if get_user_by_email(db, email):
             raise HTTPException(status_code=400, detail="Email already registered")

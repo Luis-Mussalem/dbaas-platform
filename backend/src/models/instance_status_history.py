@@ -12,12 +12,12 @@ from src.models.database_instance import InstanceStatus
 
 class InstanceStatusHistory(Base):
     """
-    Registro imutável de cada transição de status de uma instância.
+    Immutable record of each status transition of an instance.
 
-    Existe para derivar o "uptime" (fração do tempo em RUNNING numa janela):
-    a coluna DatabaseInstance.status guarda apenas o estado atual, sem histórico.
-    Uma linha é gravada a cada mudança de status via
-    services.status_history.record_status_change — nunca editada nem apagada.
+    Exists to derive "uptime" (the fraction of time spent RUNNING in a window):
+    the DatabaseInstance.status column only holds the current state, with no history.
+    A row is written on every status change via
+    services.status_history.record_status_change — never edited or deleted.
     """
 
     __tablename__ = "instance_status_history"
@@ -33,9 +33,9 @@ class InstanceStatusHistory(Base):
         nullable=False,
         index=True,
     )
-    # Reusa o tipo enum 'instancestatus' já criado por database_instances —
-    # create_type=False evita o CREATE TYPE duplicado (o tipo é criado uma vez,
-    # pela tabela que o define primeiro).
+    # Reuses the 'instancestatus' enum type already created by database_instances —
+    # create_type=False avoids a duplicate CREATE TYPE (the type is created once,
+    # by whichever table defines it first).
     status: Mapped[InstanceStatus] = mapped_column(
         SAEnum(InstanceStatus, name="instancestatus", create_type=False),
         nullable=False,

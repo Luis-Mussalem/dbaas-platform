@@ -1,8 +1,8 @@
 import { test, expect } from "@playwright/test";
 
-// A frota é gerada de propósito, e isso tem de estar CLARO na tela: uma faixa
-// fixa em todo o dashboard + uma página "Sobre esta demo" com a explicação
-// completa. O reel "Simular uso" foi removido — estes testes fixam esse contrato.
+// The fleet is generated on purpose, and that has to be CLEAR on screen: a persistent
+// banner across the dashboard + an "About this demo" page with the full
+// explanation. The "Simulate usage" reel was removed — these tests pin down that contract.
 
 test("the demo notice is visible and links to the About page", async ({ page }) => {
   await page.goto("/");
@@ -20,7 +20,7 @@ test("the About page explains what is real and what is generated", async ({ page
 
   await expect(page.getByText(/what is real/i)).toBeVisible();
   await expect(page.getByText(/what is generated/i)).toBeVisible();
-  // A jornada do botão removido faz parte da documentação na tela.
+  // The journey of the removed button is part of the on-screen documentation.
   await expect(page.getByText(/simulate usage/i)).toBeVisible();
 });
 
@@ -28,6 +28,6 @@ test("the removed simulation endpoints are gone", async ({ page }) => {
   const res = await page.request
     .get("/api/v1/demo/simulation")
     .catch(() => null);
-  // 404 (rota removida) — nunca 200.
+  // 404 (route removed) — never 200.
   if (res) expect(res.status()).toBe(404);
 });

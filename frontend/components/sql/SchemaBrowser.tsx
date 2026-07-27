@@ -7,9 +7,9 @@ import { getSchema } from "@/lib/api";
 import type { Instance, SchemaGroup } from "@/lib/types";
 import { useFormatters } from "@/hooks/use-formatters";
 
-// Variante do SchemaExplorer para o Console SQL: cada tabela é um botão que
-// chama onPickTable(nome) — a página insere o nome no editor. Mesmo visual e
-// mesma fonte de dados (getSchema), só muda a interação (clicável).
+// Variant of SchemaExplorer for the SQL Console: each table is a button that
+// calls onPickTable(name) — the page inserts the name into the editor. Same look and
+// the same data source (getSchema), only the interaction changes (clickable).
 export function SchemaBrowser({
   instance,
   onPickTable,
@@ -24,9 +24,9 @@ export function SchemaBrowser({
   const [failed, setFailed] = useState(false);
   const [open, setOpen] = useState<Set<string>>(new Set(["public"]));
 
-  // A página remonta este componente via `key={instance.id}` ao trocar de
-  // instância, então o estado já zera sozinho — o effect só dispara o fetch e o
-  // "parada" é derivado no render.
+  // The page remounts this component via `key={instance.id}` when switching
+  // instances, so the state already resets on its own — the effect only triggers the fetch and
+  // "stopped" is derived at render time.
   useEffect(() => {
     if (instance.status !== "running") return;
     let active = true;

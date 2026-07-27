@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Construction } from "lucide-react";
 
-// Estado vazio reutilizável — espelha o EmptyState do design.
+// Reusable empty state — mirrors the design's EmptyState.
 export function EmptyState({
   title,
   subtitle,

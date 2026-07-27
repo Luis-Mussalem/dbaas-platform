@@ -38,10 +38,10 @@ dev_doc/
 # Study guide
 guide.md
 
-# Scripts de estudo (local only)
+# Study scripts (local only)
 scripts/
 
-# Backup data — rastrear o diretório data/, ignorar apenas os conteúdos
+# Backup data — track the data/ directory, ignore only its contents
 data/backups/
 data/wal/
 data/physical/

@@ -3,9 +3,9 @@
 import { useTranslations } from "next-intl";
 import type { InstanceStatus } from "@/lib/types";
 
-// Cores do design por status (semânticas ok/info/warn/danger do globals.css).
-// Os rótulos vivem nas mensagens: Status.* (status técnico cru) e Health.*
-// (vocabulário de produto) — mesmas chaves, redações diferentes por locale.
+// The design's colors by status (ok/info/warn/danger semantics from globals.css).
+// The labels live in the messages: Status.* (raw technical status) and Health.*
+// (product vocabulary) — same keys, different wording per locale.
 const STATUS_CLS: Record<InstanceStatus, string> = {
   running: "text-ok border-ok/25 bg-ok/10",
   stopped: "text-fg-3 border-border bg-bg-2",
@@ -30,13 +30,13 @@ export function StatusBadge({ status }: { status: InstanceStatus }) {
   );
 }
 
-// Badge de SAÚDE (Saudável / Pausado / Falhou…), derivada do status técnico.
-// Diferente do StatusBadge, que mostra o status cru. Usada nos cards do Painel
-// para uma leitura mais "de produto".
+// HEALTH badge (Healthy / Paused / Failed...), derived from the technical status.
+// Unlike StatusBadge, which shows the raw status. Used in the Dashboard's cards
+// for a more "product" reading.
 //
-// Nota honesta: "Degradado" (rodando mas insalubre) exigiria um health check por
-// card, que ainda não fazemos no Painel — por isso não inventamos esse estado;
-// derivamos só do status já conhecido. Daí Health.* reusar as chaves de status.
+// Honest note: "Degraded" (running but unhealthy) would require a health check per
+// card, which we don't yet do in the Dashboard — that's why we don't invent that state;
+// we only derive it from the already-known status. Hence Health.* reusing the status keys.
 export function HealthBadge({ status }: { status: InstanceStatus }) {
   const t = useTranslations("Health");
   const cls = STATUS_CLS[status] ?? STATUS_CLS.stopped;

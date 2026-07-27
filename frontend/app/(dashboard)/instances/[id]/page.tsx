@@ -40,7 +40,7 @@ import { useFormatters } from "@/hooks/use-formatters";
 import { cn } from "@/lib/utils";
 import { BTN, BTN_DANGER } from "@/lib/ui";
 
-// Os rótulos vêm de InstanceDetail.tabs.* — aqui só a ordem e os ids.
+// The labels come from InstanceDetail.tabs.* — here it's just the order and ids.
 const TABS = [
   "overview",
   "metrics",
@@ -51,7 +51,7 @@ const TABS = [
   "logs",
 ] as const;
 
-// Dias desde a criação ("ativo há Nd"), só informativo.
+// Days since creation ("active for Nd"), just informative.
 function daysSince(iso: string): number {
   return Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000));
 }
@@ -249,7 +249,7 @@ export default function InstanceDetailPage() {
         </div>
       </div>
 
-      {/* ── Conteúdo da aba ── */}
+      {/* ── Tab content ── */}
       {tab === "overview" && <OverviewTab instance={instance} metrics={metrics?.metrics ?? {}} />}
       {tab === "metrics" && <MetricsTab instance={instance} />}
       {tab === "backups" && <BackupsTab instance={instance} />}
@@ -261,7 +261,7 @@ export default function InstanceDetailPage() {
   );
 }
 
-// ── Aba: Visão geral ──
+// ── Tab: Overview ──
 function OverviewTab({
   instance,
   metrics,
@@ -277,7 +277,7 @@ function OverviewTab({
   const cacheHit = metrics.cache_hit_ratio;
   const sizeBytes = metrics.db_size_bytes;
 
-  // Sparkline real de conexões (últimas 24h) para o primeiro card.
+  // Real connections sparkline (last 24h) for the first card.
   const connHistory = useMetricHistory(
     instance.id,
     "connections_active",
@@ -318,7 +318,7 @@ function OverviewTab({
   );
 }
 
-// ── Tabela de queries lentas (pg_stat_statements) ──
+// ── Slow queries table (pg_stat_statements) ──
 function SlowQueries({ instance }: { instance: Instance }) {
   const t = useTranslations("InstanceDetail");
   const tc = useTranslations("Common");
@@ -337,7 +337,7 @@ function SlowQueries({ instance }: { instance: Instance }) {
     };
   }, [instance.id, running]);
 
-  // Parada → tratamos como lista vazia (sem dados), não como indisponível.
+  // Stopped → we treat it as an empty list (no data), not as unavailable.
   const unavailable = failed;
   const display = running ? rows : [];
 
@@ -366,7 +366,7 @@ function SlowQueries({ instance }: { instance: Instance }) {
             </tr>
           </thead>
           <tbody>
-            {/* pg_stat_statements normaliza as queries — o texto é único por linha. */}
+            {/* pg_stat_statements normalizes the queries — the text is unique per row. */}
             {display.map((q) => (
               <tr key={q.query} className="border-t border-border">
                 <td className="max-w-0 truncate px-4 py-2 font-mono text-xs text-fg-2">

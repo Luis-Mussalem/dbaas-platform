@@ -14,13 +14,13 @@ from src.core.database import SessionLocal
 logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Mapeamento de ações auditáveis
+# Auditable action mapping
 #
-# Cada entrada: (método HTTP, regex do path, nome da ação, resource_type,
-#                número do grupo de captura para resource_id — ou None)
+# Each entry: (HTTP method, path regex, action name, resource_type,
+#              capture group number for resource_id — or None)
 #
-# O regex captura o resource_id diretamente do path, sem precisar parsear
-# o body do request. Grupo 1 = primeiro UUID no path, grupo 2 = segundo.
+# The regex captures the resource_id directly from the path, without needing to parse
+# the request body. Group 1 = first UUID in the path, group 2 = second.
 # ─────────────────────────────────────────────────────────────────────────────
 _AUDIT_ACTIONS = [
     ("POST",   re.compile(r"^/api/v1/auth/register$"),                          "register",                "user",            None),
@@ -39,17 +39,17 @@ _AUDIT_ACTIONS = [
 
 def _extract_user_id(request: Request) -> Optional[uuid.UUID]:
     """
-    Decodifica o JWT do header Authorization para extrair o user_id.
+    Decodes the JWT from the Authorization header to extract the user_id.
 
-    Não levanta exceções: se o token está ausente, expirado ou inválido,
-    retorna None silenciosamente. O middleware nunca deve rejeitar um
-    request — só observa e registra o que passou.
+    Raises no exceptions: if the token is missing, expired, or invalid,
+    silently returns None. The middleware must never reject a
+    request — it only observes and records what went through.
     """
     auth = request.headers.get("Authorization", "")
     if auth.startswith("Bearer "):
         token = auth.split(" ", 1)[1]
     else:
-        # Frontend autentica via cookie HttpOnly (sem header Authorization).
+        # Frontend authenticates via an HttpOnly cookie (no Authorization header).
         token = request.cookies.get("access_token")
     if not token:
         return None
@@ -71,13 +71,13 @@ def _resolve_company_id(
     active_company_header: Optional[str],
 ) -> Optional[uuid.UUID]:
     """
-    Resolve o company_id a ser gravado no audit log.
+    Resolves the company_id to be recorded in the audit log.
 
-    Espelha a semântica de visible_company_id (core/scoping.py):
-    - usuário comum → sua company_id;
-    - superuser → UUID do header X-Company-Id (None se ausente/inválido);
-    - usuário desconhecido (login/register, user_id=None) → None.
-    NULL-company fica visível só ao superuser-sem-header, sem vazar entre tenants.
+    Mirrors the semantics of visible_company_id (core/scoping.py):
+    - regular user → their company_id;
+    - superuser → UUID from the X-Company-Id header (None if missing/invalid);
+    - unknown user (login/register, user_id=None) → None.
+    NULL-company is only visible to a superuser-without-header, without leaking across tenants.
     """
     if user_id is None:
         return None
@@ -105,15 +105,15 @@ def _write_log(
     active_company_header: Optional[str] = None,
 ) -> None:
     """
-    Grava uma entrada no audit log com sessão própria.
+    Writes an entry to the audit log with its own session.
 
-    Por que SessionLocal() em vez de Depends(get_db)?
-    O middleware não participa do ciclo de Depends do FastAPI — ele executa
-    fora do contexto de um handler. Criar uma sessão própria isola a escrita
-    do ciclo de vida da sessão do request: mesmo que a sessão do handler
-    seja revertida, o audit log é persistido.
+    Why SessionLocal() instead of Depends(get_db)?
+    The middleware doesn't participate in FastAPI's Depends cycle — it runs
+    outside a handler's context. Creating its own session isolates the write
+    from the request's session lifecycle: even if the handler's session
+    is rolled back, the audit log is persisted.
 
-    Erros de escrita são absorvidos: o log não pode interromper a resposta.
+    Write errors are swallowed: the log must not interrupt the response.
     """
     from src.models.audit_log import AuditLog
 
@@ -131,7 +131,7 @@ def _write_log(
         ))
         db.commit()
     except Exception as exc:
-        logger.error("Falha ao gravar audit log [%s/%s]: %s", action, resource_type, exc)
+        logger.error("Failed to write audit log [%s/%s]: %s", action, resource_type, exc)
         db.rollback()
     finally:
         db.close()
@@ -139,17 +139,17 @@ def _write_log(
 
 class AuditMiddleware(BaseHTTPMiddleware):
     """
-    Registra ações auditáveis automaticamente, sem tocar no código de negócio.
+    Automatically records auditable actions, without touching business code.
 
-    Funciona em três etapas por request:
-    1. Deixa o handler processar o request normalmente (call_next).
-    2. Se o response for 4xx/5xx (ação falhou), não registra nada.
-    3. Se o response for 2xx, verifica se o path+método corresponde a uma
-       das ações na tabela _AUDIT_ACTIONS e, se sim, grava o audit log.
+    Works in three steps per request:
+    1. Lets the handler process the request normally (call_next).
+    2. If the response is 4xx/5xx (action failed), records nothing.
+    3. If the response is 2xx, checks whether the path+method matches one
+       of the actions in the _AUDIT_ACTIONS table and, if so, writes the audit log.
 
-    Apenas respostas bem-sucedidas (< 400) geram entradas no log.
-    Uma tentativa de login com senha errada não gera audit log de "login" —
-    o login não aconteceu.
+    Only successful responses (< 400) generate log entries.
+    A login attempt with the wrong password does not generate a "login" audit log —
+    the login didn't happen.
     """
 
     async def dispatch(self, request: Request, call_next) -> Response:
@@ -174,8 +174,8 @@ class AuditMiddleware(BaseHTTPMiddleware):
             ip_address = request.client.host if request.client else None
             details = {"method": method, "path": path, "status": response.status_code}
 
-            # _write_log é I/O síncrono (SessionLocal); em thread para não
-            # bloquear o event loop durante a escrita do audit log.
+            # _write_log is synchronous I/O (SessionLocal); run in a thread so it doesn't
+            # block the event loop while writing the audit log.
             await asyncio.to_thread(
                 _write_log,
                 action, resource_type, resource_id,

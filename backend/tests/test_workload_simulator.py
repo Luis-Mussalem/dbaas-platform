@@ -1,14 +1,14 @@
 """
-Testes do simulador de carga da frota demo.
+Tests for the demo fleet's load simulator.
 
-Duas metades independentes:
+Two independent halves:
 
-1. A curva (`traffic_factor` / `target_connections`) — pura e determinística,
-   testável sem banco nem Docker. É o contrato compartilhado com o backfill
-   histórico do seed, então é onde vale cravar as invariantes.
-2. O ciclo (`simulate_once`) — com psycopg substituído por um dublê, para
-   verificar seleção de instâncias, resize do pool e resiliência a falhas
-   sem precisar de containers de verdade.
+1. The curve (`traffic_factor` / `target_connections`) — pure and deterministic,
+   testable with no database or Docker. It's the contract shared with the seed's
+   historical backfill, so it's where it's worth pinning down the invariants.
+2. The cycle (`simulate_once`) — with psycopg replaced by a stub, to
+   verify instance selection, pool resizing, and resilience to failures
+   without needing real containers.
 """
 from datetime import datetime, timedelta, timezone
 
@@ -22,16 +22,16 @@ DEMO_MARKER = "__demo_fleet__"
 
 
 # --------------------------------------------------------------------------- #
-# Curva de tráfego
+# Traffic curve
 # --------------------------------------------------------------------------- #
 def _at(hour: int, day: int = 8) -> datetime:
-    # 2026-07-08 é uma quarta-feira (dia útil).
+    # 2026-07-08 is a Wednesday (a weekday).
     return datetime(2026, 7, day, hour, 0, tzinfo=timezone.utc)
 
 
 def test_traffic_factor_stays_in_range_over_a_full_week():
     at = _at(0, day=6)
-    for step in range(7 * 24 * 4):  # uma semana, de 15 em 15 min
+    for step in range(7 * 24 * 4):  # one week, in 15 min steps
         f = ws.traffic_factor("neptune-payments-prod", at + timedelta(minutes=15 * step))
         assert 0.0 <= f <= 1.0
 
@@ -44,13 +44,13 @@ def test_traffic_factor_is_deterministic():
 
 
 def test_daytime_busier_than_night():
-    # A defasagem por instância é de ±2h, então comparamos extremos folgados.
+    # The per-instance offset is ±2h, so we compare with a generous margin at the extremes.
     for name in ("neptune-payments-prod", "saturn-store-prod", "jupiter-clothing-prod"):
         assert ws.traffic_factor(name, _at(15)) > ws.traffic_factor(name, _at(3))
 
 
 def test_weekend_is_quieter_than_weekday():
-    # 2026-07-11 é sábado; mesma hora do dia útil de 2026-07-08 (quarta).
+    # 2026-07-11 is a Saturday; same time of day as the weekday 2026-07-08 (Wednesday).
     name = "jupiter-clothing-prod"
     assert ws.traffic_factor(name, _at(15, day=11)) < ws.traffic_factor(name, _at(15))
 
@@ -81,9 +81,9 @@ def test_production_carries_more_load_than_staging_at_peak():
 
 def test_target_queries_per_second_is_alive_and_matches_the_drive_model():
     """
-    A taxa modelada tem de ser > 0 (senão o card mostra "0") e bater EXATAMENTE
-    com o que `_drive` produz — é o contrato que faz o par ancorado no boot
-    emendar com a medição ao vivo sem degrau.
+    The modeled rate must be > 0 (otherwise the card shows "0") and match EXACTLY
+    what `_drive` produces — that's the contract that makes the pair anchored at boot
+    join up with the live measurement without a step.
     """
     prod = ws.target_queries_per_second("saturn-store-prod", Environment.PRODUCTION, _at(15))
     staging = ws.target_queries_per_second("saturn-store-staging", Environment.STAGING, _at(15))
@@ -102,7 +102,7 @@ def test_target_queries_per_second_is_alive_and_matches_the_drive_model():
 
 
 # --------------------------------------------------------------------------- #
-# Ciclo (simulate_once) com psycopg dublê
+# Cycle (simulate_once) with a stub psycopg
 # --------------------------------------------------------------------------- #
 class _FakeCursor:
     def __init__(self, row):
@@ -116,7 +116,7 @@ class _FakeCursor:
 
 
 class _FakeConnection:
-    """Conexão de mentira: registra as queries e pode falhar sob demanda."""
+    """Fake connection: records the queries and can fail on demand."""
 
     opened: list["_FakeConnection"] = []
 
@@ -129,11 +129,11 @@ class _FakeConnection:
     def execute(self, query, params=None):
         self.queries.append(str(query))
         if self.fail_on_execute:
-            raise RuntimeError("conexão caiu")
-        # _prepare() pergunta qual é a maior tabela (a fato de negócio)...
+            raise RuntimeError("connection dropped")
+        # _prepare() asks which is the largest table (the business fact table)...
         if "pg_stat_user_tables" in str(query):
             return _FakeCursor(("payments",))
-        # ...e se ela tem as colunas amount/created_at (contrato da query pesada).
+        # ...and whether it has the amount/created_at columns (the heavy query's contract).
         if "information_schema.columns" in str(query):
             return _FakeCursor((True,))
         return _FakeCursor((1,))
@@ -172,8 +172,8 @@ def _instance(db, name, *, marker=DEMO_MARKER, status=InstanceStatus.RUNNING, ur
 
 
 def test_baseline_traffic_flows_by_default(db, fake_connect):
-    # A frota demo nunca fica morta: o gerador roda sempre à carga-base, então
-    # abre conexões sozinho. É o que mantém os cards vivos desde o boot.
+    # The demo fleet never goes dead: the generator always runs at the baseline load, so
+    # it opens connections on its own. That's what keeps the cards alive from boot onward.
     inst = _instance(db, "demo-baseline")
     ws.simulate_once()
 
@@ -186,11 +186,11 @@ def test_simulate_once_opens_connections_for_demo_instances(db, fake_connect):
     ws.simulate_once()
 
     assert len(ws._pools[inst.id].conns) > 0
-    assert _FakeConnection.opened, "nenhuma conexão aberta"
+    assert _FakeConnection.opened, "no connection was opened"
 
 
 def test_simulate_once_ignores_non_demo_and_stopped_instances(db, fake_connect):
-    _instance(db, "user-owned", marker="notas do usuário")
+    _instance(db, "user-owned", marker="user notes")
     _instance(db, "demo-stopped", status=InstanceStatus.STOPPED)
     _instance(db, "demo-no-uri", uri=None)
 
@@ -207,7 +207,7 @@ def test_pool_ramps_up_gradually_across_cycles(db, fake_connect):
         ws.simulate_once()
         sizes.append(len(ws._pools[inst.id].conns))
 
-    # Cresce, mas no máximo _MAX_POOL_STEP por ciclo (rampa, não degrau).
+    # Grows, but by at most _MAX_POOL_STEP per cycle (a ramp, not a step).
     assert sizes[0] <= ws._MAX_POOL_STEP
     assert sizes == sorted(sizes)
     assert all(b - a <= ws._MAX_POOL_STEP for a, b in zip(sizes, sizes[1:]))
@@ -234,17 +234,17 @@ def test_failing_instance_does_not_break_the_cycle(db, monkeypatch):
     calls = {"n": 0}
 
     def _connect_by_order(uri):
-        # A primeira instância do ciclo recusa conexão; a seguinte responde
-        # normalmente — é isso que prova que uma falha não cancela o ciclo.
+        # The cycle's first instance refuses the connection; the next one responds
+        # normally — that's what proves a failure doesn't cancel the cycle.
         calls["n"] += 1
         if calls["n"] == 1:
             raise RuntimeError("connection refused")
         return _FakeConnection()
 
     monkeypatch.setattr(ws, "_connect", _connect_by_order)
-    ws.simulate_once()  # não deve levantar
+    ws.simulate_once()  # must not raise
 
-    # Ao menos uma das duas instâncias ficou com pool vivo apesar da falha.
+    # At least one of the two instances ended up with a live pool despite the failure.
     assert any(pool.conns for pool in ws._pools.values())
     assert {broken.id, healthy.id} >= set(ws._pools)
 
@@ -262,10 +262,10 @@ def test_shutdown_closes_every_connection(db, fake_connect):
 
 
 # --------------------------------------------------------------------------- #
-# Mix de queries — a "query pesada"
+# Query mix — the "heavy query"
 # --------------------------------------------------------------------------- #
 class _ScriptedRandom:
-    """RNG dublê: devolve um roll fixo, para escolher um ramo do mix."""
+    """Stub RNG: returns a fixed roll, to pick a branch of the mix."""
 
     def __init__(self, roll: float):
         self._roll = roll
@@ -287,8 +287,8 @@ def _pool(bulk_ready: bool) -> ws._InstancePool:
 
 def test_heavy_query_aggregates_a_bounded_slice_of_the_fact_table():
     """
-    A query pesada tem que ser CARA e LIMITADA: uma agregação "receita por hora"
-    sobre uma fatia da tabela-fato, não a tabela inteira.
+    The heavy query must be EXPENSIVE and BOUNDED: an "hourly revenue" aggregation
+    over a slice of the fact table, not the whole table.
     """
     pool = _pool(bulk_ready=True)
     conn = _FakeConnection()
@@ -296,13 +296,13 @@ def test_heavy_query_aggregates_a_bounded_slice_of_the_fact_table():
     ws._run_heavy_query(pool, conn, _ScriptedRandom(0.99))
 
     query = conn.queries[-1]
-    assert "payments" in query           # roda sobre a tabela-fato
-    assert "sum(amount)" in query        # é a agregação de negócio
-    assert "LIMIT" in query.upper()      # e é limitada
+    assert "payments" in query           # runs over the fact table
+    assert "sum(amount)" in query        # it's the business aggregation
+    assert "LIMIT" in query.upper()      # and it's bounded
 
 
 def test_heavy_query_falls_back_when_the_fact_table_is_not_ready():
-    """Sem tabela-fato pronta (amount/created_at), cai para uma contagem barata."""
+    """Without a ready fact table (amount/created_at), falls back to a cheap count."""
     pool = _pool(bulk_ready=False)
     conn = _FakeConnection()
 
@@ -314,10 +314,10 @@ def test_heavy_query_falls_back_when_the_fact_table_is_not_ready():
 
 def test_drive_bursts_light_queries_on_each_active_connection():
     """
-    Cada conexão ativa dispara a rajada de `_QUERIES_PER_ACTIVE_CONN` leves — é o
-    volume que dá o queries/s vivo. Com roll=0.1: todas ativas (0.1 ≤ _ACTIVE_FRACTION),
-    ramo de leitura (0.1 < 0.90) e SEM pesada (0.1 ≥ _HEAVY_QUERY_PROB), então a
-    contagem é exata.
+    Each active connection fires a burst of `_QUERIES_PER_ACTIVE_CONN` light queries — it's the
+    volume that gives the live queries/s. With roll=0.1: all active (0.1 ≤ _ACTIVE_FRACTION),
+    the read branch (0.1 < 0.90), and NO heavy query (0.1 ≥ _HEAVY_QUERY_PROB), so the
+    count is exact.
     """
     pool = _pool(bulk_ready=True)
     pool.conns = [_FakeConnection(), _FakeConnection(), _FakeConnection()]

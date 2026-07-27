@@ -8,7 +8,7 @@ from src.models.replica import ReplicationState
 
 
 class ReplicaInstanceInfo(BaseModel):
-    """Resumo da instância standby, embutido no ReplicaRead para a UI."""
+    """Summary of the standby instance, embedded in ReplicaRead for the UI."""
 
     id: uuid.UUID
     name: str
@@ -21,10 +21,10 @@ class ReplicaInstanceInfo(BaseModel):
 
 class ReplicaRead(BaseModel):
     """
-    Vínculo de replicação retornado pela API.
+    Replication link returned by the API.
 
-    `replica_instance` traz nome/status/porta do standby para a aba de Replicação
-    ser autossuficiente (o serviço o anexa transitoriamente antes de serializar).
+    `replica_instance` carries the standby's name/status/port so the Replication tab
+    is self-sufficient (the service attaches it transiently before serializing).
     """
 
     id: uuid.UUID

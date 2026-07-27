@@ -23,7 +23,7 @@ export function Sidebar() {
   const { instances } = useInstances();
   const router = useRouter();
 
-  // Badge de "Instâncias" = contagem real (oculta quando 0), em vez de um número fixo.
+  // "Instances" badge = real count (hidden when 0), instead of a fixed number.
   const instanceCount = instances.length;
 
   function handleLogout() {
@@ -31,7 +31,7 @@ export function Sidebar() {
     router.push("/login");
   }
 
-  // Iniciais do operador a partir do email (não temos "nome" no backend).
+  // Operator's initials from the email (we don't have a "name" in the backend).
   const initials = (user?.email ?? "?").slice(0, 2).toUpperCase();
 
   return (
@@ -47,10 +47,10 @@ export function Sidebar() {
         </span>
       </div>
 
-      {/* Workspace: empresa atual (switcher p/ superuser, rótulo fixo p/ comum) */}
+      {/* Workspace: current company (switcher for superuser, fixed label for regular users) */}
       <WorkspaceSwitcher />
 
-      {/* Navegação */}
+      {/* Navigation */}
       <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto">
         <NavSection label={t("group.workspace")} />
         {WORKSPACE_NAV.map((item) => (
@@ -59,7 +59,7 @@ export function Sidebar() {
             item={item}
             label={t(item.key)}
             active={isActive(pathname, item.href)}
-            // Contagem real só no item de Instâncias; oculta quando 0.
+            // Real count only on the Instances item; hidden when 0.
             badge={
               item.href === "/instances" && instanceCount > 0
                 ? String(instanceCount)
@@ -91,7 +91,7 @@ export function Sidebar() {
         ))}
       </nav>
 
-      {/* Rodapé: operador logado + logout */}
+      {/* Footer: logged-in operator + logout */}
       <div className="mt-2 border-t border-border px-1 pt-3">
         <div className="flex items-center gap-2">
           <div className="flex h-8.5 w-8.5 items-center justify-center rounded-md bg-primary text-[13px] font-semibold text-primary-foreground">

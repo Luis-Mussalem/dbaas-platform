@@ -1,11 +1,11 @@
 import { Skeleton } from "@/components/ui/skeleton";
 
-// Esqueleto do Painel/Instâncias enquanto os dados carregam: espelha a linha de
-// KPIs (4 tiles) e a grade de cards, para o layout não "pular" ao chegar os dados.
+// Dashboard/Instances skeleton while the data loads: mirrors the KPI row
+// (4 tiles) and the card grid, so the layout doesn't "jump" when the data arrives.
 export function FleetSkeleton({ cards = 6 }: { cards?: number }) {
   return (
     <div className="flex flex-col gap-4" aria-busy="true">
-      {/* Cabeçalho: título + ações */}
+      {/* Header: title + actions */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-col gap-2">
           <Skeleton className="h-7 w-40" />
@@ -14,7 +14,7 @@ export function FleetSkeleton({ cards = 6 }: { cards?: number }) {
         <Skeleton className="h-9 w-32" />
       </div>
 
-      {/* Linha de KPIs (mesma grade do FleetKpiRow) */}
+      {/* KPI row (same grid as FleetKpiRow) */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
           <div
@@ -27,7 +27,7 @@ export function FleetSkeleton({ cards = 6 }: { cards?: number }) {
         ))}
       </div>
 
-      {/* Grade de cards (mesma grade das páginas) */}
+      {/* Card grid (same grid as the pages) */}
       <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
         {Array.from({ length: cards }).map((_, i) => (
           <div

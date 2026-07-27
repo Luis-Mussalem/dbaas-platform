@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 
-// Bloco de carregamento pulsante — base para os esqueletos de página.
+// Pulsing loading block — the base for page skeletons.
 export function Skeleton({ className }: { className?: string }) {
   return (
     <div

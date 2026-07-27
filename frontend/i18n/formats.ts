@@ -1,8 +1,8 @@
 import type { Formats } from "next-intl";
 import { CURRENCY, type Locale } from "./config";
 
-// Formatos globais consumidos via useFormatter(): format.number(v, "cost").
-// `formats.number.cost` é o ÚNICO lugar onde a moeda é decidida.
+// Global formats consumed via useFormatter(): format.number(v, "cost").
+// `formats.number.cost` is the ONLY place where the currency is decided.
 export function formatsFor(locale: Locale) {
   return {
     number: {

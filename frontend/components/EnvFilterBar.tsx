@@ -4,10 +4,10 @@ import { useTranslations } from "next-intl";
 import { Segmented } from "@/components/Segmented";
 import { ENV_FILTER_VALUES, type EnvFilter } from "@/lib/environment";
 
-// Barra de filtro de ambiente (Todos / produção / homologação / desenvolvimento).
-// Fina camada sobre o Segmented: os VALORES vêm da fonte única lib/environment,
-// os rótulos das mensagens — para o Painel e a página de Instâncias
-// compartilharem o mesmo controle.
+// Environment filter bar (All / production / staging / development).
+// A thin layer over Segmented: the VALUES come from the single source lib/environment,
+// the labels from the messages — so the Dashboard and the Instances page
+// share the same control.
 export function EnvFilterBar({
   value,
   onChange,

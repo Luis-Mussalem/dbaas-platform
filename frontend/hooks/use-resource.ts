@@ -1,19 +1,19 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 
-// Hook genérico de dados: colapsa o boilerplate idêntico dos hooks de fetch
-// (busca inicial + guarda `active` + { data, isLoading, error, refresh }).
-// Cada hook específico continua dono da sua API pública — este é só o motor.
+// Generic data hook: collapses the identical boilerplate of the fetch hooks
+// (initial fetch + `active` guard + { data, isLoading, error, refresh }).
+// Each specific hook still owns its public API — this is just the engine.
 //
-// O `fetcher` DEVE ser estável entre renders (useCallback nos chamadores),
-// senão o effect re-dispara a cada render.
+// `fetcher` MUST be stable across renders (useCallback in the callers),
+// otherwise the effect re-triggers on every render.
 interface UseResourceResult<T> {
   data: T | null;
   isLoading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
-  // Exposto para hooks que mutam a lista localmente após create/delete
-  // (ex.: use-instances), sem re-buscar tudo do backend.
+  // Exposed for hooks that mutate the list locally after create/delete
+  // (e.g.: use-instances), without re-fetching everything from the backend.
   setData: Dispatch<SetStateAction<T | null>>;
 }
 
@@ -21,9 +21,9 @@ export function useResource<T>(
   fetcher: () => Promise<T>,
   errorMessage: string,
   pollMs?: number,
-  // Muda quando algo externo já sabe que os dados mudaram (uma ação da
-  // simulação, por exemplo). Só participa das dependências do efeito: uma
-  // mudança refaz a busca na hora, em vez de esperar o próximo `pollMs`.
+  // Changes when something external already knows the data changed (a
+  // simulation action, for example). Only participates in the effect's dependencies: a
+  // change redoes the fetch right away, instead of waiting for the next `pollMs`.
   version?: number
 ): UseResourceResult<T> {
   const [data, setData] = useState<T | null>(null);
@@ -42,9 +42,9 @@ export function useResource<T>(
     }
   }, [fetcher, errorMessage]);
 
-  // Busca inicial inline (setState dentro do .then/.catch, após o await) — evita
-  // o aviso de "setState síncrono no effect". `active` descarta a resposta se o
-  // componente desmontar antes dela chegar.
+  // Inline initial fetch (setState inside .then/.catch, after the await) — avoids
+  // the "synchronous setState in effect" warning. `active` discards the response if the
+  // component unmounts before it arrives.
   useEffect(() => {
     let active = true;
 

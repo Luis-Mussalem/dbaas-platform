@@ -43,7 +43,7 @@ class InstanceRead(InstanceBase):
 
     id: uuid.UUID
     status: InstanceStatus
-    # Empresa dona (multi-tenant). NULL para instâncias de superuser sem empresa.
+    # Owning company (multi-tenant). NULL for superuser instances with no company.
     company_id: Optional[uuid.UUID] = None
     host: Optional[str] = None
     port: Optional[int] = None
@@ -56,11 +56,11 @@ class InstanceRead(InstanceBase):
 
 class InstanceSummary(BaseModel):
     """
-    Estado agregado de uma instância para o card da frota.
+    Aggregated state of an instance for the fleet card.
 
-    Todo campo é opcional porque uma instância recém-criada (ou parada) ainda
-    não tem coleta, alerta nem backup: o card mostra "—" em vez de zero, que
-    seria uma afirmação falsa sobre a instância.
+    Every field is optional because a newly created (or stopped) instance
+    doesn't yet have collection, alerts, or a backup: the card shows "—" instead
+    of zero, which would be a false statement about the instance.
     """
 
     instance_id: uuid.UUID
@@ -69,7 +69,7 @@ class InstanceSummary(BaseModel):
     queries_per_second: Optional[float] = None
     p95_latency_ms: Optional[float] = None
     db_size_bytes: Optional[float] = None
-    # Crescimento nas últimas 24h; pode ser negativo (após VACUUM FULL/DROP).
+    # Growth over the last 24h; can be negative (after VACUUM FULL/DROP).
     size_delta_24h_bytes: Optional[float] = None
     open_alerts: int = 0
     max_alert_severity: Optional[AlertSeverity] = None

@@ -1,9 +1,9 @@
 import type { Environment } from "@/lib/types";
 
-// Fonte única de verdade para ambientes: valor canônico do backend
-// (production/staging/development) → tom semântico. O rótulo exibido não vive
-// mais aqui: vem das mensagens (Environments.*), traduzido por locale.
-// Consumido por EnvBadge, EnvFilterBar e as páginas de painel/instâncias.
+// Single source of truth for environments: canonical backend value
+// (production/staging/development) → semantic tone. The displayed label no longer
+// lives here: it comes from the messages (Environments.*), translated per locale.
+// Consumed by EnvBadge, EnvFilterBar, and the dashboard/instances pages.
 
 export type EnvFilter = "all" | Environment;
 
@@ -16,8 +16,8 @@ export const ENVIRONMENTS: {
   { value: "development", tone: "info" },
 ];
 
-// Valores do filtro segmentado, com "all" na frente. Os rótulos são montados
-// no componente (precisa de hook para traduzir).
+// Segmented filter values, with "all" up front. The labels are built
+// in the component (needs a hook to translate).
 export const ENV_FILTER_VALUES: EnvFilter[] = ["all", ...ENVIRONMENTS.map((e) => e.value)];
 
 export function environmentTone(env: Environment | null): "ok" | "warn" | "info" | null {

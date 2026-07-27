@@ -22,7 +22,7 @@ interface Toast {
   variant: Variant;
 }
 
-// API exposta aos componentes: três atalhos por tipo de mensagem.
+// API exposed to components: three shortcuts by message type.
 interface ToastApi {
   success: (message: string) => void;
   error: (message: string) => void;
@@ -37,9 +37,9 @@ interface ToastContextValue {
 
 const ToastContext = createContext<ToastContextValue | null>(null);
 
-const DURATION_MS = 4500; // tempo até sumir sozinho
+const DURATION_MS = 4500; // time until it disappears on its own
 
-// Estilo por variante: ícone + cor semântica (tokens do tema).
+// Style per variant: icon + semantic color (theme tokens).
 const TONE: Record<Variant, { icon: typeof Info; className: string }> = {
   success: { icon: CheckCircle2, className: "text-ok" },
   error: { icon: AlertCircle, className: "text-danger" },
@@ -51,14 +51,14 @@ const TONE: Record<Variant, { icon: typeof Info; className: string }> = {
 export function ToastProvider({ children }: { children: ReactNode }) {
   const tc = useTranslations("Common");
   const [toasts, setToasts] = useState<Toast[]>([]);
-  // Contador de ids estável entre renders (não precisa causar re-render).
+  // Id counter stable across renders (doesn't need to cause a re-render).
   const nextId = useRef(0);
 
   const remove = useCallback((id: number) => {
     setToasts((cur) => cur.filter((t) => t.id !== id));
   }, []);
 
-  // Cria um toast e agenda sua remoção automática.
+  // Creates a toast and schedules its automatic removal.
   const push = useCallback(
     (variant: Variant, message: string) => {
       const id = nextId.current++;

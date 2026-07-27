@@ -1,13 +1,13 @@
 """
-Testes do guard SELECT-only de collect_explain (FASE 4).
+Tests for collect_explain's SELECT-only guard (PHASE 4).
 
-Este é o mesmo guard que o SQL Console (FRONTEND F7) vai reusar para a execução
-read-only de SQL — por isso vale travar o comportamento agora, antes do reuso.
+This is the same guard the SQL Console (FRONTEND F7) will reuse for the
+read-only execution of SQL — that's why it's worth locking down the behavior now, before the reuse.
 
-As validações (tamanho, ponto-e-vírgula, startswith select, blacklist DML/DDL)
-rodam ANTES de qualquer uso da conexão. Logo, passamos conn=None: nas entradas
-inválidas a função levanta ValueError sem nunca tocar no banco. Não há
-dependência de Postgres aqui.
+The validations (length, semicolon, startswith select, DML/DDL blacklist)
+run BEFORE any use of the connection. Hence we pass conn=None: on invalid
+inputs the function raises ValueError without ever touching the database. There's no
+dependency on Postgres here.
 """
 import pytest
 
@@ -32,7 +32,7 @@ def test_rejects_semicolon():
         "update users set x = 1",
         "insert into users values (1)",
         "  drop table users  ",
-        "with x as (select 1) delete from users",  # não começa com select
+        "with x as (select 1) delete from users",  # doesn't start with select
     ],
 )
 def test_rejects_non_select_start(query):
@@ -56,7 +56,7 @@ def test_rejects_blocked_keyword_inside_select(keyword, query):
 
 
 def test_case_insensitive_and_whitespace_tolerant():
-    # SELECT maiúsculo com espaços à frente passa pela validação e só falha ao
-    # tentar usar a conexão None — provando que o guard não barrou a query.
+    # Uppercase SELECT with leading whitespace passes validation and only fails when
+    # trying to use the None connection — proving the guard didn't block the query.
     with pytest.raises(AttributeError):
         collect_explain(None, "   SELECT 1   ")

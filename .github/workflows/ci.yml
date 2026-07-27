@@ -1,38 +1,38 @@
 name: CI
 
-# Roda em pushes na main e em qualquer Pull Request.
+# Runs on pushes to main and on any Pull Request.
 on:
   push:
     branches: [main]
   pull_request:
 
-# Cancela execuções antigas do mesmo branch quando um novo push chega.
+# Cancels stale runs of the same branch when a new push arrives.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Backend: lint (ruff) + testes (pytest) contra um PostgreSQL real.
+  # Backend: lint (ruff) + tests (pytest) against a real PostgreSQL.
   # ---------------------------------------------------------------------------
   backend:
     name: Backend (ruff + pytest)
     runs-on: ubuntu-latest
 
-    # PostgreSQL como service container — espelha o docker-compose local.
-    # A suíte conecta nele para criar o banco de teste dbaas_test.
+    # PostgreSQL as a service container — mirrors the local docker-compose.
+    # The suite connects to it to create the dbaas_test test database.
     services:
       postgres:
         image: postgres:16-alpine
         env:
           POSTGRES_USER: dbaas
-          # Senha efêmera do service container de CI (não é um segredo real).
-          # config.py rejeita placeholders "change-me" no startup.
+          # Ephemeral password for the CI service container (not a real secret).
+          # config.py rejects "change-me" placeholders at startup.
           POSTGRES_PASSWORD: ci-only-test-password
           POSTGRES_DB: dbaas
         ports:
           - 5432:5432
-        # Espera o Postgres aceitar conexões antes de rodar os steps.
+        # Waits for Postgres to accept connections before running the steps.
         options: >-
           --health-cmd "pg_isready -U dbaas"
           --health-interval 10s
@@ -40,14 +40,14 @@ jobs:
           --health-retries 5
 
     env:
-      # Conexão com o service container (config.py usa estes nomes).
+      # Connection to the service container (config.py uses these names).
       POSTGRES_HOST: localhost
       POSTGRES_PORT: 5432
       POSTGRES_USER: dbaas
       POSTGRES_PASSWORD: ci-only-test-password
-      # As demais variáveis sensíveis (JWT_SECRET_KEY, FERNET_KEY,
-      # PROVISIONER_SUPERUSER_PASSWORD, POSTGRES_DB) são definidas pelo
-      # próprio conftest.py antes de importar a aplicação.
+      # The other sensitive variables (JWT_SECRET_KEY, FERNET_KEY,
+      # PROVISIONER_SUPERUSER_PASSWORD, POSTGRES_DB) are set by
+      # conftest.py itself before the application is imported.
 
     defaults:
       run:
@@ -72,7 +72,7 @@ jobs:
         run: pytest --cov=src --cov-report=term-missing
 
   # ---------------------------------------------------------------------------
-  # Frontend: paridade das mensagens + lint (eslint) + typecheck (tsc) + build.
+  # Frontend: message parity + lint (eslint) + typecheck (tsc) + build.
   # ---------------------------------------------------------------------------
   frontend:
     name: Frontend (i18n + lint + typecheck + build)
@@ -95,8 +95,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Antes do typecheck: um drift de chave dá um erro de tsc genérico e
-      # difícil de ler; este step nomeia a chave que falta.
+      # Before the typecheck: a key drift produces a generic, hard-to-read tsc
+      # error; this step names the missing key.
       - name: Check i18n messages (en/pt parity)
         run: npm run i18n:check
 
@@ -110,7 +110,7 @@ jobs:
         run: npm run build
 
   # ---------------------------------------------------------------------------
-  # Docker: valida que a imagem multi-stage do backend constrói sem erro.
+  # Docker: validates that the backend's multi-stage image builds without error.
   # ---------------------------------------------------------------------------
   docker:
     name: Docker build (backend image)

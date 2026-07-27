@@ -11,11 +11,11 @@ from src.core.database import Base
 
 
 class AlertCondition(str, enum.Enum):
-    GT  = "gt"   # maior que (greater than)
-    GTE = "gte"  # maior ou igual (greater than or equal)
-    LT  = "lt"   # menor que (less than)
-    LTE = "lte"  # menor ou igual (less than or equal)
-    EQ  = "eq"   # igual (equal)
+    GT  = "gt"   # greater than
+    GTE = "gte"  # greater than or equal
+    LT  = "lt"   # less than
+    LTE = "lte"  # less than or equal
+    EQ  = "eq"   # equal
 
 
 class AlertSeverity(str, enum.Enum):
@@ -26,18 +26,18 @@ class AlertSeverity(str, enum.Enum):
 
 class AlertRule(Base):
     """
-    Define uma regra de detecção de problemas para uma instância específica.
+    Defines a problem-detection rule for a specific instance.
 
-    metric_type é String (não Enum no banco) para permitir novos tipos sem
-    migration. O Pydantic valida os valores aceitos na camada de schema.
+    metric_type is String (not an Enum in the database) to allow new types without
+    a migration. Pydantic validates the accepted values at the schema layer.
 
-    Por que threshold é Float e não Int?
-    Permite regras como "cache_hit_ratio < 95.5" ou "backup_age_hours > 23.5"
-    sem perda de precisão. Na prática, a maioria será inteiro, mas Float não custa nada.
+    Why is threshold a Float and not an Int?
+    Allows rules like "cache_hit_ratio < 95.5" or "backup_age_hours > 23.5"
+    without losing precision. In practice most will be integers, but Float costs nothing.
 
-    Por que name é obrigatório?
-    Facilita identificar o alerta no log: "[CRITICAL] Backup Overdue" é
-    imediatamente compreensível, ao contrário de "backup_age_hours > 24".
+    Why is name required?
+    Makes it easier to identify the alert in the log: "[CRITICAL] Backup Overdue" is
+    immediately understandable, unlike "backup_age_hours > 24".
     """
 
     __tablename__ = "alert_rules"
@@ -76,19 +76,19 @@ class AlertRule(Base):
 
 class AlertEvent(Base):
     """
-    Registra uma ocorrência de disparo de uma AlertRule.
+    Records an occurrence of an AlertRule firing.
 
-    Um evento fica "aberto" (resolved_at = NULL) enquanto o problema persiste.
-    O avaliador automático resolve o evento quando o valor volta ao normal.
-    O operador também pode resolver manualmente via API.
+    An event stays "open" (resolved_at = NULL) while the problem persists.
+    The automatic evaluator resolves the event when the value returns to normal.
+    The operator can also resolve it manually via the API.
 
-    Por que manter eventos resolvidos em vez de deletar?
-    Audit trail: permite ver a frequência de um problema, quando foi resolvido
-    e por quanto tempo a instância ficou em estado crítico.
+    Why keep resolved events instead of deleting them?
+    Audit trail: lets you see how often a problem occurs, when it was resolved,
+    and for how long the instance stayed in a critical state.
 
-    Índice composto (instance_id, resolved_at):
-    A query mais frequente é "alertas abertos desta instância" →
-    WHERE instance_id = X AND resolved_at IS NULL. O índice cobre esse filtro.
+    Composite index (instance_id, resolved_at):
+    The most frequent query is "open alerts for this instance" →
+    WHERE instance_id = X AND resolved_at IS NULL. The index covers that filter.
     """
 
     __tablename__ = "alert_events"

@@ -1,10 +1,10 @@
 """
-Testes do endpoint de histórico de métricas (série temporal para sparklines).
+Tests for the metrics history endpoint (time series for sparklines).
 
-GET /api/v1/instances/{id}/metrics/history?metric=&window= lê da tabela metrics
-do banco da plataforma — não conecta ao banco monitorado. Cobrimos: filtragem
-por janela, ordenação crescente, métrica inexistente (lista vazia), instância
-inexistente (404) e janela inválida (422).
+GET /api/v1/instances/{id}/metrics/history?metric=&window= reads from the metrics
+table on the platform database — it doesn't connect to the monitored database. We cover: window
+filtering, ascending order, nonexistent metric (empty list), nonexistent
+instance (404), and invalid window (422).
 """
 from datetime import datetime, timedelta, timezone
 
@@ -40,15 +40,15 @@ def test_history_returns_points_in_window_ordered(client, auth_headers, instance
     headers, _ = auth_headers()
     now = datetime.now(timezone.utc)
     db.add_all([
-        # Fora da janela de 15m (não deve aparecer).
+        # Outside the 15m window (must not appear).
         Metric(instance_id=instance.id, metric_name="cache_hit_ratio", value=80.0,
                collected_at=now - timedelta(minutes=30)),
-        # Dentro da janela (devem aparecer, em ordem crescente).
+        # Within the window (must appear, in ascending order).
         Metric(instance_id=instance.id, metric_name="cache_hit_ratio", value=95.0,
                collected_at=now - timedelta(minutes=10)),
         Metric(instance_id=instance.id, metric_name="cache_hit_ratio", value=98.0,
                collected_at=now - timedelta(minutes=2)),
-        # Outra métrica não deve vazar para o resultado.
+        # Another metric must not leak into the result.
         Metric(instance_id=instance.id, metric_name="connections_active", value=5.0,
                collected_at=now - timedelta(minutes=1)),
     ])
@@ -60,7 +60,7 @@ def test_history_returns_points_in_window_ordered(client, auth_headers, instance
     assert body["metric_name"] == "cache_hit_ratio"
     assert body["window"] == "15m"
     values = [p["value"] for p in body["points"]]
-    assert values == [95.0, 98.0]  # filtrado por janela e ordenado por tempo
+    assert values == [95.0, 98.0]  # filtered by window and ordered by time
 
 
 def test_history_wider_window_includes_more(client, auth_headers, instance, db):
@@ -100,9 +100,9 @@ def test_history_invalid_window_422(client, auth_headers, instance):
 
 def test_history_is_downsampled_to_a_stable_number_of_points(client, auth_headers, instance, db):
     """
-    Uma janela de 24h com coleta a cada 5s (o que a simulação de uso faz) traz
-    dezenas de milhares de amostras. O endpoint reamostra em baldes para o
-    sparkline ter sempre a mesma resolução — e não virar uma serra.
+    A 24h window with collection every 5s (what the usage simulation does) brings
+    tens of thousands of samples. The endpoint resamples into buckets so the
+    sparkline always has the same resolution — and doesn't turn into a sawtooth.
     """
     headers, _ = auth_headers()
     now = datetime.now(timezone.utc)
@@ -110,10 +110,10 @@ def test_history_is_downsampled_to_a_stable_number_of_points(client, auth_header
         Metric(
             instance_id=instance.id,
             metric_name="connections_active",
-            value=float(10 + (i % 2)),  # alterna 10/11: o ruído a suavizar
+            value=float(10 + (i % 2)),  # alternates 10/11: the noise to be smoothed
             collected_at=now - timedelta(seconds=5 * i),
         )
-        for i in range(2000)  # ~2.7h de coleta a 5s
+        for i in range(2000)  # ~2.7h of collection at 5s
     ])
     db.commit()
 
@@ -121,21 +121,21 @@ def test_history_is_downsampled_to_a_stable_number_of_points(client, auth_header
         f"{_url(instance.id)}?metric=connections_active&window=24h", headers=headers
     ).json()["points"]
 
-    assert 0 < len(points) <= 120, f"esperava série reamostrada, veio {len(points)}"
-    # A média dentro do balde fica entre os extremos — a curva perde a serrilha,
-    # não a escala.
+    assert 0 < len(points) <= 120, f"expected a resampled series, got {len(points)}"
+    # The average within the bucket sits between the extremes — the curve loses the
+    # jaggedness, not the scale.
     assert all(10.0 <= p["value"] <= 11.0 for p in points)
-    # Ordem cronológica preservada.
+    # Chronological order preserved.
     assert [p["collected_at"] for p in points] == sorted(p["collected_at"] for p in points)
 
 
 def test_queries_per_second_is_derived_from_the_xact_commit_counter(
     client, auth_headers, instance, db
 ):
-    """queries/s não é armazenado: a série vem da derivada do contador xact_commit."""
+    """queries/s isn't stored: the series comes from the derivative of the xact_commit counter."""
     headers, _ = auth_headers()
     now = datetime.now(timezone.utc)
-    # Contador cumulativo crescendo +600 a cada 60s → 10 commits/s.
+    # Cumulative counter growing +600 every 60s → 10 commits/s.
     db.add_all([
         Metric(instance_id=instance.id, metric_name="xact_commit", value=v,
                collected_at=now - timedelta(seconds=s))
@@ -150,20 +150,20 @@ def test_queries_per_second_is_derived_from_the_xact_commit_counter(
     body = resp.json()
     assert body["metric_name"] == "queries_per_second"
     values = [p["value"] for p in body["points"]]
-    assert values, "série derivada veio vazia"
+    assert values, "derived series came back empty"
     assert all(v == 10.0 for v in values)
 
 
 def test_queries_per_second_series_skips_a_counter_reset(
     client, auth_headers, instance, db
 ):
-    """Reset do Postgres reancora e NÃO emite ponto — nunca um pico nem um 0 falso."""
+    """A Postgres reset re-anchors and does NOT emit a point — never a spike or a false 0."""
     headers, _ = auth_headers()
     now = datetime.now(timezone.utc)
     db.add_all([
         Metric(instance_id=instance.id, metric_name="xact_commit", value=v,
                collected_at=now - timedelta(seconds=s))
-        for v, s in [(9000, 120), (50, 60), (650, 0)]  # reset entre -120s e -60s
+        for v, s in [(9000, 120), (50, 60), (650, 0)]  # reset between -120s and -60s
     ])
     db.commit()
 
@@ -171,20 +171,20 @@ def test_queries_per_second_series_skips_a_counter_reset(
         f"{_url(instance.id)}?metric=queries_per_second&window=1h&points=60", headers=headers
     )
     values = [p["value"] for p in resp.json()["points"]]
-    assert values == [10.0]  # reset pulado; só o par pós-reset (50→650)/60s = 10
+    assert values == [10.0]  # reset skipped; only the post-reset pair (50→650)/60s = 10
 
 
 def test_queries_per_second_series_skips_a_stale_low_read(
     client, auth_headers, instance, db
 ):
     """
-    Uma leitura stale (mergulho pequeno e transitório) é PULADA em vez de virar 0 e
-    depois um pico: a linha interpola o buraco e o crescimento real reaparece no
-    balde seguinte, medido sobre o intervalo maior.
+    A stale reading (a small, transient dip) is SKIPPED instead of turning into 0 and
+    then a spike: the line interpolates over the gap and the real growth reappears in the
+    next bucket, measured over the larger interval.
     """
     headers, _ = auth_headers()
     now = datetime.now(timezone.utc)
-    # +600/60s de crescimento real; o balde de -60s é STALE (2180 < 2200 de antes).
+    # +600/60s of real growth; the -60s bucket is STALE (2180 < 2200 from before).
     db.add_all([
         Metric(instance_id=instance.id, metric_name="xact_commit", value=v,
                collected_at=now - timedelta(seconds=s))
@@ -196,8 +196,8 @@ def test_queries_per_second_series_skips_a_stale_low_read(
         f"{_url(instance.id)}?metric=queries_per_second&window=1h&points=60", headers=headers
     )
     values = [p["value"] for p in resp.json()["points"]]
-    # 1600→2200 = +600/60 = 10; o stale 2180 é pulado; 2200→2800 = +600/120 = 5.
-    # (window=1h/60 → baldes de 60s: a média móvel de 1 min é no-op aqui.)
+    # 1600→2200 = +600/60 = 10; the stale 2180 is skipped; 2200→2800 = +600/120 = 5.
+    # (window=1h/60 → 60s buckets: the 1 min moving average is a no-op here.)
     assert values == [10.0, 5.0]
 
 
@@ -205,14 +205,14 @@ def test_queries_per_second_series_is_smoothed_to_one_minute(
     client, auth_headers, instance, db
 ):
     """
-    Em baldes curtos (15s), a taxa de uma carga em rajadas serrilha muito. A série
-    passa por uma média móvel de ~1 min: um dente-de-serra 0/20 vira uma linha
-    estável em ~10 (a taxa real média), mantendo um ponto por balde.
+    In short buckets (15s), the rate of a bursty load is very jagged. The series
+    goes through a ~1 min moving average: a 0/20 sawtooth becomes a stable
+    line at ~10 (the real average rate), keeping one point per bucket.
     """
     headers, _ = auth_headers()
     now = datetime.now(timezone.utc)
-    # Um sample por balde de 15s; o contador cresce +300 a balde SIM, balde NÃO —
-    # taxas cruas alternando 0 e 20 q/s.
+    # One sample per 15s bucket; the counter grows +300 on every OTHER bucket —
+    # raw rates alternating between 0 and 20 q/s.
     db.add_all([
         Metric(instance_id=instance.id, metric_name="xact_commit", value=v,
                collected_at=now - timedelta(seconds=s))
@@ -221,12 +221,12 @@ def test_queries_per_second_series_is_smoothed_to_one_minute(
     ])
     db.commit()
 
-    # window=15m/60 → baldes de 15s → média móvel de 4 pontos (1 min).
+    # window=15m/60 → 15s buckets → 4-point (1 min) moving average.
     resp = client.get(
         f"{_url(instance.id)}?metric=queries_per_second&window=15m&points=60", headers=headers
     )
     values = [p["value"] for p in resp.json()["points"]]
-    # A serra crua seria [0, 20, 0, 20, 0, 20]; alisada, a cauda assenta em 10 q/s.
+    # The raw sawtooth would be [0, 20, 0, 20, 0, 20]; smoothed, the tail settles at 10 q/s.
     assert values[-3:] == [10.0, 10.0, 10.0]
-    # E nenhum ponto alisado chega ao pico cru de 20 (o serrilhado sumiu).
+    # And no smoothed point reaches the raw peak of 20 (the jaggedness is gone).
     assert max(values) < 20.0

@@ -8,7 +8,7 @@ import { updateUser } from "@/lib/api";
 import { useFormatters } from "@/hooks/use-formatters";
 import { BTN_PRIMARY, INPUT_LG } from "@/lib/ui";
 
-// Pequeno aviso de sucesso/erro reutilizado pelos dois formulários.
+// Small success/error notice reused by both forms.
 function Notice({ kind, text }: { kind: "ok" | "error"; text: string }) {
   return (
     <div
@@ -28,16 +28,16 @@ export default function SettingsPage() {
   const t = useTranslations("Settings");
   const tc = useTranslations("Common");
   const { dateTime } = useFormatters();
-  // `user` vem do AuthContext (estado global). `refreshUser` re-busca /auth/me
-  // depois de salvar, para a Sidebar refletir o novo email na hora.
+  // `user` comes from AuthContext (global state). `refreshUser` re-fetches /auth/me
+  // after saving, so the Sidebar reflects the new email right away.
   const { user, refreshUser } = useAuth();
 
-  // ── Formulário 1: email ──
+  // ── Form 1: email ──
   const [email, setEmail] = useState(user?.email ?? "");
   const [emailBusy, setEmailBusy] = useState(false);
   const [emailMsg, setEmailMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
 
-  // ── Formulário 2: senha ── (independente do de email)
+  // ── Form 2: password ── (independent from the email one)
   const [pwd, setPwd] = useState("");
   const [pwd2, setPwd2] = useState("");
   const [pwdBusy, setPwdBusy] = useState(false);
@@ -46,7 +46,7 @@ export default function SettingsPage() {
   if (!user) return <p className="text-sm text-fg-3">{tc("loading")}</p>;
 
   async function saveEmail(e: React.FormEvent) {
-    e.preventDefault(); // impede o reload padrão do <form> (controlamos via fetch)
+    e.preventDefault(); // prevents the <form>'s default reload (we control it via fetch)
     if (!user) return;
     if (!email.trim() || email === user.email) {
       setEmailMsg({ kind: "error", text: t("email.sameAsCurrent") });
@@ -84,7 +84,7 @@ export default function SettingsPage() {
       setPwd2("");
       setPwdMsg({ kind: "ok", text: t("password.updated") });
     } catch (err) {
-      // O backend valida a força da senha; mostramos a mensagem dele tal qual.
+      // The backend validates password strength; we show its message as-is.
       setPwdMsg({ kind: "error", text: err instanceof Error ? err.message : t("saveFailed") });
     } finally {
       setPwdBusy(false);
@@ -98,7 +98,7 @@ export default function SettingsPage() {
         <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
       </div>
 
-      {/* ── Identidade da conta (somente leitura) ── */}
+      {/* ── Account identity (read-only) ── */}
       <div className="rounded-xl border border-border bg-surface p-5">
         <div className="flex items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-base font-semibold text-primary-foreground">
@@ -118,7 +118,7 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* ── Trocar email ── */}
+      {/* ── Change email ── */}
       <form onSubmit={saveEmail} className="rounded-xl border border-border bg-surface p-5">
         <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold">
           <Mail size={15} className="text-fg-2" /> {t("email.title")}
@@ -139,7 +139,7 @@ export default function SettingsPage() {
         </div>
       </form>
 
-      {/* ── Trocar senha ── */}
+      {/* ── Change password ── */}
       <form onSubmit={savePassword} className="rounded-xl border border-border bg-surface p-5">
         <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold">
           <KeyRound size={15} className="text-fg-2" /> {t("password.title")}

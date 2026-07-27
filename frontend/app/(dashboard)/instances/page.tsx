@@ -21,13 +21,13 @@ import { CURRENCY } from "@/i18n/config";
 export default function InstancesPage() {
   const t = useTranslations("Instances");
   const locale = useLocale();
-  // Reaproveita o mesmo hook e o mesmo card do Painel; ganha o filtro de
-  // ambiente e a linha de KPIs (via useDashboard) para ficar como no design.
+  // Reuses the same hook and the same card as the Dashboard; gains the
+  // environment filter and the KPI row (via useDashboard) to match the design.
   const { instances, isLoading, error } = useInstances(DASHBOARD_POLL_MS);
   const { summary } = useDashboard(DASHBOARD_POLL_MS);
   const { summaries } = useFleetSummary(DASHBOARD_POLL_MS);
-  // Teto comum (base zero) dos sparklines de queries/s: régua compartilhada entre
-  // os cards, para a altura da linha codificar magnitude e não só forma.
+  // Common (zero-based) ceiling for the queries/s sparklines: a scale shared across
+  // the cards, so the line's height encodes magnitude and not just shape.
   const qpsScale = useMemo(
     () => qpsScaleMax([...summaries.values()].map((s) => s.queries_per_second)),
     [summaries],
@@ -48,7 +48,7 @@ export default function InstancesPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* cabeçalho: título + filtro de ambiente + ação de criar */}
+      {/* header: title + environment filter + create action */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>

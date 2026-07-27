@@ -3,12 +3,12 @@
 import { useTranslations } from "next-intl";
 import type { QueryResult } from "@/lib/types";
 
-// Espelha MAX_ROWS de backend/src/services/query.py — o cap não vem na resposta,
-// só o booleano `truncated`.
+// Mirrors MAX_ROWS from backend/src/services/query.py — the cap doesn't come in the response,
+// only the `truncated` boolean.
 const MAX_ROWS = 1000;
 
-// Tabela de resultados do Console SQL. Apenas apresentação: recebe o QueryResult
-// já carregado pela página e o renderiza. Segue o padrão visual de ConnectionsTable.
+// SQL Console results table. Presentation only: receives the QueryResult
+// already loaded by the page and renders it. Follows ConnectionsTable's visual pattern.
 export function ResultsTable({ result }: { result: QueryResult }) {
   const t = useTranslations("Sql.results");
   const { columns, rows, row_count, truncated } = result;
@@ -24,16 +24,16 @@ export function ResultsTable({ result }: { result: QueryResult }) {
       </div>
 
       {columns.length === 0 ? (
-        // SELECT válido que não devolve colunas (raro, mas possível).
+        // A valid SELECT that returns no columns (rare, but possible).
         <p className="px-4 py-8 text-center text-sm text-fg-3">{t("noRows")}</p>
       ) : (
-        // overflow-x-auto: tabelas largas rolam na horizontal sem quebrar o layout.
+        // overflow-x-auto: wide tables scroll horizontally without breaking the layout.
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-[11.5px] uppercase tracking-wide text-fg-3">
                 {columns.map((col, i) => (
-                  // Colunas podem repetir nome (SELECT 1, 1) → a key inclui o índice.
+                  // Columns can repeat a name (SELECT 1, 1) → the key includes the index.
                   <th key={`${col}-${i}`} className="whitespace-nowrap px-4 py-2 font-medium">
                     {col}
                   </th>
@@ -41,8 +41,8 @@ export function ResultsTable({ result }: { result: QueryResult }) {
               </tr>
             </thead>
             <tbody>
-              {/* Linhas não têm id próprio e podem se repetir (SELECT 1) — a key
-                  combina conteúdo + posição para ser estável e única. */}
+              {/* Rows have no id of their own and can repeat (SELECT 1) — the key
+                  combines content + position to be stable and unique. */}
               {rows.map((row, r) => (
                 <tr key={`${r}|${row.join("")}`} className="border-t border-border">
                   {row.map((cell, c) => (

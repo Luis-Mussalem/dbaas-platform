@@ -5,9 +5,9 @@ import { useTranslations } from "next-intl";
 import { Copy, Check } from "lucide-react";
 import { useToast } from "@/context/ToastProvider";
 
-// String de conexão da instância. Os campos host/porta/banco/usuário são reais
-// (vêm do GET /instances/{id}); a SENHA é cifrada no backend e nunca devolvida
-// pela API — por isso aparece mascarada. É informativa, não copiável "pronta".
+// The instance's connection string. The host/port/database/user fields are real
+// (come from GET /instances/{id}); the PASSWORD is encrypted on the backend and never
+// returned by the API — that's why it shows up masked. It's informational, not a "ready" copy.
 export function ConnString({
   host,
   port,
@@ -26,8 +26,8 @@ export function ConnString({
   const uri = `postgresql://${user ?? "user"}:••••••••@${host}:${port ?? 5432}/${db ?? ""}`;
 
   function copy() {
-    // Sucesso só depois que o clipboard confirmar — sem toast falso quando a
-    // cópia falha (clipboard indisponível fora de HTTPS/localhost, permissão).
+    // Success only after the clipboard confirms — no false toast when the
+    // copy fails (clipboard unavailable outside HTTPS/localhost, permission).
     if (!navigator.clipboard) {
       toast.error(t("copyUnavailable"));
       return;

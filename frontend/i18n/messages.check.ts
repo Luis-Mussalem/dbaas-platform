@@ -1,13 +1,13 @@
 import type { Messages } from "next-intl";
 import pt from "../messages/pt.json";
 
-// Guard-rail de TIPO, complementar ao i18n/check-messages.mjs (que roda no CI).
-// `Messages` é tipado a partir de en.json (ver global.d.ts), então esta atribuição
-// faz o `tsc` falhar se pt.json perder uma chave que en.json tem.
+// TYPE guard-rail, complementary to i18n/check-messages.mjs (which runs in CI).
+// `Messages` is typed from en.json (see global.d.ts), so this assignment
+// makes `tsc` fail if pt.json is missing a key that en.json has.
 //
-// Existe além do checker .mjs porque pega o erro no editor, no exato momento em
-// que a chave some — sem esperar o CI. O .mjs cobre o que o tipo não vê: chaves
-// a mais, ordem e a estrutura ICU.
+// It exists alongside the .mjs checker because it catches the error in the editor, the exact
+// moment the key disappears — without waiting for CI. The .mjs covers what the type can't see: extra
+// keys, ordering, and ICU structure.
 //
-// `satisfies` em vez de `:` para checar a compatibilidade sem alargar o tipo.
+// `satisfies` instead of `:` to check compatibility without widening the type.
 export const ptMessages = pt satisfies Messages;

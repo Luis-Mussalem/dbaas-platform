@@ -31,7 +31,7 @@ export function LogsTab({ instance }: { instance: Instance }) {
       ) : !logs || !logs.trim() ? (
         <p className="px-4 py-8 text-center text-sm text-fg-3">{t("empty")}</p>
       ) : (
-        // pre com scroll próprio: logs largos rolam sem quebrar o layout da página.
+        // pre with its own scroll: wide logs scroll without breaking the page layout.
         <pre className="max-h-[28rem] overflow-auto px-4 py-3 font-mono text-xs leading-relaxed text-fg-2">
           {logs}
         </pre>

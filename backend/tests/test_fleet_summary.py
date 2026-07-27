@@ -1,11 +1,11 @@
 """
-Testes do agregado por instância dos cards da frota.
+Tests for the per-instance aggregate behind the fleet cards.
 
-GET /api/v1/instances/fleet-summary lê só do banco da plataforma (metrics,
-alert_events, backups, instance_status_history) — não conecta ao banco
-monitorado. Cobrimos: cálculo de throughput a partir do contador cumulativo,
-crescimento de disco em 24h, alertas abertos com a pior severidade, último
-backup, ausência de dados (campos null) e escopo multi-tenant.
+GET /api/v1/instances/fleet-summary only reads from the platform database (metrics,
+alert_events, backups, instance_status_history) — it doesn't connect to the monitored
+database. We cover: throughput calculation from the cumulative counter,
+24h disk growth, open alerts with the worst severity, last
+backup, absence of data (null fields), and multi-tenant scope.
 """
 from datetime import datetime, timedelta, timezone
 
@@ -59,7 +59,7 @@ def test_fleet_summary_requires_auth(client, instance):
 
 
 def test_empty_instance_has_all_metrics_null(client, auth_headers, instance):
-    """Instância sem coleta: campos null e zero alertas — nunca zeros inventados."""
+    """Instance with no collection: null fields and zero alerts — never invented zeros."""
     headers, _ = auth_headers()
     body = _summary_of(client.get(URL, headers=headers).json(), instance)
 
@@ -75,8 +75,8 @@ def test_empty_instance_has_all_metrics_null(client, auth_headers, instance):
 def test_queries_per_second_from_cumulative_counter(client, auth_headers, instance, db):
     headers, _ = auth_headers()
     now = datetime.now(timezone.utc)
-    # Dois baldes de 15s a 30s de distância: a série derivada tem um ponto, a taxa
-    # daquele balde; o número é a média dessa série (= o único ponto).
+    # Two 15s buckets 30s apart: the derived series has one point, the rate
+    # of that bucket; the number is the average of that series (= the single point).
     db.add_all([
         Metric(instance_id=instance.id, metric_name="xact_commit", value=1_000.0,
                collected_at=now - timedelta(seconds=30)),
@@ -93,13 +93,13 @@ def test_queries_per_second_averages_over_the_window_not_adjacent_points(
     client, auth_headers, instance, db
 ):
     """
-    A carga demo comita em rajadas: dois pontos adjacentes podem cair entre
-    rajadas (Δ=0) mesmo com a frota viva. O número é a média da série inteira, e
-    não a taxa do último par — então devolve um valor estável e não-zero.
+    The demo load commits in bursts: two adjacent points can fall between
+    bursts (Δ=0) even with a live fleet. The number is the average of the whole series, not
+    the rate of the last pair — so it returns a stable, non-zero value.
     """
     headers, _ = auth_headers()
     now = datetime.now(timezone.utc)
-    # Rajadas de +180 a cada 30s; o par mais recente (now, -15s) tem Δ=0.
+    # +180 bursts every 30s; the most recent pair (now, -15s) has Δ=0.
     db.add_all([
         Metric(instance_id=instance.id, metric_name="xact_commit", value=v,
                collected_at=now - timedelta(seconds=s))
@@ -108,23 +108,23 @@ def test_queries_per_second_averages_over_the_window_not_adjacent_points(
     db.commit()
 
     body = _summary_of(client.get(URL, headers=headers).json(), instance)
-    # Baldes de 15s → taxas cruas [12, 0, 12, 0]; a média móvel de 1 min as alisa
-    # para [12, 6, 8, 6] e o número é a média dessa linha (8 q/s) — o ponto é que
-    # não é o "0" do último par, e sim um valor estável que reflete a janela.
+    # 15s buckets → raw rates [12, 0, 12, 0]; the 1 min moving average smooths them
+    # to [12, 6, 8, 6] and the number is the average of that line (8 q/s) — the point is
+    # it's not the "0" of the last pair, but a stable value that reflects the window.
     assert body["queries_per_second"] == 8.0
 
 
 def test_queries_per_second_ignores_a_stale_low_read(client, auth_headers, instance, db):
     """
-    O pg_stat_database às vezes devolve uma leitura stale (snapshot antigo): o
-    contador "mergulha" de leve por uma amostra. Se essa amostra vira a mais
-    recente, a derivação não pode zerar/anular o card — o mergulho é ignorado e a
-    taxa sai do crescimento real.
+    pg_stat_database sometimes returns a stale reading (an old snapshot): the
+    counter "dips" slightly for one sample. If that sample becomes the most
+    recent, the derivation must not zero out/nullify the card — the dip is ignored and the
+    rate comes from the real growth.
     """
     headers, _ = auth_headers()
     now = datetime.now(timezone.utc)
-    # Crescimento real de +180 em 15s; a amostra mais recente é STALE (2100 < 2180
-    # de 15s antes) — um mergulho de ~4%, não um reset.
+    # Real growth of +180 over 15s; the most recent sample is STALE (2100 < 2180
+    # from 15s before) — a ~4% dip, not a reset.
     db.add_all([
         Metric(instance_id=instance.id, metric_name="xact_commit", value=v,
                collected_at=now - timedelta(seconds=s))
@@ -133,13 +133,13 @@ def test_queries_per_second_ignores_a_stale_low_read(client, auth_headers, insta
     db.commit()
 
     body = _summary_of(client.get(URL, headers=headers).json(), instance)
-    # Um único balde real: (2180-2000)/15 = 12 q/s. A leitura stale de 2100 é
-    # ignorada (não emite ponto), então não zera nem anula o card.
+    # A single real bucket: (2180-2000)/15 = 12 q/s. The stale 2100 reading is
+    # ignored (emits no point), so it neither zeroes out nor nullifies the card.
     assert body["queries_per_second"] == 12.0
 
 
 def test_counter_reset_is_discarded(client, auth_headers, instance, db):
-    """Delta negativo = Postgres reiniciou; melhor não reportar que reportar um pico."""
+    """Negative delta = Postgres restarted; better to not report than to report a spike."""
     headers, _ = auth_headers()
     now = datetime.now(timezone.utc)
     db.add_all([
@@ -158,7 +158,7 @@ def test_size_delta_ignores_samples_older_than_24h(client, auth_headers, instanc
     headers, _ = auth_headers()
     now = datetime.now(timezone.utc)
     db.add_all([
-        # Fora da janela: não pode virar a base do cálculo.
+        # Outside the window: cannot become the basis of the calculation.
         Metric(instance_id=instance.id, metric_name="db_size_bytes", value=100.0,
                collected_at=now - timedelta(hours=30)),
         Metric(instance_id=instance.id, metric_name="db_size_bytes", value=1_000.0,
@@ -181,7 +181,7 @@ def test_open_alerts_counted_with_worst_severity(client, auth_headers, instance,
                    current_value=1, message="open-warning"),
         AlertEvent(rule_id=critical.id, instance_id=instance.id,
                    current_value=1, message="open-critical"),
-        # Resolvido: não conta.
+        # Resolved: doesn't count.
         AlertEvent(rule_id=warning.id, instance_id=instance.id,
                    current_value=1, message="closed",
                    resolved_at=datetime.now(timezone.utc)),
@@ -194,7 +194,7 @@ def test_open_alerts_counted_with_worst_severity(client, auth_headers, instance,
 
 
 def test_last_backup_reports_failure(client, auth_headers, instance, db):
-    """O backup mais recente é o que vale — inclusive quando falhou."""
+    """The most recent backup is what counts — even when it failed."""
     headers, _ = auth_headers()
     now = datetime.now(timezone.utc)
     db.add_all([
@@ -240,7 +240,7 @@ def test_uptime_comes_from_status_history(client, auth_headers, instance, db):
 def test_summary_is_scoped_to_the_users_company(
     client, auth_headers, make_company, db
 ):
-    """Membro de empresa não vê o agregado das instâncias de outra."""
+    """A company's member doesn't see the aggregate of another company's instances."""
     mine, theirs = make_company("Mine"), make_company("Theirs")
     db.add_all([
         DatabaseInstance(name="mine-db", status=InstanceStatus.RUNNING, company_id=mine.id),

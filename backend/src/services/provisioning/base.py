@@ -6,17 +6,17 @@ from src.services.provisioning.types import ProvisionResult, ProvisionerStatus
 
 class ProvisionerBase(ABC):
     """
-    Interface abstrata para todos os provedores de infraestrutura.
+    Abstract interface for all infrastructure providers.
 
-    Por que uma interface aqui?
-    O restante da aplicação (instance service, status poller) fala APENAS
-    com esta interface. Isso significa que podemos trocar a implementação
-    (Docker local → servidor remoto → cloud managed) sem alterar nenhuma
-    linha de código de negócio.
+    Why an interface here?
+    The rest of the application (instance service, status poller) talks ONLY
+    to this interface. That means we can swap the implementation
+    (local Docker → remote server → managed cloud) without changing a single
+    line of business code.
 
-    Todos os métodos são SÍNCRONOS porque usamos SQLAlchemy sync em toda
-    a aplicação. Os métodos são chamados a partir de rotas FastAPI async
-    via asyncio.to_thread() para não bloquear o event loop.
+    All methods are SYNCHRONOUS because we use sync SQLAlchemy throughout
+    the application. The methods are called from async FastAPI routes
+    via asyncio.to_thread() so as not to block the event loop.
     """
 
     @abstractmethod
@@ -28,52 +28,52 @@ class ProvisionerBase(ABC):
         cpu: int | None = None,
     ) -> ProvisionResult:
         """
-        Provisionar um novo container de banco de dados.
+        Provisions a new database container.
 
-        Responsabilidades:
-        - Iniciar o container Docker
-        - Aguardar o PostgreSQL aceitar conexões
-        - Criar o banco e a role dedicada com privilégios mínimos
+        Responsibilities:
+        - Start the Docker container
+        - Wait for PostgreSQL to accept connections
+        - Create the database and the dedicated role with minimal privileges
 
-        memory_mb: limite de RAM em MiB (None = sem limite)
-        cpu: vCPUs máximas (None = sem limite; convertido para nano_cpus internamente)
+        memory_mb: RAM limit in MiB (None = no limit)
+        cpu: max vCPUs (None = no limit; converted to nano_cpus internally)
 
-        Levanta RuntimeError se o provisionamento falhar por qualquer motivo.
+        Raises RuntimeError if provisioning fails for any reason.
         """
         ...
 
     @abstractmethod
     def start(self, instance_id: uuid.UUID) -> int:
         """
-        Iniciar um container parado e retornar a porta publicada no host.
+        Starts a stopped container and returns the port published on the host.
 
-        Portas dinâmicas mudam entre stop/start; o serviço usa o retorno para
-        ressincronizar a connection_uri. Levanta RuntimeError em falha.
+        Dynamic ports change between stop/start; the service uses the return value to
+        resync connection_uri. Raises RuntimeError on failure.
         """
         ...
 
     @abstractmethod
     def stop(self, instance_id: uuid.UUID) -> None:
-        """Parar um container em execução graciosamente. Levanta RuntimeError em falha."""
+        """Gracefully stops a running container. Raises RuntimeError on failure."""
         ...
 
     @abstractmethod
     def delete(self, instance_id: uuid.UUID) -> None:
-        """Remover o container permanentemente. Idempotente (not found = ok)."""
+        """Permanently removes the container. Idempotent (not found = ok)."""
         ...
 
     @abstractmethod
     def get_status(self, instance_id: uuid.UUID) -> ProvisionerStatus:
-        """Retornar o status atual de infra do container sem lançar exceção."""
+        """Returns the container's current infra status without raising an exception."""
         ...
 
     @abstractmethod
     def get_port(self, instance_id: uuid.UUID) -> int | None:
         """
-        Retornar a porta publicada de um container em execução, ou None.
+        Returns the published port of a running container, or None.
 
-        O serviço usa isto para ressincronizar a connection_uri quando o Docker
-        republica uma porta diferente após religar o container. Não lança exceção.
+        The service uses this to resync connection_uri when Docker
+        republishes a different port after restarting the container. Does not raise an exception.
         """
         ...
 
@@ -90,32 +90,32 @@ class ProvisionerBase(ABC):
         cpu: int | None = None,
     ) -> ProvisionResult:
         """
-        Provisionar um standby que replica em streaming a partir de um primário.
+        Provisions a standby that streams replication from a primary.
 
-        A réplica é uma cópia FÍSICA (pg_basebackup) do primário, então herda o
-        mesmo banco/role/senha — por isso db_name/db_user/db_password são os do
-        primário (o serviço os decripta da connection_uri) e apenas ecoados no
-        ProvisionResult junto com o host/porta do novo container standby.
+        The replica is a PHYSICAL copy (pg_basebackup) of the primary, so it inherits the
+        same database/role/password — that's why db_name/db_user/db_password are the
+        primary's (the service decrypts them from connection_uri) and are just echoed back
+        in the ProvisionResult along with the host/port of the new standby container.
 
-        Levanta RuntimeError se o primário não estiver acessível ou o basebackup falhar.
+        Raises RuntimeError if the primary is unreachable or the basebackup fails.
         """
         ...
 
     @abstractmethod
     def promote_replica(self, replica_instance_id: uuid.UUID) -> None:
         """
-        Promover um standby a primário standalone (failover manual).
+        Promotes a standby to a standalone primary (manual failover).
 
-        Após a promoção o container deixa de aplicar WAL do primário e passa a
-        aceitar escritas. Levanta RuntimeError em falha.
+        After promotion the container stops applying WAL from the primary and
+        starts accepting writes. Raises RuntimeError on failure.
         """
         ...
 
     @abstractmethod
     def logs(self, instance_id: uuid.UUID, tail: int = 200) -> str:
         """
-        Retornar as últimas `tail` linhas de log (stdout/stderr) do container.
+        Returns the last `tail` log lines (stdout/stderr) of the container.
 
-        Levanta RuntimeError se o container não existir.
+        Raises RuntimeError if the container doesn't exist.
         """
         ...

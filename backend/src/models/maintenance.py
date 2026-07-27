@@ -14,8 +14,8 @@ class TaskType(str, enum.Enum):
     VACUUM_FULL = "vacuum_full"
     ANALYZE     = "analyze"
     REINDEX     = "reindex"
-    KILL_IDLE   = "kill_idle"   # encerrar conexões idle > N minutos
-    KILL_LONG   = "kill_long"   # encerrar queries ativas > N minutos
+    KILL_IDLE   = "kill_idle"   # terminate idle connections > N minutes
+    KILL_LONG   = "kill_long"   # terminate active queries > N minutes
 
 
 class TaskStatus(str, enum.Enum):
@@ -41,14 +41,14 @@ class MaintenanceTask(Base):
     status: Mapped[TaskStatus] = mapped_column(
         Enum(TaskStatus), nullable=False, default=TaskStatus.PENDING
     )
-    # Tabela alvo. None = banco inteiro (não aplicável para KILL_IDLE/KILL_LONG).
+    # Target table. None = whole database (not applicable for KILL_IDLE/KILL_LONG).
     target_table: Mapped[str | None] = mapped_column(String(255))
     scheduled_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    # Output resumido da execução ou mensagem de erro em caso de FAILED.
+    # Summarized execution output, or error message in case of FAILED.
     result_summary: Mapped[str | None] = mapped_column(Text)
 
 
@@ -70,9 +70,9 @@ class MaintenanceSchedule(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
-    # Próximo horário de execução — atualizado pelo scheduler após cada run.
-    # Indexado para que o scheduler encontre schedules vencidos rapidamente
-    # com um único filtro WHERE next_run_at <= NOW().
+    # Next run time — updated by the scheduler after each run.
+    # Indexed so the scheduler can find due schedules quickly
+    # with a single WHERE next_run_at <= NOW() filter.
     next_run_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), index=True
     )

@@ -24,9 +24,9 @@ def upgrade() -> None:
         'instance_status_history',
         sa.Column('id', sa.UUID(), nullable=False),
         sa.Column('instance_id', sa.UUID(), nullable=False),
-        # Reusa o tipo enum já existente (criado por database_instances).
-        # postgresql.ENUM(create_type=False) referencia o tipo sem reemitir o
-        # CREATE TYPE (o create_type=False do sa.Enum genérico é ignorado).
+        # Reuses the enum type already created by database_instances.
+        # postgresql.ENUM(create_type=False) references the type without reissuing
+        # the CREATE TYPE (the generic sa.Enum's create_type=False is ignored).
         sa.Column(
             'status',
             postgresql.ENUM(

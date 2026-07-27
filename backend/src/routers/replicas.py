@@ -32,10 +32,10 @@ async def create_instance_replica(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Cria um standby em streaming a partir de uma instância primária RUNNING.
+    Creates a streaming standby from a RUNNING primary instance.
 
-    Operação bloqueante — faz pg_basebackup do primário e sobe o container do
-    standby antes de retornar (pode levar de alguns segundos a minutos).
+    Blocking operation — runs pg_basebackup from the primary and brings up the
+    standby's container before returning (can take from a few seconds to minutes).
     """
     primary = get_instance_if_running(instance_id, db, current_user)
     return await create_replica(db, primary, current_user)
@@ -50,7 +50,7 @@ def list_instance_replicas(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Lista as réplicas de uma instância primária, mais recentes primeiro."""
+    """Lists the replicas of a primary instance, most recent first."""
     get_instance_or_404(instance_id, db, current_user)
     return list_replicas(db, instance_id)
 
@@ -64,13 +64,13 @@ async def promote_instance_replica(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Promove um standby a primário standalone (failover manual)."""
+    """Promotes a standby to a standalone primary (manual failover)."""
     replica = get_replica(db, replica_id)
     if not replica:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Replica not found",
         )
-    # Scoping por empresa: se o primário não é visível ao usuário, 404.
+    # Scoping by company: if the primary is not visible to the user, 404.
     get_instance_or_404(replica.primary_instance_id, db, current_user)
     return await promote_replica(db, replica, current_user)

@@ -1,10 +1,10 @@
 """
-Testes de replicação (FASE 9) sem tocar em Docker/pg_basebackup.
+Tests for replication (PHASE 9) without touching Docker/pg_basebackup.
 
-Estratégia: um provisionador falso (create_replica/promote_replica) via
-monkeypatch, exercitando toda a orquestração do serviço — criação da instância
-companheira, linha Replica, ciclo de status e promoção — através da API HTTP.
-O scoping multi-tenant é coberto ao final (réplica de outra empresa → 404).
+Strategy: a fake provisioner (create_replica/promote_replica) via
+monkeypatch, exercising the service's entire orchestration — creation of the
+companion instance, the Replica row, the status cycle, and promotion — through the HTTP API.
+Multi-tenant scoping is covered at the end (a replica from another company → 404).
 """
 import pytest
 
@@ -22,7 +22,7 @@ API = "/api/v1"
 
 
 def _seed_primary(db, company_id, name="primary", status=InstanceStatus.RUNNING):
-    """Primário RUNNING com connection_uri cifrada, como em produção."""
+    """RUNNING primary with an encrypted connection_uri, as in production."""
     uri = encrypt_value(f"postgresql://appuser:s3cret@127.0.0.1:5433/{name}_db")
     inst = DatabaseInstance(
         name=name,
@@ -41,7 +41,7 @@ def _seed_primary(db, company_id, name="primary", status=InstanceStatus.RUNNING)
 
 
 class _FakeReplicaProvisioner:
-    """Dublê: ecoa as credenciais recebidas, sem tocar em Docker."""
+    """Stub: echoes back the received credentials, without touching Docker."""
 
     def create_replica(
         self, replica_instance_id, primary_instance_id, engine_version,
@@ -84,7 +84,7 @@ def failing_provisioner(monkeypatch):
 
 
 # --------------------------------------------------------------------------- #
-# Criação
+# Creation
 # --------------------------------------------------------------------------- #
 
 
@@ -98,18 +98,18 @@ def test_create_replica_success(client, auth_headers, make_company, db, fake_pro
     body = resp.json()
     assert body["replication_state"] == "streaming"
     assert body["primary_instance_id"] == str(primary.id)
-    # A instância companheira nasce RUNNING e aparece na frota.
+    # The companion instance is born RUNNING and shows up in the fleet.
     assert body["replica_instance"]["status"] == "running"
     assert body["replica_instance"]["name"].endswith("(replica)")
 
-    # Persistência: uma linha Replica + a instância standby com URI cifrada.
+    # Persistence: one Replica row + the standby instance with an encrypted URI.
     replica = db.query(Replica).filter(Replica.primary_instance_id == primary.id).one()
     assert replica.replication_state == ReplicationState.STREAMING
     standby = db.query(DatabaseInstance).filter(
         DatabaseInstance.id == replica.replica_instance_id
     ).one()
     assert standby.status == InstanceStatus.RUNNING
-    assert standby.connection_uri  # cifrada, não vazia
+    assert standby.connection_uri  # encrypted, not empty
 
 
 def test_create_replica_requires_running_primary(client, auth_headers, make_company, db, fake_provisioner):
@@ -141,7 +141,7 @@ def test_create_replica_provisioner_failure_marks_failed(
 
 
 # --------------------------------------------------------------------------- #
-# Listagem / promoção
+# Listing / promotion
 # --------------------------------------------------------------------------- #
 
 
@@ -166,13 +166,13 @@ def test_promote_replica(client, auth_headers, make_company, db, fake_provisione
     assert resp.status_code == 200
     assert resp.json()["replication_state"] == "promoted"
 
-    # Promover de novo é conflito (já promovida).
+    # Promoting again is a conflict (already promoted).
     again = client.post(f"{API}/replicas/{created['id']}/promote", headers=headers)
     assert again.status_code == 409
 
 
 # --------------------------------------------------------------------------- #
-# Scoping multi-tenant
+# Multi-tenant scoping
 # --------------------------------------------------------------------------- #
 
 

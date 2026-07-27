@@ -11,9 +11,9 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-// Ponto genérico de série temporal já formatado para o gráfico.
+// Generic time-series point already formatted for the chart.
 export interface ChartPoint {
-  t: string; // rótulo do eixo X (ex.: "14:30")
+  t: string; // X-axis label (e.g.: "14:30")
   [series: string]: string | number;
 }
 
@@ -29,7 +29,7 @@ const TOOLTIP = {
   itemStyle: { color: "var(--fg)" },
 };
 
-// Gráfico de ÁREA para uma única métrica (ex.: conexões ao longo do tempo).
+// AREA chart for a single metric (e.g.: connections over time).
 export function MetricArea({
   data,
   color = "#34d399",
@@ -64,7 +64,7 @@ export function MetricArea({
   );
 }
 
-// Gráfico de LINHAS para múltiplas séries (ex.: latência p50/p95/p99).
+// LINE chart for multiple series (e.g.: p50/p95/p99 latency).
 export function MultiLineChart({
   data,
   series,

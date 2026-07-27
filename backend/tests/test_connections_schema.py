@@ -1,12 +1,12 @@
 """
-Testes dos endpoints live de detalhe da instância (FASE B):
-GET /instances/{id}/connections (pg_stat_activity) e
-GET /instances/{id}/schema (tabelas por schema).
+Tests for the instance-detail live endpoints (PHASE B):
+GET /instances/{id}/connections (pg_stat_activity) and
+GET /instances/{id}/schema (tables per schema).
 
-O caminho feliz conecta ao banco monitorado (não testável sem um Postgres-alvo
-vivo) — então cobrimos o que NÃO precisa de conexão: autenticação, 404, o 409 de
-"instância não está RUNNING", e a lógica pura de agrupamento por schema do
-service (com get_connection/collect_schema dublados).
+The happy path connects to the monitored database (not testable without a live
+target Postgres) — so we cover what does NOT need a connection: authentication, 404, the 409 for
+"instance is not RUNNING", and the service's pure schema-grouping
+logic (with get_connection/collect_schema stubbed out).
 """
 import uuid
 from contextlib import contextmanager
@@ -30,7 +30,7 @@ def _make(db, status=InstanceStatus.STOPPED, with_uri=True):
 
 
 # --------------------------------------------------------------------------- #
-# Conexões ativas (router)
+# Active connections (router)
 # --------------------------------------------------------------------------- #
 
 
@@ -60,7 +60,7 @@ def test_connections_running_without_uri_returns_409(client, auth_headers, db):
 
 
 # --------------------------------------------------------------------------- #
-# Explorador de esquemas (router)
+# Schema explorer (router)
 # --------------------------------------------------------------------------- #
 
 
@@ -77,7 +77,7 @@ def test_schema_not_running_returns_409(client, auth_headers, db):
 
 
 # --------------------------------------------------------------------------- #
-# Agrupamento por schema (service — lógica pura)
+# Grouping by schema (service — pure logic)
 # --------------------------------------------------------------------------- #
 
 

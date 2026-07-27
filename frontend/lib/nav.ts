@@ -10,10 +10,10 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-// Fonte única da navegação: a Sidebar monta os links e o Topbar deriva o
-// breadcrumb daqui. Antes cada um tinha seu próprio mapa de URL → rótulo.
-// `key` indexa Nav.* nas mensagens; o texto não vive mais neste arquivo.
-// A união literal (em vez de `string`) é o que permite ao tsc validar t(key).
+// Single source of navigation: the Sidebar builds the links and the Topbar derives the
+// breadcrumb from here. Each one used to have its own URL → label map.
+// `key` indexes Nav.* in the messages; the text no longer lives in this file.
+// The literal union (instead of `string`) is what lets tsc validate t(key).
 export type NavKey =
   | "dashboard"
   | "instances"
@@ -45,14 +45,14 @@ export const ACCOUNT_NAV: NavItem[] = [
 
 export const ALL_NAV: NavItem[] = [...WORKSPACE_NAV, ...ADMIN_NAV, ...ACCOUNT_NAV];
 
-// "/" só casa na raiz exata; as demais casam também nas subrotas
-// (ex.: /instances ativo em /instances/abc).
+// "/" only matches the exact root; the others also match subroutes
+// (e.g.: /instances active on /instances/abc).
 export function isActive(pathname: string, href: string): boolean {
   if (href === "/") return pathname === "/";
   return pathname === href || pathname.startsWith(href + "/");
 }
 
-// Chave de mensagem da rota atual — usada pelo breadcrumb.
+// Message key for the current route — used by the breadcrumb.
 export function navKeyFor(pathname: string): NavKey | undefined {
   return ALL_NAV.find((item) => item.href === pathname)?.key;
 }

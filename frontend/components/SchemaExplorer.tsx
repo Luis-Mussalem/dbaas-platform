@@ -13,10 +13,10 @@ export function SchemaExplorer({ instance }: { instance: Instance }) {
   const { number } = useFormatters();
   const [groups, setGroups] = useState<SchemaGroup[] | null>(null);
   const [failed, setFailed] = useState(false);
-  // Quais schemas estão expandidos (Set de nomes). public começa aberto.
+  // Which schemas are expanded (a Set of names). public starts open.
   const [open, setOpen] = useState<Set<string>>(new Set(["public"]));
 
-  // O estado "parada" é derivado no render; o effect só dispara o fetch.
+  // The "stopped" state is derived at render time; the effect only triggers the fetch.
   useEffect(() => {
     if (instance.status !== "running") return;
     let active = true;

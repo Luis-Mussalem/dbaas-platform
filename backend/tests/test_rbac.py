@@ -1,14 +1,14 @@
 """
-Testes de RBAC — delegação company-admin (PHASE 11 — Stage D).
+RBAC tests — company-admin delegation (PHASE 11 — Stage D).
 
-Cobre o eixo intra-empresa `role` (admin/member), ortogonal ao `is_superuser`
-(eixo plataforma). Um company admin gerencia apenas funcionários da própria
-empresa; o superuser mantém poder cross-company total.
+Covers the intra-company `role` axis (admin/member), orthogonal to `is_superuser`
+(the platform axis). A company admin only manages employees of their own
+company; the superuser retains full cross-company power.
 
-Posturas de erro relevantes:
-- alvo invisível ao company admin (outra empresa, ou alvo é superuser) → 404
-  (não vaza existência);
-- faltar o papel inteiramente (member numa rota admin) → 403.
+Relevant error postures:
+- a target invisible to the company admin (another company, or the target is a superuser) → 404
+  (doesn't leak existence);
+- missing the role entirely (member on an admin route) → 403.
 """
 from src.models.user import UserRole
 
@@ -17,7 +17,7 @@ STRONG_PASSWORD = "ValidPass123!"
 
 
 # --------------------------------------------------------------------------- #
-# Happy paths — company admin gerencia a própria empresa
+# Happy paths — company admin manages their own company
 # --------------------------------------------------------------------------- #
 
 
@@ -57,7 +57,7 @@ def test_company_admin_creates_admin_in_own_company(client, auth_headers, make_c
 
 
 def test_company_admin_create_forces_own_company(client, auth_headers, make_company):
-    """company_id ausente no payload → forçado para a empresa do admin."""
+    """company_id missing from the payload → forced to the admin's company."""
     company = make_company(name="Acme")
     headers, _ = auth_headers(
         email="admin@acme.com", company_id=company.id, role=UserRole.ADMIN
@@ -92,7 +92,7 @@ def test_company_admin_lists_only_own_company(
 def test_company_admin_lists_own_company_ignores_filter(
     client, auth_headers, make_company, make_user
 ):
-    """Mesmo passando ?company_id=<outra>, o admin só vê a própria empresa."""
+    """Even passing ?company_id=<other>, the admin only sees their own company."""
     company_a = make_company(name="Company A")
     company_b = make_company(name="Company B")
     make_user(email="other@b.com", company_id=company_b.id)
@@ -161,7 +161,7 @@ def test_company_admin_deactivates_member(
 
 
 # --------------------------------------------------------------------------- #
-# Gate de papel — member não pode usar rotas admin
+# Role gate — member cannot use admin routes
 # --------------------------------------------------------------------------- #
 
 
@@ -205,7 +205,7 @@ def test_member_cannot_admin_patch(client, auth_headers, make_company, make_user
 
 
 # --------------------------------------------------------------------------- #
-# Guards de escalonamento — company admin não pode subir privilégios
+# Escalation guards — company admin cannot escalate privileges
 # --------------------------------------------------------------------------- #
 
 
@@ -288,7 +288,7 @@ def test_company_admin_cannot_move_user_to_foreign_company(
 
 
 # --------------------------------------------------------------------------- #
-# Posturas 404 — alvo invisível (não vaza existência)
+# 404 postures — invisible target (doesn't leak existence)
 # --------------------------------------------------------------------------- #
 
 
@@ -330,8 +330,8 @@ def test_company_admin_update_superuser_target_returns_404(
 def test_company_admin_get_foreign_user_returns_403(
     client, auth_headers, make_company, make_user
 ):
-    """GET /{id} usa o guard self-or-superuser do router — company admin não é
-    superuser, então ler outro usuário dá 403 (object-level auth do router)."""
+    """GET /{id} uses the router's self-or-superuser guard — a company admin is not a
+    superuser, so reading another user gives 403 (the router's object-level auth)."""
     company_a = make_company(name="Company A")
     company_b = make_company(name="Company B")
     foreign = make_user(email="foreign@b.com", company_id=company_b.id)
@@ -352,7 +352,7 @@ def test_cannot_demote_last_company_admin(
     client, auth_headers, make_company, make_user
 ):
     company = make_company(name="Acme")
-    # admin a desativar é o único admin ativo da empresa
+    # the admin to be deactivated is the company's only active admin
     admin = make_user(
         email="onlyadmin@acme.com", company_id=company.id, role=UserRole.ADMIN
     )
@@ -405,7 +405,7 @@ def test_can_demote_admin_when_another_exists(
 
 
 # --------------------------------------------------------------------------- #
-# Isolamento cross-company (dois admins, duas empresas)
+# Cross-company isolation (two admins, two companies)
 # --------------------------------------------------------------------------- #
 
 
@@ -432,12 +432,12 @@ def test_two_company_admins_are_isolated(
 
 
 # --------------------------------------------------------------------------- #
-# Sanidade do member e regressão de tokens antigos
+# Member sanity check and old-token regression
 # --------------------------------------------------------------------------- #
 
 
 def test_member_role_is_default(client, auth_headers, make_company):
-    """Usuário criado sem role explícito nasce como member (server_default)."""
+    """A user created with no explicit role is born as member (server_default)."""
     company = make_company()
     su_headers, _ = auth_headers(email="su@example.com", is_superuser=True)
 

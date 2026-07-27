@@ -44,8 +44,8 @@ def upgrade() -> None:
         ondelete='SET NULL',
     )
 
-    # Backfill a partir do ator: atribui às entradas existentes o company_id
-    # do usuário que as gerou. Entradas de sistema (user_id NULL) ficam como NULL.
+    # Backfill from the actor: assigns existing entries the company_id
+    # of the user who generated them. System entries (user_id NULL) stay NULL.
     op.execute(
         """
         UPDATE audit_logs

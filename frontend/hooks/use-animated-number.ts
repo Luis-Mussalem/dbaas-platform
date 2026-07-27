@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 
-// Anima um número entre dois valores MEDIDOS na transição, para uma atualização
-// que chega a cada 15s "andar" suavemente em vez de saltar — a frota parece viva
-// sem inventar dado (interpola só o visual entre duas leituras reais).
+// Animates a number between two MEASURED values on transition, so an update
+// arriving every 15s "walks" smoothly instead of jumping — the fleet looks alive
+// without inventing data (it only interpolates the visual between two real readings).
 //
-// `currentRef` guarda o valor exibido a cada frame: uma nova meta que chegue no
-// meio da animação parte de onde o número está, não de um salto.
+// `currentRef` holds the value displayed on each frame: a new target arriving
+// mid-animation starts from where the number currently is, not from a jump.
 export function useAnimatedNumber(target: number, durationMs = 400): number {
   const [display, setDisplay] = useState(target);
   const currentRef = useRef(target);

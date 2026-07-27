@@ -16,8 +16,8 @@ import {
 import { cn } from "@/lib/utils";
 import { BTN, INPUT } from "@/lib/ui";
 
-// Cor do badge por tom semântico. O tom e a lista de ações vêm da fonte única
-// lib/audit.ts; os rótulos, das mensagens (Actions.label.*).
+// Badge color by semantic tone. The tone and action list come from the single
+// source lib/audit.ts; the labels come from the messages (Actions.label.*).
 const TONE_CLS: Record<Tone, string> = {
   ok: "text-ok border-ok/25 bg-ok/10",
   info: "text-info border-info/25 bg-info/10",
@@ -35,9 +35,9 @@ export default function AuditPage() {
   const tc = useTranslations("Common");
   const tAction = useTranslations("Actions.label");
   const { ago, dateTime } = useFormatters();
-  // Estado dos filtros vive AQUI (na página) e é passado ao hook como
-  // parâmetro. Trocar um <select> re-renderiza a página → o hook recebe novos
-  // filtros → o effect reseta para a página 0. "" significa "sem filtro".
+  // Filter state lives HERE (in the page) and is passed to the hook as a
+  // parameter. Changing a <select> re-renders the page → the hook gets new
+  // filters → the effect resets to page 0. "" means "no filter".
   const [action, setAction] = useState("");
   const [resourceType, setResourceType] = useState("");
 
@@ -48,7 +48,7 @@ export default function AuditPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* cabeçalho */}
+      {/* header */}
       <div className="flex items-center gap-2">
         <ScrollText size={20} className="text-fg-2" />
         <div>
@@ -58,7 +58,7 @@ export default function AuditPage() {
       </div>
 
       <div className="overflow-hidden rounded-xl border border-border bg-surface">
-        {/* barra de filtros */}
+        {/* filter bar */}
         <div className="flex flex-wrap items-end gap-3 border-b border-border px-4 py-3">
           <label className="flex flex-col gap-1">
             <span className="text-[11px] uppercase tracking-wide text-fg-3">
@@ -92,7 +92,7 @@ export default function AuditPage() {
           </label>
         </div>
 
-        {/* tabela */}
+        {/* table */}
         {isLoading ? (
           <p className="px-4 py-8 text-center text-sm text-fg-3">{tc("loading")}</p>
         ) : error ? (
@@ -120,8 +120,8 @@ export default function AuditPage() {
                           TONE_CLS[toneFor(log.action)]
                         )}
                       >
-                        {/* Ação/recurso desconhecidos (backend novo, frontend
-                            antigo) → mostra a chave crua em vez de quebrar. */}
+                        {/* Unknown action/resource (new backend, old
+                            frontend) → shows the raw key instead of breaking. */}
                         {isAuditAction(log.action) ? tAction(log.action) : log.action}
                       </span>
                     </td>
@@ -151,7 +151,7 @@ export default function AuditPage() {
           </table>
         )}
 
-        {/* paginação */}
+        {/* pagination */}
         {hasMore && !isLoading && (
           <div className="border-t border-border px-4 py-3 text-center">
             <button onClick={loadMore} className={BTN}>

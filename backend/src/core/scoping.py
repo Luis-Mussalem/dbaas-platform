@@ -1,14 +1,14 @@
 """
-Scoping multi-tenant: restringe consultas à empresa do usuário.
+Multi-tenant scoping: restricts queries to the user's company.
 
-Centraliza a regra de autorização por empresa num único lugar, reusado tanto
-pelas dependencies (camada FastAPI) quanto pelos services. Analogia backend:
-é um "tenant filter" — equivalente a aplicar `WHERE company_id = :user_company`
-de forma consistente em toda a API, com bypass para o superuser.
+Centralizes the per-company authorization rule in a single place, reused both
+by dependencies (FastAPI layer) and by services. Backend analogy:
+it's a "tenant filter" — equivalent to consistently applying
+`WHERE company_id = :user_company` across the whole API, with a bypass for the superuser.
 
-Regra única:
-- superuser  → enxerga todas as empresas (sem filtro);
-- usuário comum → apenas a própria company_id.
+Single rule:
+- superuser  → sees all companies (no filter);
+- regular user → only their own company_id.
 """
 import uuid
 from typing import Optional
@@ -21,11 +21,11 @@ from src.models.user import User, UserRole
 
 def visible_company_id(user: User) -> Optional[uuid.UUID]:
     """
-    company_id que o usuário pode enxergar, ou None para "sem restrição" (todas).
+    company_id the user can see, or None for "no restriction" (all).
 
-    - usuário comum → a própria empresa;
-    - superuser → a empresa-ativa escolhida (Stage B, via header X-Company-Id);
-      None = nenhuma escolhida = vê todas.
+    - regular user → their own company;
+    - superuser → the chosen active company (Stage B, via the X-Company-Id header);
+      None = none chosen = sees all.
     """
     if user.is_superuser:
         return getattr(user, "active_company_id", None)
@@ -34,11 +34,11 @@ def visible_company_id(user: User) -> Optional[uuid.UUID]:
 
 def scope_instance_query(query, user: User):
     """
-    Aplica o filtro de empresa a uma query cujo FROM é DatabaseInstance.
+    Applies the company filter to a query whose FROM is DatabaseInstance.
 
-    Superuser sem empresa-ativa: query inalterada (vê todas). Caso contrário,
-    filtra por company_id. SQLAlchemy traduz `== None` em `IS NULL`, então um
-    usuário comum sem empresa (borda) só enxerga instâncias órfãs.
+    Superuser with no active company: query unchanged (sees all). Otherwise,
+    filters by company_id. SQLAlchemy translates `== None` into `IS NULL`, so a
+    regular user with no company (edge case) only sees orphan instances.
     """
     company_id = visible_company_id(user)
     if user.is_superuser and company_id is None:
@@ -47,20 +47,20 @@ def scope_instance_query(query, user: User):
 
 
 def is_company_admin(user: User) -> bool:
-    """Retorna True se o usuário é superuser ou admin de uma empresa."""
+    """Returns True if the user is a superuser or the admin of a company."""
     return user.is_superuser or getattr(user, "role", None) == UserRole.ADMIN
 
 
 def assert_can_manage_target(acting_user: User, target_user: User) -> None:
     """
-    Valida se acting_user pode gerenciar target_user.
+    Validates whether acting_user can manage target_user.
 
-    Raises HTTPException 404 se:
-    - target é superuser (infovisível a company admin)
-    - target pertence a outra empresa (company admin só gerencia sua própria empresa)
+    Raises HTTPException 404 if:
+    - target is a superuser (invisible to a company admin)
+    - target belongs to another company (a company admin only manages their own company)
 
-    Regra: superuser pode gerenciar qualquer um; company admin só gerencia
-    usuários da própria empresa que não são superuser.
+    Rule: a superuser can manage anyone; a company admin only manages
+    users of their own company who are not superusers.
     """
     if acting_user.is_superuser:
         return

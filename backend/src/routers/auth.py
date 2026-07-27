@@ -30,10 +30,10 @@ class LogoutRequest(BaseModel):
 
 def _set_auth_cookies(response: Response, request: Request, access: str, refresh: str) -> None:
     """
-    Grava os tokens em cookies HttpOnly — inacessíveis a JavaScript (anti-XSS).
+    Writes the tokens into HttpOnly cookies — inaccessible to JavaScript (anti-XSS).
 
-    O corpo JSON com os tokens é mantido nos endpoints (Swagger, API clients e
-    testes usam o header Authorization); o frontend usa só os cookies.
+    The JSON body with the tokens is kept on the endpoints (Swagger, API clients, and
+    tests use the Authorization header); the frontend uses only the cookies.
     """
     secure = request.url.scheme == "https"
     response.set_cookie(
@@ -102,8 +102,8 @@ def login(
 @router.post("/refresh")
 @limiter.limit("10/minute")
 def refresh(request: Request, response: Response, db: Session = Depends(get_db)):
-    # Header Authorization (API clients) tem precedência; cookie HttpOnly
-    # é o caminho do frontend.
+    # Authorization header (API clients) takes precedence; the HttpOnly cookie
+    # is the frontend's path.
     auth_header = request.headers.get("Authorization")
     if auth_header and auth_header.startswith("Bearer "):
         token = auth_header.split(" ", 1)[1]
@@ -189,7 +189,7 @@ def logout(
 
     blacklist_token(db, jti, token_type, current_user.id, expires_at)
 
-    # Refresh token do corpo (API clients) ou do cookie (frontend).
+    # Refresh token from the body (API clients) or from the cookie (frontend).
     refresh_token = body.refresh_token or request.cookies.get("refresh_token")
     if refresh_token:
         try:

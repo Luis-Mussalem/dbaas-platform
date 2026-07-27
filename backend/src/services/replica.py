@@ -18,10 +18,10 @@ logger = logging.getLogger(__name__)
 
 def _attach_replica_instance(db: Session, replica: Replica) -> Replica:
     """
-    Anexar a DatabaseInstance standby ao objeto Replica (atributo transiente).
+    Attaches the standby DatabaseInstance to the Replica object (transient attribute).
 
-    Replica não tem relationship com a instância (colunas UUID puras, padrão do
-    Backup); o ReplicaRead lê `replica_instance` via from_attributes.
+    Replica has no relationship with the instance (plain UUID columns, same
+    pattern as Backup); ReplicaRead reads `replica_instance` via from_attributes.
     """
     replica.replica_instance = (
         db.query(DatabaseInstance)
@@ -54,14 +54,14 @@ async def create_replica(
     db: Session, primary: DatabaseInstance, current_user: User
 ) -> Replica:
     """
-    Criar um standby em streaming a partir de uma instância primária RUNNING.
+    Creates a streaming standby from a RUNNING primary instance.
 
-    Espelha o fluxo de instance.create_instance: cria uma DatabaseInstance
-    companheira (a réplica é um membro real da frota), provisiona o standby via
-    pg_basebackup em thread pool e liga as duas por uma linha Replica.
+    Mirrors instance.create_instance's flow: creates a companion DatabaseInstance
+    (the replica is a real member of the fleet), provisions the standby via
+    pg_basebackup in a thread pool, and links the two through a Replica row.
 
-    A réplica é cópia FÍSICA do primário → herda banco/role/senha; decriptamos a
-    connection_uri do primário para reusar essas credenciais na URI do standby.
+    The replica is a PHYSICAL copy of the primary → it inherits database/role/password; we decrypt
+    the primary's connection_uri to reuse those credentials in the standby's URI.
     """
     if not primary.connection_uri:
         raise HTTPException(
@@ -74,7 +74,7 @@ async def create_replica(
     db_password = parsed.password or ""
     db_name = (parsed.path or "/").lstrip("/")
 
-    # Instância companheira que representa o standby na frota (status/porta/métricas).
+    # Companion instance that represents the standby in the fleet (status/port/metrics).
     replica_instance = DatabaseInstance(
         name=f"{primary.name} (replica)",
         engine_version=primary.engine_version,
@@ -136,7 +136,7 @@ async def create_replica(
     replica_instance.connection_uri = encrypt_value(connection_uri)
     record_status_change(db, replica_instance, InstanceStatus.RUNNING)
 
-    # STREAMING é otimista; o replication_poller confirma/corrige no próximo ciclo.
+    # STREAMING is optimistic; the replication_poller confirms/corrects it on the next cycle.
     replica.replication_state = ReplicationState.STREAMING
     replica.error_message = None
     db.commit()
@@ -148,10 +148,10 @@ async def promote_replica(
     db: Session, replica: Replica, current_user: User
 ) -> Replica:
     """
-    Promover o standby a primário standalone (failover manual, pg_promote()).
+    Promotes the standby to a standalone primary (manual failover, pg_promote()).
 
-    Após promover, o standby deixa de aplicar WAL e aceita escritas; o vínculo de
-    replicação passa a PROMOTED (encerrado). A instância companheira segue RUNNING.
+    After promotion, the standby stops applying WAL and accepts writes; the
+    replication link becomes PROMOTED (ended). The companion instance stays RUNNING.
     """
     if replica.replication_state == ReplicationState.PROMOTED:
         raise HTTPException(

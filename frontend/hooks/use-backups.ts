@@ -4,8 +4,8 @@ import { listBackups } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
 import type { Backup } from "@/lib/types";
 
-// Hook da lista de backups de uma instância.
-// Expõe `refresh` para a UI re-buscar após criar/restaurar.
+// Hook for an instance's backup list.
+// Exposes `refresh` for the UI to re-fetch after creating/restoring.
 interface UseBackupsResult {
   backups: Backup[];
   isLoading: boolean;

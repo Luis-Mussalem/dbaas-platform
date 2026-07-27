@@ -19,25 +19,25 @@ import { periodForHour, type Period } from "@/lib/greeting";
 import { filterByEnvironment, type EnvFilter } from "@/lib/environment";
 import { CURRENCY } from "@/i18n/config";
 
-// O período nunca muda durante a sessão — nada a que assinar.
+// The period never changes during the session — nothing to subscribe to.
 const subscribeToNothing = () => () => {};
 
 export default function PainelPage() {
   const t = useTranslations("Dashboard");
   const locale = useLocale();
-  // O Painel compõe TRÊS fontes de dados reais:
-  //  - useDashboard(): agregados de GET /admin/dashboard
-  //  - useInstances(): lista de instâncias
-  //  - ActivityFeed:  audit log (busca própria, dentro do componente)
-  // Tudo se refresca sozinho a cada DASHBOARD_POLL_MS — a frota tem vida-base
-  // contínua, então há sempre algo novo a mostrar.
+  // The Dashboard composes THREE real data sources:
+  //  - useDashboard(): aggregates from GET /admin/dashboard
+  //  - useInstances(): the instance list
+  //  - ActivityFeed:  audit log (its own fetch, inside the component)
+  // Everything refreshes itself every DASHBOARD_POLL_MS — the fleet has a continuous
+  // baseline of activity, so there's always something new to show.
   const { instances, isLoading: loadingInstances } = useInstances(DASHBOARD_POLL_MS);
   const { summary, isLoading: loadingSummary } = useDashboard(DASHBOARD_POLL_MS);
-  // Agregado por instância (alertas, backup, uptime, throughput) para os cards,
-  // numa requisição só em vez de quatro por card.
+  // Per-instance aggregate (alerts, backup, uptime, throughput) for the cards,
+  // in a single request instead of four per card.
   const { summaries } = useFleetSummary(DASHBOARD_POLL_MS);
-  // Teto comum (base zero) dos sparklines de queries/s: régua compartilhada entre
-  // os cards, para a altura da linha codificar magnitude e não só forma.
+  // Common (zero-based) ceiling for the queries/s sparklines: a scale shared across
+  // the cards, so the line's height encodes magnitude and not just shape.
   const qpsScale = useMemo(
     () => qpsScaleMax([...summaries.values()].map((s) => s.queries_per_second)),
     [summaries],
@@ -46,22 +46,22 @@ export default function PainelPage() {
 
   const isLoading = loadingInstances || loadingSummary;
 
-  // Filtro por ambiente (client-side, sobre o campo real instance.environment).
+  // Environment filter (client-side, over the real instance.environment field).
   const visibleInstances = useMemo(
     () => filterByEnvironment(instances, envFilter),
     [instances, envFilter]
   );
 
-  // Moeda segue o idioma: tabelas de preço independentes (ver lib/cost.ts).
+  // Currency follows the language: independent price tables (see lib/cost.ts).
   const monthlyCost = useMemo(
     () => estimateMonthlyCost(instances, CURRENCY[locale]),
     [instances, locale]
   );
 
-  // O período depende do relógio do usuário, que o servidor não conhece: lê-lo
-  // no render (ou num inicializador lazy) divergiria na hidratação se os fusos
-  // diferissem. useSyncExternalStore entrega `null` como snapshot de servidor e
-  // troca pelo valor real após hidratar — sem mismatch e sem setState em effect.
+  // The period depends on the user's clock, which the server doesn't know: reading it
+  // during render (or in a lazy initializer) would diverge at hydration if the timezones
+  // differed. useSyncExternalStore delivers `null` as the server snapshot and
+  // swaps in the real value after hydration — no mismatch, no setState in an effect.
   const period = useSyncExternalStore<Period | null>(
     subscribeToNothing,
     () => periodForHour(new Date().getHours()),
@@ -77,11 +77,11 @@ export default function PainelPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* cabeçalho: saudação + resumo + filtro de ambiente */}
+      {/* header: greeting + summary + environment filter */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">
-            {/* Sem período ainda (primeiro paint) → só a saudação neutra. */}
+            {/* No period yet (first paint) → just the neutral greeting. */}
             {t("greeting", { period: period ?? "other" })}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -91,10 +91,10 @@ export default function PainelPage() {
         <EnvFilterBar value={envFilter} onChange={setEnvFilter} size="sm" />
       </div>
 
-      {/* KPIs de performance da frota (queries/s, p95, gasto, uptime) */}
+      {/* Fleet performance KPIs (queries/s, p95, cost, uptime) */}
       <FleetKpiRow summary={summary} monthlyCost={monthlyCost} />
 
-      {/* 2 colunas: bancos (esq) + mapa de regiões e atividade (dir) */}
+      {/* 2 columns: databases (left) + region map and activity (right) */}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">

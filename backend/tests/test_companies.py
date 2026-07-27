@@ -1,9 +1,9 @@
 """
-Testes do router /companies — a primeira superfície multi-tenant (PHASE 11).
+Tests for the /companies router — the first multi-tenant surface (PHASE 11).
 
-O ponto central aqui é a AUTORIZAÇÃO: tanto GET quanto POST exigem
-get_current_superuser. Um usuário comum autenticado deve receber 403; só o
-superuser cria e lista empresas. Cobre também validação de payload e ordenação.
+The central point here is AUTHORIZATION: both GET and POST require
+get_current_superuser. An authenticated regular user should get 403; only the
+superuser creates and lists companies. Also covers payload validation and ordering.
 """
 from src.models.company import Company
 
@@ -11,7 +11,7 @@ API = "/api/v1/companies"
 
 
 # --------------------------------------------------------------------------- #
-# Autorização (superuser gate)
+# Authorization (superuser gate)
 # --------------------------------------------------------------------------- #
 
 
@@ -34,7 +34,7 @@ def test_create_company_forbidden_for_regular_user(client, auth_headers):
 
 
 # --------------------------------------------------------------------------- #
-# Fluxo feliz (superuser)
+# Happy path (superuser)
 # --------------------------------------------------------------------------- #
 
 
@@ -46,7 +46,7 @@ def test_superuser_creates_company(client, auth_headers, db):
     assert body["name"] == "Acme Corp"
     assert "id" in body and "created_at" in body
 
-    # Persistiu de fato no banco.
+    # Actually persisted to the database.
     assert db.query(Company).filter_by(name="Acme Corp").first() is not None
 
 
@@ -58,11 +58,11 @@ def test_superuser_lists_companies_ordered_by_name(client, auth_headers, db):
     resp = client.get(API, headers=headers)
     assert resp.status_code == 200
     names = [c["name"] for c in resp.json()]
-    assert names == ["Alpha", "Mid", "Zeta"]  # list_companies ordena por name
+    assert names == ["Alpha", "Mid", "Zeta"]  # list_companies orders by name
 
 
 # --------------------------------------------------------------------------- #
-# Validação de payload
+# Payload validation
 # --------------------------------------------------------------------------- #
 
 

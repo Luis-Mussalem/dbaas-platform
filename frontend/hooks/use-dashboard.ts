@@ -4,9 +4,9 @@ import { getDashboard } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
 import type { DashboardSummary } from "@/lib/types";
 
-// Hook de dados do Painel — busca no mount e expõe { dados, isLoading, error }.
-// `pollMs` é usado enquanto a simulação de uso mexe na frota: sem ele, o painel
-// só mostrava o resultado depois de um F5.
+// Dashboard data hook — fetches on mount and exposes { summary, isLoading, error }.
+// `pollMs` is used while the usage simulation touches the fleet: without it, the dashboard
+// would only show the result after an F5.
 interface UseDashboardResult {
   summary: DashboardSummary | null;
   isLoading: boolean;

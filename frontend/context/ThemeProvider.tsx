@@ -24,8 +24,8 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 const STORAGE_KEY = "theme";
 
-// Lê o tema salvo no localStorage; default "dark" (igual ao design).
-// Protegido contra SSR: no servidor não existe `window`.
+// Reads the theme saved in localStorage; default "dark" (matches the design).
+// Protected against SSR: `window` doesn't exist on the server.
 function getStoredTheme(): Theme {
   if (typeof window === "undefined") return "dark";
   const saved = localStorage.getItem(STORAGE_KEY);
@@ -35,13 +35,13 @@ function getStoredTheme(): Theme {
 // ─── Provider ────────────────────────────────────────────────────────────────
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  // Lazy initializer: getStoredTheme roda UMA vez, no primeiro render.
-  // No servidor retorna "dark" (não há localStorage); no cliente lê a
-  // preferência salva. Como nenhum JSX depende de `theme` (a classe vai
-  // direto na <html> pelo effect abaixo), não há divergência de hidratação.
+  // Lazy initializer: getStoredTheme runs ONCE, on the first render.
+  // On the server it returns "dark" (there's no localStorage); on the client it reads the
+  // saved preference. Since no JSX depends on `theme` (the class goes
+  // straight onto <html> via the effect below), there's no hydration mismatch.
   const [theme, setTheme] = useState<Theme>(getStoredTheme);
 
-  // Sincroniza o estado do React com o DOM (uso correto de useEffect):
+  // Syncs React's state with the DOM (correct use of useEffect):
   // aplica/remove a classe `dark` na <html> e persiste a escolha.
   useEffect(() => {
     const root = document.documentElement;

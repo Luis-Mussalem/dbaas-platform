@@ -24,7 +24,7 @@ export function BackupsTab({ instance }: { instance: Instance }) {
   const tc = useTranslations("Common");
   const { ago, bytes } = useFormatters();
   const { backups, isLoading, error, refresh } = useBackups(instance.id);
-  // `busy` guarda qual ação está em andamento: "logical", "physical" ou o id do backup em restore.
+  // `busy` holds which action is in progress: "logical", "physical", or the id of the backup being restored.
   const [busy, setBusy] = useState<string | null>(null);
   const { toast } = useToast();
   const { confirm } = useConfirm();
@@ -65,7 +65,7 @@ export function BackupsTab({ instance }: { instance: Instance }) {
 
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-surface">
-      {/* cabeçalho + ações */}
+      {/* header + actions */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
         <h2 className="text-sm font-semibold">{t("title")}</h2>
         <div className="flex items-center gap-2">
@@ -102,7 +102,7 @@ export function BackupsTab({ instance }: { instance: Instance }) {
         </div>
       )}
 
-      {/* tabela */}
+      {/* table */}
       {isLoading ? (
         <p className="px-4 py-8 text-center text-sm text-fg-3">{tc("loading")}</p>
       ) : backups.length === 0 ? (

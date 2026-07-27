@@ -22,11 +22,11 @@ class InstanceStatus(str, PyEnum):
 
 class Environment(str, PyEnum):
     """
-    Ambiente lógico da instância — usado para agrupar/filtrar no painel.
+    Logical environment of the instance — used to group/filter in the dashboard.
 
-    Valores canônicos em inglês; a UI traduz para os rótulos exibidos
-    (produção / homologação / desenvolvimento). Nullable: instâncias antigas
-    ou sem classificação ficam sem ambiente.
+    Canonical values are in English; the UI translates them into the displayed
+    labels (production / staging / development). Nullable: older instances
+    or ones without a classification are left without an environment.
     """
 
     PRODUCTION = "production"
@@ -106,10 +106,10 @@ class DatabaseInstance(Base):
         SAEnum(Environment, name="environment"),
         nullable=True,
     )
-    # Empresa dona da instância (multi-tenant). Raiz do scoping: backups, alertas
-    # e manutenção herdam o dono via instance_id. Nullable: instâncias de
-    # sistema/legado e as criadas por superuser sem empresa ficam visíveis só ao
-    # superuser. Mesmo padrão de users.company_id (FK opcional, SET NULL).
+    # Company that owns the instance (multi-tenant). Root of the scoping: backups,
+    # alerts and maintenance inherit the owner via instance_id. Nullable: system/legacy
+    # instances and ones created by a superuser with no company are visible only to the
+    # superuser. Same pattern as users.company_id (optional FK, SET NULL).
     company_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("companies.id", ondelete="SET NULL"),

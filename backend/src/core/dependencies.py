@@ -12,18 +12,18 @@ from src.models.database_instance import DatabaseInstance, InstanceStatus
 from src.models.user import User
 from src.services.auth import is_token_blacklisted
 
-# auto_error=False: sem header Authorization não levanta 401 na hora —
-# get_current_user tenta o cookie HttpOnly "access_token" antes de rejeitar.
+# auto_error=False: without an Authorization header it doesn't raise 401 right away —
+# get_current_user tries the HttpOnly "access_token" cookie before rejecting.
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
 
 def _read_active_company(request: Request, user: User) -> uuid.UUID | None:
     """
-    Empresa-ativa do superuser, lida do header X-Company-Id (Stage B).
+    Superuser's active company, read from the X-Company-Id header (Stage B).
 
-    Só o superuser pode "vestir" uma empresa; para o usuário comum o header é
-    ignorado (ele fica preso à própria empresa). Header ausente/ inválido = None
-    (superuser vê todas).
+    Only the superuser can "wear" a company; for a regular user the header is
+    ignored (they're stuck with their own company). Missing/invalid header = None
+    (superuser sees all).
     """
     if not user.is_superuser:
         return None
@@ -47,8 +47,8 @@ def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    # Header Authorization tem precedência (API clients, Swagger, testes);
-    # o cookie HttpOnly é o caminho do frontend (não exposto a XSS).
+    # The Authorization header takes precedence (API clients, Swagger, tests);
+    # the HttpOnly cookie is the frontend's path (not exposed to XSS).
     if token is None:
         token = request.cookies.get("access_token")
     if token is None:
@@ -81,8 +81,8 @@ def get_current_user(
     if user is None or not user.is_active:
         raise credentials_exception
 
-    # Stage B: anexa a empresa-ativa (atributo transiente, não é coluna do User).
-    # O scoping (core/scoping.py) lê isto para filtrar os dados do superuser.
+    # Stage B: attaches the active company (transient attribute, not a User column).
+    # scoping (core/scoping.py) reads this to filter the superuser's data.
     user.active_company_id = _read_active_company(request, user)
     return user
 
@@ -91,11 +91,11 @@ def get_current_superuser(
     current_user: User = Depends(get_current_user),
 ) -> User:
     """
-    Exige que o usuário autenticado seja superuser (admin da plataforma).
+    Requires the authenticated user to be a superuser (platform admin).
 
-    Reusa get_current_user (autenticação) e adiciona a checagem de papel.
-    Primeiro ponto onde is_superuser passa a ser efetivamente verificado —
-    base para o multi-tenant: só o superuser enxerga/gerencia todas as empresas.
+    Reuses get_current_user (authentication) and adds the role check.
+    First point where is_superuser is actually verified —
+    the foundation for multi-tenancy: only the superuser sees/manages all companies.
     """
     if not current_user.is_superuser:
         raise HTTPException(
@@ -109,12 +109,12 @@ def get_current_company_admin(
     current_user: User = Depends(get_current_user),
 ) -> User:
     """
-    Exige que o usuário autenticado seja superuser ou admin de uma empresa.
+    Requires the authenticated user to be a superuser or the admin of a company.
 
-    Reusa get_current_user e adiciona a checagem de rol (role). O serviço
-    é responsável por validar se o admin gerencia de fato o recurso-alvo
-    (defense in depth). Este dependência apenas comprova "você é admin em
-    algum lugar".
+    Reuses get_current_user and adds the role check. The service
+    is responsible for validating whether the admin actually manages the target
+    resource (defense in depth). This dependency only proves "you're an admin
+    somewhere".
     """
     if not is_company_admin(current_user):
         raise HTTPException(
@@ -127,9 +127,9 @@ def get_current_company_admin(
 def get_instance_or_404(
     instance_id: uuid.UUID, db: Session, current_user: User
 ) -> DatabaseInstance:
-    # Scoping multi-tenant: usuário comum só acha instâncias da própria empresa;
-    # uma instância de outra empresa vira 404 (mesma resposta de "não existe" —
-    # não vaza que ela existe). Superuser passa direto (vê todas).
+    # Multi-tenant scoping: a regular user can only find instances of their own company;
+    # an instance from another company becomes 404 (same response as "doesn't exist" —
+    # doesn't leak that it exists). Superuser passes through (sees all).
     query = db.query(DatabaseInstance).filter(
         DatabaseInstance.id == instance_id,
         DatabaseInstance.deleted_at.is_(None),

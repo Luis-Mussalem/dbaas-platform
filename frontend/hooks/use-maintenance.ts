@@ -4,7 +4,7 @@ import { listMaintenanceTasks } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
 import type { MaintenanceTask } from "@/lib/types";
 
-// Hook do histórico de manutenção, com `refresh` para re-buscar após executar.
+// Maintenance history hook, with `refresh` to re-fetch after running a task.
 interface UseMaintenanceResult {
   tasks: MaintenanceTask[];
   isLoading: boolean;

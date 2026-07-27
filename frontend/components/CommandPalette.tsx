@@ -25,8 +25,8 @@ import {
   type NavItem,
 } from "@/lib/nav";
 
-// Evento que o botão da Topbar dispara para abrir o palette sem um provider
-// dedicado — o listener global (Ctrl+K) e o botão convergem no mesmo toggle.
+// Event the Topbar button fires to open the palette without a dedicated
+// provider — the global listener (Ctrl+K) and the button converge on the same toggle.
 export const OPEN_EVENT = "command-palette:open";
 
 const DOT: Record<string, string> = {
@@ -46,8 +46,8 @@ type Command = {
   run: () => void;
 };
 
-// Command palette global (Ctrl+K / ⌘K no Mac): navegação, salto para instâncias e ações
-// rápidas num só lugar. Complementa a busca "/" da Topbar (só instâncias).
+// Global command palette (Ctrl+K / ⌘K on Mac): navigation, jumping to instances, and quick
+// actions in one place. Complements the Topbar's "/" search (instances only).
 export function CommandPalette() {
   const t = useTranslations("CommandPalette");
   const tNav = useTranslations("Nav");
@@ -70,7 +70,7 @@ export function CommandPalette() {
     setActive(0);
   }
 
-  // Fecha e então executa — a navegação/ação acontece com o overlay já fora.
+  // Closes and then runs — the navigation/action happens with the overlay already gone.
   function runAndClose(fn: () => void) {
     close();
     fn();
@@ -78,7 +78,7 @@ export function CommandPalette() {
 
   const isAdmin = Boolean(user?.is_superuser || user?.role === "admin");
 
-  // ── Comandos ────────────────────────────────────────────────────────────────
+  // ── Commands ────────────────────────────────────────────────────────────────
   const commands = useMemo<Command[]>(() => {
     const navItems: NavItem[] = [
       ...WORKSPACE_NAV,
@@ -158,14 +158,14 @@ export function CommandPalette() {
     tNav,
   ]);
 
-  // ── Filtro ───────────────────────────────────────────────────────────────────
+  // ── Filter ───────────────────────────────────────────────────────────────────
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return commands;
     return commands.filter((c) => c.keywords.toLowerCase().includes(q));
   }, [commands, query]);
 
-  // Agrupa preservando a ordem de inserção dos grupos.
+  // Groups while preserving the groups' insertion order.
   const groups = useMemo(() => {
     const map = new Map<string, Command[]>();
     for (const cmd of filtered) {
@@ -176,7 +176,7 @@ export function CommandPalette() {
     return Array.from(map.entries());
   }, [filtered]);
 
-  // ── Atalho global de abertura (Ctrl+K / ⌘K no Mac) + evento do botão ────────────────
+  // ── Global open shortcut (Ctrl+K / ⌘K on Mac) + button event ────────────────
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
@@ -195,12 +195,12 @@ export function CommandPalette() {
     };
   }, []);
 
-  // Foca o input ao abrir (o índice ativo é zerado no onChange do input).
+  // Focuses the input on open (the active index is reset in the input's onChange).
   useEffect(() => {
     if (open) inputRef.current?.focus();
   }, [open]);
 
-  // Mantém o item ativo visível durante a navegação por teclado.
+  // Keeps the active item visible during keyboard navigation.
   useEffect(() => {
     const el = listRef.current?.querySelector<HTMLElement>('[data-active="true"]');
     el?.scrollIntoView({ block: "nearest" });
@@ -309,7 +309,7 @@ export function CommandPalette() {
           )}
         </div>
 
-        {/* Rodapé com dicas de teclado */}
+        {/* Footer with keyboard hints */}
         <div className="flex items-center gap-4 border-t border-border px-4 py-2 text-[11px] text-fg-3">
           <span className="flex items-center gap-1">
             <kbd className="rounded border border-border bg-bg-2 px-1">↑</kbd>

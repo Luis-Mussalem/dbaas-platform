@@ -14,10 +14,10 @@ from src.services.provisioning.types import ProvisionerStatus
 
 logger = logging.getLogger(__name__)
 
-# Intervalo em segundos entre cada ciclo de polling
+# Interval in seconds between each polling cycle
 _POLL_INTERVAL_SECONDS = 30
 
-# Limpeza de tokens expirados: a cada N ciclos de poll (30s × 2880 = 24h)
+# Expired token cleanup: every N poll cycles (30s × 2880 = 24h)
 _TOKEN_CLEANUP_EVERY_N_CYCLES = 2880
 _poll_cycle_counter = 0
 
@@ -26,19 +26,19 @@ def _reconcile_instance(
     db: Session, provisioner: ProvisionerBase, instance: DatabaseInstance
 ) -> None:
     """
-    Reconciliar o estado de UMA instância com o que o Docker reporta.
+    Reconciles the state of ONE instance with what Docker reports.
 
-    Aplicado às instâncias que DEVEM estar rodando (RUNNING e FAILED):
+    Applied to instances that SHOULD be running (RUNNING and FAILED):
 
-    - container RUNNING → garante que a porta publicada bate com o banco
-      (o Docker republica porta nova ao religar o container após um restart do
-      host) e, se a instância estava FAILED, auto-recupera para RUNNING.
-    - container STOPPED → existe mas parou (host/Docker reiniciou, OOM, crash).
-      Tenta religar; no sucesso ressincroniza a porta e volta a RUNNING, na
-      falha marca FAILED (e tenta de novo no próximo ciclo).
-    - container NOT_FOUND/ERROR → sumiu de vez. Se estava RUNNING marca FAILED
-      para o operador investigar; se já era FAILED deixa como está (não há o que
-      recuperar — re-provisionar criaria um banco vazio).
+    - RUNNING container → ensures the published port matches the database
+      (Docker republishes a new port when the container restarts after a
+      host restart) and, if the instance was FAILED, auto-recovers it to RUNNING.
+    - STOPPED container → exists but stopped (host/Docker restarted, OOM, crash).
+      Tries to restart it; on success resyncs the port and returns to RUNNING; on
+      failure marks it FAILED (and tries again on the next cycle).
+    - NOT_FOUND/ERROR container → gone for good. If it was RUNNING marks it FAILED
+      for the operator to investigate; if it was already FAILED leaves it as is (there's
+      nothing to recover — re-provisioning would create an empty database).
     """
     infra_status = provisioner.get_status(instance.id)
 
@@ -50,7 +50,7 @@ def _reconcile_instance(
             changed = True
         if instance.status != InstanceStatus.RUNNING:
             logger.info(
-                "Instância %s recuperada: container voltou a rodar", instance.id
+                "Instance %s recovered: container is running again", instance.id
             )
             record_status_change(db, instance, InstanceStatus.RUNNING)
             changed = True
@@ -59,29 +59,29 @@ def _reconcile_instance(
 
     elif infra_status == ProvisionerStatus.STOPPED:
         logger.warning(
-            "Instância %s tem container parado — tentando religar", instance.id
+            "Instance %s has a stopped container — attempting to restart", instance.id
         )
         try:
             new_port = provisioner.start(instance.id)
         except Exception as exc:
-            logger.error("Falha ao religar instância %s: %s", instance.id, exc)
+            logger.error("Failed to restart instance %s: %s", instance.id, exc)
             if instance.status != InstanceStatus.FAILED:
                 record_status_change(db, instance, InstanceStatus.FAILED)
                 db.commit()
             return
         sync_connection_port(instance, new_port)
-        # DB pode já estar RUNNING (container caíra sem o banco saber); só
-        # registra a transição se o status realmente mudou (evita linha redundante).
+        # The DB may already be RUNNING (container went down without the database knowing);
+        # only record the transition if the status actually changed (avoids a redundant row).
         if instance.status != InstanceStatus.RUNNING:
             record_status_change(db, instance, InstanceStatus.RUNNING)
         db.commit()
-        logger.info("Instância %s religada com sucesso (porta %d)", instance.id, new_port)
+        logger.info("Instance %s restarted successfully (port %d)", instance.id, new_port)
 
-    else:  # NOT_FOUND ou ERROR
+    else:  # NOT_FOUND or ERROR
         if instance.status == InstanceStatus.RUNNING:
             logger.warning(
-                "Instância %s está RUNNING no banco mas o container reporta '%s' "
-                "— marcando como FAILED",
+                "Instance %s is RUNNING in the database but the container reports '%s' "
+                "— marking as FAILED",
                 instance.id,
                 infra_status.value,
             )
@@ -91,30 +91,30 @@ def _reconcile_instance(
 
 def poll_once() -> None:
     """
-    Reconciliação síncrona de todas as instâncias que devem estar rodando.
+    Synchronous reconciliation of all instances that should be running.
 
-    Por que síncrono?
-    Esta função é chamada via asyncio.to_thread() do loop async, então pode
-    fazer operações bloqueantes (consultas SQL + chamadas Docker API) sem
-    travar o event loop que processa os requests HTTP.
+    Why synchronous?
+    This function is called via asyncio.to_thread() from the async loop, so it can
+    do blocking operations (SQL queries + Docker API calls) without
+    blocking the event loop that processes HTTP requests.
 
-    Por que SessionLocal() diretamente e não get_db()?
-    get_db() é um gerador FastAPI projetado para ser usado como Depends()
-    dentro do contexto de um request HTTP. O poller roda fora desse contexto
-    (é uma task de background), então cria sua própria Session e a fecha
-    manualmente no bloco finally.
+    Why SessionLocal() directly instead of get_db()?
+    get_db() is a FastAPI generator designed to be used as Depends()
+    inside an HTTP request's context. The poller runs outside that context
+    (it's a background task), so it creates its own Session and closes it
+    manually in the finally block.
 
-    Quais instâncias reconciliamos:
-    - RUNNING e FAILED → o estado desejado é "rodando", então reconciliamos
-      (inclui auto-recuperar instâncias que caíram num restart do Docker).
-    - STOPPED → parada intencional do operador; não tocamos.
-    - DELETING/DELETED/PENDING/PROVISIONING → estados transitórios ou finais
-      gerenciados por outros fluxos; o poller os ignora.
+    Which instances we reconcile:
+    - RUNNING and FAILED → the desired state is "running", so we reconcile them
+      (includes auto-recovering instances that went down in a Docker restart).
+    - STOPPED → an intentional stop by the operator; we don't touch it.
+    - DELETING/DELETED/PENDING/PROVISIONING → transient or final states
+      managed by other flows; the poller ignores them.
 
-    Limpeza de TokenBlacklist:
-    - A cada _TOKEN_CLEANUP_EVERY_N_CYCLES ciclos (~24h), remove tokens
-      expirados da blacklist. Tokens expirados são inválidos por definição
-      (JWT rejeita por 'exp'), então mantê-los só desperdiça espaço.
+    TokenBlacklist cleanup:
+    - Every _TOKEN_CLEANUP_EVERY_N_CYCLES cycles (~24h), removes
+      expired tokens from the blacklist. Expired tokens are invalid by definition
+      (the JWT rejects them via 'exp'), so keeping them only wastes space.
     """
     global _poll_cycle_counter
     _poll_cycle_counter += 1
@@ -139,10 +139,10 @@ def poll_once() -> None:
             except Exception as exc:
                 db.rollback()
                 logger.exception(
-                    "Erro ao reconciliar a instância %s: %s", instance.id, exc
+                    "Error reconciling instance %s: %s", instance.id, exc
                 )
 
-        # Limpeza periódica de tokens expirados da blacklist
+        # Periodic cleanup of expired tokens from the blacklist
         if _poll_cycle_counter % _TOKEN_CLEANUP_EVERY_N_CYCLES == 0:
             try:
                 removed = cleanup_expired_tokens(db)
@@ -157,37 +157,37 @@ def poll_once() -> None:
 
 async def status_polling_loop(stop_event: asyncio.Event) -> None:
     """
-    Loop async que executa poll_once() a cada _POLL_INTERVAL_SECONDS.
+    Async loop that runs poll_once() every _POLL_INTERVAL_SECONDS.
 
-    Shutdown limpo via stop_event:
-    Em vez de cancelar a task abruptamente (que poderia deixar uma Session
-    aberta ou um commit no meio), usamos asyncio.wait_for(stop_event.wait()).
-    Quando o lifespan do FastAPI chama stop_event.set() no encerramento:
-    - Se estiver esperando o próximo ciclo → wait_for retorna imediatamente
-    - O while verifica stop_event.is_set() → sai do loop
-    - A task termina graciosamente
+    Clean shutdown via stop_event:
+    Instead of abruptly cancelling the task (which could leave a Session
+    open or a commit half-done), we use asyncio.wait_for(stop_event.wait()).
+    When FastAPI's lifespan calls stop_event.set() on shutdown:
+    - If it's waiting for the next cycle → wait_for returns immediately
+    - The while checks stop_event.is_set() → exits the loop
+    - The task ends gracefully
 
-    poll_once() é síncrono (SQL + Docker API = I/O bloqueante).
-    asyncio.to_thread() roda em thread pool, liberando o event loop para
-    continuar processando requests HTTP durante o polling.
+    poll_once() is synchronous (SQL + Docker API = blocking I/O).
+    asyncio.to_thread() runs it in a thread pool, freeing the event loop to
+    keep processing HTTP requests during polling.
     """
     logger.info(
-        "Status poller iniciado (intervalo: %ds)", _POLL_INTERVAL_SECONDS
+        "Status poller started (interval: %ds)", _POLL_INTERVAL_SECONDS
     )
 
     while not stop_event.is_set():
         try:
             await asyncio.to_thread(poll_once)
         except Exception as exc:
-            logger.exception("Erro no ciclo de polling: %s", exc)
+            logger.exception("Error in polling cycle: %s", exc)
 
-        # Aguardar o intervalo OU o sinal de shutdown — o que vier primeiro
+        # Wait for the interval OR the shutdown signal — whichever comes first
         try:
             await asyncio.wait_for(
                 stop_event.wait(),
                 timeout=_POLL_INTERVAL_SECONDS,
             )
         except asyncio.TimeoutError:
-            pass  # Normal — intervalo expirou, próximo ciclo de poll
+            pass  # Normal — interval expired, next poll cycle
 
-    logger.info("Status poller encerrado")
+    logger.info("Status poller stopped")

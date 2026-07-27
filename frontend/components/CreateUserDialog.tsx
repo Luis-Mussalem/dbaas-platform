@@ -33,7 +33,7 @@ export function CreateUserDialog({ companies, onCreate, isSuperuser: isCurrentUs
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
-  // Company admin (não superuser) só pode criar members e admins da própria empresa
+  // Company admin (not superuser) can only create members and admins for their own company
   const canCreateSuperuser = isCurrentUserSuperuser;
   const canChooseCompany = isCurrentUserSuperuser;
   const canChooseRole = !isCurrentUserSuperuser;

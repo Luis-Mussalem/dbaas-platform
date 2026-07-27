@@ -1,8 +1,8 @@
 import { test, expect } from "@playwright/test";
 import { DEMO_EMAIL, DEMO_PASSWORD } from "./helpers";
 
-// Estes testes exercitam a própria tela de login, então rodam SEM a sessão
-// salva (contexto anônimo sobrescrevendo o storageState do projeto).
+// These tests exercise the login screen itself, so they run WITHOUT the saved
+// session (anonymous context overriding the project's storageState).
 test.use({ storageState: { cookies: [], origins: [] } });
 
 test("login page renders the form", async ({ page }) => {
@@ -18,7 +18,7 @@ test("rejects invalid credentials", async ({ page }) => {
   await page.locator("#password").fill("wrong-password");
   await page.getByRole("button", { name: /sign in/i }).click();
 
-  // Continua na tela de login e mostra um erro — não navega para o painel.
+  // Stays on the login screen and shows an error — doesn't navigate to the dashboard.
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByRole("alert").or(page.locator("p.text-danger"))).toBeVisible();
 });

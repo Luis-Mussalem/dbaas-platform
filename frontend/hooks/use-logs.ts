@@ -10,8 +10,8 @@ interface UseLogsResult {
   refresh: () => Promise<void>;
 }
 
-// Logs do container. Sem polling automático — o operador atualiza sob demanda
-// (um tail contínuo seria custoso e ruidoso na UI).
+// Container logs. No automatic polling — the operator refreshes on demand
+// (a continuous tail would be costly and noisy in the UI).
 export function useLogs(instanceId: string, tail = 200): UseLogsResult {
   const t = useTranslations("Logs");
   const fetcher = useCallback(

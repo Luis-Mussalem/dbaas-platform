@@ -3,8 +3,8 @@
 import { History, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-// Histórico de queries (apresentação pura). A página é dona da lista e da
-// persistência em localStorage; aqui só listamos e avisamos cliques.
+// Query history (pure presentation). The page owns the list and the
+// localStorage persistence; here we just list them and report clicks.
 export function QueryHistory({
   items,
   onSelect,
@@ -34,7 +34,7 @@ export function QueryHistory({
         </button>
       </div>
       <ul className="p-2">
-        {/* O histórico é deduplicado ao salvar — a própria query é a key. */}
+        {/* The history is deduplicated on save — the query itself is the key. */}
         {items.map((q) => (
           <li key={q}>
             <button

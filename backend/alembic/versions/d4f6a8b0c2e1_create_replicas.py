@@ -24,8 +24,8 @@ def upgrade() -> None:
         sa.Column('id', sa.UUID(), nullable=False),
         sa.Column('primary_instance_id', sa.UUID(), nullable=False),
         sa.Column('replica_instance_id', sa.UUID(), nullable=False),
-        # Enum novo, criado inline (labels = nomes dos membros, maiúsculos —
-        # padrão da casa; sem values_callable, como Backup/InstanceStatus).
+        # New enum, created inline (labels = member names, uppercase —
+        # house convention; no values_callable, same as Backup/InstanceStatus).
         sa.Column(
             'replication_state',
             sa.Enum(
@@ -84,5 +84,5 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_replicas_replica_instance_id'), table_name='replicas')
     op.drop_index(op.f('ix_replicas_primary_instance_id'), table_name='replicas')
     op.drop_table('replicas')
-    # Enum é dropado explicitamente: op.drop_table não remove o tipo no Postgres.
+    # Enum is dropped explicitly: op.drop_table does not remove the type in Postgres.
     sa.Enum(name='replicationstate').drop(op.get_bind(), checkfirst=True)

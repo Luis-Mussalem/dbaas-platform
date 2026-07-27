@@ -4,11 +4,11 @@ import { getFleetSummary } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
 import type { InstanceSummary } from "@/lib/types";
 
-// Estado agregado da frota, indexado por id para o card acessar em O(1).
-// Uma única requisição serve o grid inteiro — ver getFleetSummary.
+// Aggregated fleet state, indexed by id so the card can access it in O(1).
+// A single request serves the whole grid — see getFleetSummary.
 //
-// O intervalo default acompanha o do card (10s); os chamadores passam
-// DASHBOARD_POLL_MS para casar a cadência com o resto do dashboard.
+// The default interval matches the card's (10s); callers pass
+// DASHBOARD_POLL_MS to match the cadence with the rest of the dashboard.
 const POLL_INTERVAL_MS = 10_000;
 
 interface UseFleetSummaryResult {

@@ -12,14 +12,14 @@ from src.core.database import Base
 
 class ReplicationState(str, PyEnum):
     """
-    Estado do fluxo de replicação de um standby.
+    State of a standby's replication stream.
 
-    - PENDING/PROVISIONING: a réplica está sendo criada (pg_basebackup em curso).
-    - STREAMING: standby conectado ao primário, recebendo WAL em tempo real.
-    - CATCHUP: conectado, mas ainda aplicando WAL atrasado (lag alto).
-    - DISCONNECTED: sem stream ativo no primário (não aparece em pg_stat_replication).
-    - PROMOTED: a réplica foi promovida a primário standalone (fim do vínculo).
-    - FAILED: a criação ou a promoção falhou.
+    - PENDING/PROVISIONING: the replica is being created (pg_basebackup in progress).
+    - STREAMING: standby connected to the primary, receiving WAL in real time.
+    - CATCHUP: connected, but still applying delayed WAL (high lag).
+    - DISCONNECTED: no active stream on the primary (doesn't show up in pg_stat_replication).
+    - PROMOTED: the replica was promoted to a standalone primary (end of the link).
+    - FAILED: creation or promotion failed.
     """
 
     PENDING = "pending"
@@ -33,14 +33,14 @@ class ReplicationState(str, PyEnum):
 
 class Replica(Base):
     """
-    Vínculo de replicação entre uma instância primária e um standby.
+    Replication link between a primary instance and a standby.
 
-    A réplica em si é uma `DatabaseInstance` companheira (reusa status, porta,
-    métricas e a máquina de estados da frota); esta linha só liga as duas e
-    guarda o estado de replicação e o lag medido pelo replication_poller.
+    The replica itself is a companion `DatabaseInstance` (reuses status, port,
+    metrics, and the fleet's state machine); this row just links the two and
+    stores the replication state and lag measured by the replication_poller.
 
-    Sem FK nas colunas de instância (padrão do Backup): o scoping multi-tenant é
-    imposto no router via `get_instance_or_404` sobre o `primary_instance_id`.
+    No FK on the instance columns (same pattern as Backup): multi-tenant scoping is
+    enforced in the router via `get_instance_or_404` on `primary_instance_id`.
     """
 
     __tablename__ = "replicas"

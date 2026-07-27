@@ -18,17 +18,17 @@ logger = logging.getLogger(__name__)
 
 def poll_schedules_once() -> None:
     """
-    Verifica todos os BackupSchedules ativos com next_run_at <= agora.
-    Para cada um, executa o backup e avança o schedule para a próxima execução.
+    Checks all active BackupSchedules with next_run_at <= now.
+    For each one, runs the backup and advances the schedule to its next run.
 
-    Por que sync com SessionLocal() direto (e não Depends(get_db))?
-    Este código roda fora do contexto de uma request FastAPI. Não há como usar
-    a dependency injection do FastAPI aqui. Criamos e fechamos a sessão manualmente.
+    Why sync with SessionLocal() directly (and not Depends(get_db))?
+    This code runs outside a FastAPI request context. There's no way to use
+    FastAPI's dependency injection here. We create and close the session manually.
 
-    Por que capturar Exception por schedule em vez de deixar propagar?
-    Se o backup de uma instância falhar (instância offline, disco cheio, etc.),
-    o poller deve continuar verificando as outras instâncias. Uma falha não pode
-    derrubar os backups das demais.
+    Why catch Exception per schedule instead of letting it propagate?
+    If one instance's backup fails (instance offline, disk full, etc.),
+    the poller must keep checking the other instances. A single failure must not
+    take down the backups of the rest.
     """
     db = SessionLocal()
     try:
@@ -50,7 +50,7 @@ def poll_schedules_once() -> None:
         logger.info("Backup scheduler: %d schedule(s) due for execution", len(due_schedules))
 
         for schedule in due_schedules:
-            # Verificar se a instância existe e está RUNNING
+            # Check whether the instance exists and is RUNNING
             instance = (
                 db.query(DatabaseInstance)
                 .filter(
@@ -68,13 +68,13 @@ def poll_schedules_once() -> None:
                     schedule.id,
                     schedule.instance_id,
                 )
-                # Ainda avança o schedule para não ficar tentando repetidamente
+                # Still advances the schedule so it doesn't keep retrying repeatedly
                 advance_schedule(db, schedule)
                 continue
 
-            # O Docker republica portas ao religar containers; um backup que
-            # vence no boot pode correr na frente do status_poller e falhar numa
-            # porta morta. Conferir antes custa uma chamada à API do Docker.
+            # Docker republishes ports when containers restart; a backup that
+            # comes due at boot can run ahead of the status_poller and fail on a
+            # dead port. Checking beforehand only costs one call to the Docker API.
             reconcile_connection_port(db, instance)
 
             try:
@@ -93,7 +93,7 @@ def poll_schedules_once() -> None:
                         retention_days=schedule.retention_days,
                     )
 
-                # Aplicar retenção após cada backup agendado
+                # Apply retention after each scheduled backup
                 removed = apply_retention(db, instance.id)
                 if removed > 0:
                     logger.info(
@@ -110,8 +110,8 @@ def poll_schedules_once() -> None:
                     exc,
                 )
             finally:
-                # Sempre avançar o schedule, mesmo em caso de falha,
-                # para não tentar novamente no próximo ciclo de 60s
+                # Always advance the schedule, even on failure,
+                # to avoid retrying again on the next 60s cycle
                 advance_schedule(db, schedule)
 
     finally:
@@ -120,17 +120,17 @@ def poll_schedules_once() -> None:
 
 async def backup_scheduling_loop(stop_event: asyncio.Event) -> None:
     """
-    Loop assíncrono que executa poll_schedules_once() a cada 60 segundos.
+    Async loop that runs poll_schedules_once() every 60 seconds.
 
-    Por que asyncio.to_thread()?
-    poll_schedules_once() é síncrono (SQLAlchemy sync + subprocess). Rodar
-    diretamente no event loop bloquearia todas as requests durante a execução.
-    asyncio.to_thread() move a execução para uma thread pool, liberando o event loop.
+    Why asyncio.to_thread()?
+    poll_schedules_once() is synchronous (sync SQLAlchemy + subprocess). Running it
+    directly on the event loop would block all requests during execution.
+    asyncio.to_thread() moves the execution to a thread pool, freeing the event loop.
 
-    Por que asyncio.wait_for(stop_event.wait(), timeout=60)?
-    Permite que o loop seja interrompido imediatamente quando a API faz shutdown,
-    sem esperar o próximo ciclo de 60s. O TimeoutError é capturado e tratado como
-    "continue o loop".
+    Why asyncio.wait_for(stop_event.wait(), timeout=60)?
+    Lets the loop be interrupted immediately when the API shuts down,
+    without waiting for the next 60s cycle. The TimeoutError is caught and treated as
+    "continue the loop".
     """
     logger.info("Backup scheduling loop started (interval: 60s)")
     while not stop_event.is_set():

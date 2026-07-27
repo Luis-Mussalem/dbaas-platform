@@ -19,13 +19,13 @@ def get_dashboard(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Visão consolidada da saúde da plataforma.
+    Consolidated view of the platform's health.
 
-    Retorna:
-    - Total de instâncias e contagem por status
-    - Alertas ativos (não resolvidos)
-    - Backups nas últimas 24h (total e falhos)
-    - Tarefas de manutenção pendentes ou em execução
+    Returns:
+    - Total instances and count by status
+    - Active (unresolved) alerts
+    - Backups in the last 24h (total and failed)
+    - Pending or running maintenance tasks
     """
     return admin_service.get_dashboard(db, company_id=visible_company_id(current_user))
 
@@ -34,19 +34,19 @@ def get_dashboard(
 def get_audit_log(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    action: str | None = Query(None, description="Filtrar por ação (ex: login, backup_created)"),
-    resource_type: str | None = Query(None, description="Filtrar por tipo de recurso (ex: instance, backup)"),
-    user_id: uuid.UUID | None = Query(None, description="Filtrar por usuário"),
+    action: str | None = Query(None, description="Filter by action (e.g.: login, backup_created)"),
+    resource_type: str | None = Query(None, description="Filter by resource type (e.g.: instance, backup)"),
+    user_id: uuid.UUID | None = Query(None, description="Filter by user"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_company_admin),
 ):
     """
-    Histórico de ações auditadas na plataforma.
+    History of audited actions on the platform.
 
-    Ordenado por timestamp decrescente (mais recente primeiro).
-    Suporta filtros por action, resource_type e user_id.
-    Paginação via limit e offset.
-    Acesso restrito a company-admin e superuser.
+    Ordered by timestamp descending (most recent first).
+    Supports filters by action, resource_type, and user_id.
+    Paginated via limit and offset.
+    Access restricted to company-admin and superuser.
     """
     return admin_service.list_audit_logs(
         db,

@@ -1,12 +1,12 @@
 """
-Testes de isolamento multi-tenant (PHASE 11 — Stage A).
+Multi-tenant isolation tests (PHASE 11 — Stage A).
 
-Garantem que um usuário comum só enxerga/gerencia recursos da sua empresa, que
-o superuser enxerga todas, e que recursos derivados (backups, eventos de alerta)
-herdam o scoping da instância dona.
+Ensure a regular user only sees/manages resources of their own company, that
+the superuser sees all of them, and that derived resources (backups, alert events)
+inherit the scoping of the owning instance.
 
-Não dependem de Docker: instâncias são inseridas direto via ORM com company_id;
-o único teste de criação real usa um provisioner falso (monkeypatch).
+Don't depend on Docker: instances are inserted directly via the ORM with company_id;
+the only real creation test uses a fake provisioner (monkeypatch).
 """
 import pytest
 
@@ -31,7 +31,7 @@ def _seed_instance(db, company_id, name="db", status=InstanceStatus.STOPPED):
 
 
 class _FakeProvisioner:
-    """Dublê mínimo: não toca em Docker, devolve um ProvisionResult fixo."""
+    """Minimal stub: doesn't touch Docker, returns a fixed ProvisionResult."""
 
     def create(self, instance_id, engine_version, memory_mb=None, cpu=None):
         return ProvisionResult(
@@ -53,7 +53,7 @@ def fake_provisioner(monkeypatch):
 
 
 # --------------------------------------------------------------------------- #
-# Listagem / leitura de instâncias
+# Listing / reading instances
 # --------------------------------------------------------------------------- #
 
 
@@ -93,7 +93,7 @@ def test_superuser_sees_all_companies(client, auth_headers, make_company, db):
 
 
 # --------------------------------------------------------------------------- #
-# Criação atribui a empresa do criador
+# Creation assigns the creator's company
 # --------------------------------------------------------------------------- #
 
 
@@ -113,7 +113,7 @@ def test_created_instance_belongs_to_creator_company(
 
 
 # --------------------------------------------------------------------------- #
-# Recursos derivados herdam o scoping
+# Derived resources inherit the scoping
 # --------------------------------------------------------------------------- #
 
 
@@ -137,7 +137,7 @@ def test_global_alert_events_scoped_by_company(
     a_inst = _seed_instance(db, company_a.id, name="a1")
     b_inst = _seed_instance(db, company_b.id, name="b1")
 
-    # Uma regra+evento em cada empresa.
+    # One rule+event in each company.
     for inst in (a_inst, b_inst):
         rule = AlertRule(
             instance_id=inst.id,
@@ -164,7 +164,7 @@ def test_global_alert_events_scoped_by_company(
     resp = client.get("/api/v1/alerts/events", headers=headers_a)
     assert resp.status_code == 200
     messages = {e["message"] for e in resp.json()}
-    assert messages == {"event-a1"}  # NÃO enxerga o evento da empresa B
+    assert messages == {"event-a1"}  # does NOT see company B's event
 
     headers_su, _ = auth_headers(email="root@example.com", is_superuser=True)
     resp_su = client.get("/api/v1/alerts/events", headers=headers_su)
@@ -172,7 +172,7 @@ def test_global_alert_events_scoped_by_company(
 
 
 # --------------------------------------------------------------------------- #
-# Stage B — empresa-ativa do superuser (header X-Company-Id)
+# Stage B — superuser's active company (X-Company-Id header)
 # --------------------------------------------------------------------------- #
 
 
@@ -183,7 +183,7 @@ def test_superuser_active_company_header_filters(client, auth_headers, make_comp
     _seed_instance(db, company_b.id, name="b1")
     headers, _ = auth_headers(email="root@example.com", is_superuser=True)
 
-    # Com a empresa B ativa, o superuser enxerga só as instâncias de B.
+    # With company B active, the superuser only sees B's instances.
     resp = client.get(API, headers={**headers, "X-Company-Id": str(company_b.id)})
     assert resp.status_code == 200
     assert {i["name"] for i in resp.json()} == {"b1"}
@@ -196,7 +196,7 @@ def test_regular_user_ignores_company_header(client, auth_headers, make_company,
     _seed_instance(db, company_b.id, name="b1")
     headers, _ = auth_headers(email="a@example.com", company_id=company_a.id)
 
-    # Usuário comum tenta forjar a empresa B no header — deve ser ignorado.
+    # A regular user tries to forge company B in the header — should be ignored.
     resp = client.get(API, headers={**headers, "X-Company-Id": str(company_b.id)})
     assert resp.status_code == 200
     assert {i["name"] for i in resp.json()} == {"a1"}

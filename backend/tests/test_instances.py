@@ -1,11 +1,11 @@
 """
-Testes de instâncias: criação (com provisioner falso), falha de
-provisionamento, listagem, máquina de estados e soft delete.
+Tests for instances: creation (with a fake provisioner), provisioning
+failure, listing, the state machine, and soft delete.
 
-O provisioner real sobe containers Docker. Aqui ele é substituído por um
-FakeProvisioner (monkeypatch) — os testes validam a LÓGICA do service/router
-sem depender de Docker. Cobrem também o fix #4 (erros internos não vazam na
-resposta 503).
+The real provisioner brings up Docker containers. Here it's replaced by a
+FakeProvisioner (monkeypatch) — the tests validate the service/router LOGIC
+without depending on Docker. They also cover fix #4 (internal errors don't leak into
+the 503 response).
 """
 import uuid
 from datetime import datetime, timezone
@@ -20,12 +20,12 @@ API = "/api/v1/instances"
 
 
 # --------------------------------------------------------------------------- #
-# Provisioner falso + fixtures
+# Fake provisioner + fixtures
 # --------------------------------------------------------------------------- #
 
 
 class FakeProvisioner:
-    """Dublê do provisioner: registra chamadas, não toca em Docker."""
+    """Provisioner stub: records calls, doesn't touch Docker."""
 
     def __init__(self) -> None:
         self.fail_create = False
@@ -36,7 +36,7 @@ class FakeProvisioner:
 
     def create(self, instance_id, engine_version, memory_mb=None, cpu=None):
         if self.fail_create:
-            # Mensagem com "segredo" interno — os testes garantem que NÃO vaza.
+            # Message with an internal "secret" — the tests guarantee it does NOT leak.
             raise RuntimeError("docker daemon error at internal-host:5432")
         self.created.append(instance_id)
         return ProvisionResult(
@@ -51,7 +51,7 @@ class FakeProvisioner:
 
     def start(self, instance_id):
         self.started.append(instance_id)
-        return 55433  # nova porta após restart (Docker republica dinamicamente)
+        return 55433  # new port after restart (Docker republishes dynamically)
 
     def stop(self, instance_id):
         self.stopped.append(instance_id)
@@ -62,7 +62,7 @@ class FakeProvisioner:
 
 @pytest.fixture
 def fake_provisioner(monkeypatch):
-    """Substitui get_provisioner no service por um FakeProvisioner."""
+    """Replaces get_provisioner in the service with a FakeProvisioner."""
     fake = FakeProvisioner()
     monkeypatch.setattr("src.services.instance.get_provisioner", lambda: fake)
     return fake
@@ -70,7 +70,7 @@ def fake_provisioner(monkeypatch):
 
 @pytest.fixture
 def make_instance(db):
-    """Insere uma instância direto no banco, em qualquer status desejado."""
+    """Inserts an instance directly into the database, in whatever status is desired."""
     def _make(
         name: str = "test-instance",
         status: InstanceStatus = InstanceStatus.STOPPED,
@@ -86,7 +86,7 @@ def make_instance(db):
 
 
 # --------------------------------------------------------------------------- #
-# Criação
+# Creation
 # --------------------------------------------------------------------------- #
 
 
@@ -109,10 +109,10 @@ def test_create_instance_succeeds(client, auth_headers, fake_provisioner):
     assert body["host"] == "127.0.0.1"
     assert body["port"] == 55432
     assert body["db_name"] == "db_fakeinstance"
-    # A connection_uri (segredo cifrado) NUNCA deve aparecer na resposta.
+    # connection_uri (an encrypted secret) must NEVER appear in the response.
     assert "connection_uri" not in body
     assert "fake-plaintext-password" not in resp.text
-    assert fake_provisioner.created  # o provisioner foi de fato chamado
+    assert fake_provisioner.created  # the provisioner was actually called
 
 
 def test_create_instance_records_status_history(client, auth_headers, fake_provisioner, db):
@@ -128,7 +128,7 @@ def test_create_instance_records_status_history(client, auth_headers, fake_provi
         .order_by(InstanceStatusHistory.changed_at.asc())
         .all()
     ]
-    # Criação bem-sucedida percorre PENDING (semente) → PROVISIONING → RUNNING.
+    # A successful creation goes through PENDING (seed) → PROVISIONING → RUNNING.
     assert statuses == [
         InstanceStatus.PENDING,
         InstanceStatus.PROVISIONING,
@@ -170,7 +170,7 @@ def test_create_instance_rejects_invalid_environment(client, auth_headers, fake_
     resp = client.post(
         API,
         headers=headers,
-        json={"name": "bad-env", "environment": "qa"},  # não é production/staging/development
+        json={"name": "bad-env", "environment": "qa"},  # not production/staging/development
     )
     assert resp.status_code == 422
 
@@ -178,7 +178,7 @@ def test_create_instance_rejects_invalid_environment(client, auth_headers, fake_
 def test_create_instance_provisioning_failure_returns_generic_503(
     client, auth_headers, fake_provisioner, db
 ):
-    # Fix #4: na falha, o cliente recebe 503 genérico — sem detalhe interno.
+    # Fix #4: on failure, the client gets a generic 503 — no internal detail.
     fake_provisioner.fail_create = True
     headers, _ = auth_headers()
 
@@ -186,17 +186,17 @@ def test_create_instance_provisioning_failure_returns_generic_503(
     assert resp.status_code == 503
     detail = resp.json()["detail"]
     assert detail == "Provisioning failed. See server logs for details."
-    assert "internal-host" not in detail  # erro interno não vazou
+    assert "internal-host" not in detail  # internal error didn't leak
     assert "internal-host" not in resp.text
 
-    # E a instância fica persistida como FAILED (registro de auditoria).
+    # And the instance stays persisted as FAILED (an audit record).
     inst = db.query(DatabaseInstance).filter_by(name="boom").first()
     assert inst is not None
     assert inst.status == InstanceStatus.FAILED
 
 
 # --------------------------------------------------------------------------- #
-# Listagem / detalhe
+# Listing / detail
 # --------------------------------------------------------------------------- #
 
 
@@ -233,7 +233,7 @@ def test_get_instance_not_found_returns_404(client, auth_headers):
 
 
 # --------------------------------------------------------------------------- #
-# Máquina de estados (start/stop)
+# State machine (start/stop)
 # --------------------------------------------------------------------------- #
 
 
@@ -261,7 +261,7 @@ def test_start_stopped_instance_resyncs_port(
     assert resp.status_code == 200
     body = resp.json()
     assert body["status"] == "running"
-    # Docker republica em nova porta no start; o service ressincroniza.
+    # Docker republishes on a new port on start; the service resyncs.
     assert body["port"] == 55433
     assert inst.id in fake_provisioner.started
 
@@ -270,7 +270,7 @@ def test_invalid_transition_returns_409(
     client, auth_headers, make_instance, fake_provisioner
 ):
     headers, _ = auth_headers()
-    # RUNNING → start (alvo RUNNING) é transição inválida.
+    # RUNNING → start (target RUNNING) is an invalid transition.
     inst = make_instance(status=InstanceStatus.RUNNING)
 
     resp = client.patch(
@@ -306,12 +306,12 @@ def test_delete_stopped_instance(
     assert resp.json()["status"] == "deleted"
     assert inst.id in fake_provisioner.deleted
 
-    # Depois do soft delete, a instância some das consultas (404).
+    # After the soft delete, the instance disappears from queries (404).
     assert client.get(f"{API}/{inst.id}", headers=headers).status_code == 404
 
 
 # --------------------------------------------------------------------------- #
-# Logs (FASE 10)
+# Logs (PHASE 10)
 # --------------------------------------------------------------------------- #
 
 
@@ -320,7 +320,7 @@ def test_get_instance_logs(client, auth_headers, make_instance, monkeypatch):
         def logs(self, instance_id, tail=200):
             return f"line1\nline2 (tail={tail})\n"
 
-    # O router usa get_provisioner importado no seu módulo.
+    # The router uses get_provisioner imported into its own module.
     monkeypatch.setattr(
         "src.routers.instances.get_provisioner", lambda: _LogProvisioner()
     )
@@ -336,7 +336,7 @@ def test_get_instance_logs(client, auth_headers, make_instance, monkeypatch):
 def test_get_instance_logs_container_missing(client, auth_headers, make_instance, monkeypatch):
     class _MissingProvisioner:
         def logs(self, instance_id, tail=200):
-            raise RuntimeError("Container não encontrado")
+            raise RuntimeError("Container not found")
 
     monkeypatch.setattr(
         "src.routers.instances.get_provisioner", lambda: _MissingProvisioner()

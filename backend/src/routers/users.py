@@ -59,9 +59,9 @@ def get_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Object-level authorization: um usuário só pode ler o próprio registro.
-    # O superuser (admin da plataforma) pode ler qualquer um. Sem esta checagem,
-    # qualquer usuário autenticado leria os dados de outro pelo UUID (IDOR).
+    # Object-level authorization: a user can only read their own record.
+    # The superuser (platform admin) can read anyone's. Without this check,
+    # any authenticated user could read another's data by UUID (IDOR).
     if current_user.id != user_id and not current_user.is_superuser:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

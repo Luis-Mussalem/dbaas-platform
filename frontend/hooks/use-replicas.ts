@@ -4,8 +4,8 @@ import { listReplicas } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
 import type { Replica } from "@/lib/types";
 
-// Lag e estado de streaming mudam continuamente — o poller do backend atualiza a
-// cada 30s, então revalidamos aqui num intervalo próximo para a UI acompanhar.
+// Lag and streaming state change continuously — the backend poller updates every
+// 30s, so we revalidate here at a similar interval to keep the UI in sync.
 const POLL_INTERVAL_MS = 15_000;
 
 interface UseReplicasResult {

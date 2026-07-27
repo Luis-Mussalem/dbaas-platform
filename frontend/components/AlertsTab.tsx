@@ -25,8 +25,8 @@ import { useFormatters } from "@/hooks/use-formatters";
 import { cn } from "@/lib/utils";
 import { BTN, BTN_GHOST, INPUT } from "@/lib/ui";
 
-// Unidade exibida ao lado do limiar de cada métrica (o rótulo vem do i18n).
-// Espelha o enum AlertMetricType do backend (src/schemas/alert.py).
+// Unit shown next to each metric's threshold (the label comes from i18n).
+// Mirrors the backend's AlertMetricType enum (src/schemas/alert.py).
 const METRIC_UNITS: Record<AlertMetricType, string> = {
   connections_ratio: "%",
   cache_hit_ratio: "%",
@@ -48,11 +48,11 @@ const SEVERITY_CLS: Record<AlertSeverity, string> = {
   warning: "text-warn border-warn/25 bg-warn/10",
   critical: "text-danger border-danger/25 bg-danger/10",
 };
-// Ordem de exibição do seletor de severidade (a chave é a fonte do rótulo i18n).
+// Display order of the severity selector (the key is the source of the i18n label).
 const SEVERITIES: AlertSeverity[] = ["info", "warning", "critical"];
 
-// Estado inicial do formulário de nova regra. threshold é string porque vem de
-// um <input> (todo input HTML entrega texto); convertemos para número no envio.
+// Initial state of the new-rule form. threshold is a string because it comes from
+// an <input> (every HTML input delivers text); we convert it to a number on submit.
 const EMPTY_FORM = {
   name: "",
   metric_type: "cache_hit_ratio" as AlertMetricType,
@@ -72,9 +72,9 @@ export function AlertsTab({ instance }: { instance: Instance }) {
   const { toast } = useToast();
   const { confirm } = useConfirm();
 
-  // Atualização imutável: nunca mutamos `form` direto — criamos um objeto novo
-  // com spread (...f) trocando só o campo alterado. O genérico <K> garante que
-  // value tenha o tipo exato do campo (type-safety no controlled input).
+  // Immutable update: we never mutate `form` directly — we create a new object
+  // with spread (...f) swapping only the changed field. The generic <K> guarantees that
+  // value has the field's exact type (type-safety in the controlled input).
   function setField<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((f) => ({ ...f, [key]: value }));
   }
@@ -226,7 +226,7 @@ export function AlertsTab({ instance }: { instance: Instance }) {
           </div>
         </div>
 
-        {/* formulário de criação (controlado) */}
+        {/* creation form (controlled) */}
         {showForm && (
           <div className="flex flex-wrap items-end gap-3 border-b border-border bg-surface-2/40 px-4 py-3">
             <label className="flex flex-col gap-1">

@@ -1,9 +1,9 @@
 "use client";
 
-// Controle segmentado genérico (pílula com N opções, uma ativa).
-// Usado nos filtros de ambiente do Painel e no toggle de visão do topo.
-// Componente "controlado": quem usa passa `value` e recebe `onChange` — o estado
-// vive no pai (mesmo padrão de um <select> controlado no React).
+// Generic segmented control (a pill with N options, one active).
+// Used in the Dashboard's environment filters and in the top view toggle.
+// A "controlled" component: the caller passes `value` and receives `onChange` — the state
+// lives in the parent (the same pattern as a controlled <select> in React).
 
 export interface SegmentedOption<T extends string> {
   value: T;
@@ -21,8 +21,8 @@ export function Segmented<T extends string>({
   onChange: (value: T) => void;
   size?: "sm" | "md" | "lg";
 }) {
-  // `lg` existe para a moldura fixa (toggle EN/PT da topbar), que é ~20% maior
-  // que os controles das páginas — `sm`/`md` seguem servindo o conteúdo.
+  // `lg` exists for the fixed frame (the topbar's EN/PT toggle), which is ~20% bigger
+  // than the pages' controls — `sm`/`md` keep serving the content.
   const pad = {
     sm: "px-2.5 py-1 text-[12px]",
     md: "px-3 py-1.5 text-[13px]",

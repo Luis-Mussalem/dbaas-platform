@@ -1,14 +1,14 @@
 """
-Testes do serviço de backup (PHASE 5) sem executar pg_dump/pg_restore/pg_basebackup.
+Tests for the backup service (PHASE 5) without running pg_dump/pg_restore/pg_basebackup.
 
-Estratégia: substituir subprocess.run por um dublê que simula o binário —
-opcionalmente escrevendo o arquivo de saída indicado em --file= / --pgdata= e
-controlando o returncode. Isso exercita TODA a orquestração (transições de
-status PENDING→RUNNING→COMPLETED/FAILED, cálculo de tamanho, expires_at,
-limpeza em falha) sem depender do postgresql-client nem de um banco vivo.
+Strategy: replace subprocess.run with a stub that simulates the binary —
+optionally writing the output file indicated by --file= / --pgdata= and
+controlling the returncode. This exercises the ENTIRE orchestration (status
+transitions PENDING→RUNNING→COMPLETED/FAILED, size calculation, expires_at,
+cleanup on failure) without depending on postgresql-client or a live database.
 
-BACKUP_DIR é redirecionado para tmp_path em cada teste para nunca tocar em
-data/backups real.
+BACKUP_DIR is redirected to tmp_path in every test so it never touches the
+real data/backups.
 """
 import subprocess
 import uuid
@@ -31,14 +31,14 @@ from src.services import backup as backup_service
 
 @pytest.fixture(autouse=True)
 def tmp_backup_dir(tmp_path, monkeypatch):
-    """Redireciona BACKUP_DIR para um diretório temporário em todos os testes."""
+    """Redirects BACKUP_DIR to a temporary directory in every test."""
     monkeypatch.setattr(backup_service.settings, "BACKUP_DIR", str(tmp_path))
     return tmp_path
 
 
 @pytest.fixture
 def instance(db):
-    """Instância com connection_uri cifrada (Fernet), como em produção."""
+    """Instance with an encrypted (Fernet) connection_uri, as in production."""
     uri = encrypt_value("postgresql://appuser:s3cret@127.0.0.1:5433/appdb")
     inst = DatabaseInstance(
         name="backup-db",
@@ -57,8 +57,8 @@ def instance(db):
 
 def _fake_run(returncode=0, stderr="", write_bytes=b"BACKUPDATA"):
     """
-    Fabrica um substituto de subprocess.run que opcionalmente escreve o arquivo
-    de saída (parseado de --file= ou --pgdata=) e devolve o returncode desejado.
+    Builds a subprocess.run replacement that optionally writes the output
+    file (parsed from --file= or --pgdata=) and returns the desired returncode.
     """
     def _run(cmd, *args, **kwargs):
         for arg in cmd:
@@ -120,7 +120,7 @@ def test_logical_backup_success(db, instance, monkeypatch):
     assert result.file_path is not None and result.file_path.endswith(".dump")
     assert result.size_bytes == len(b"BACKUPDATA")
     assert result.completed_at is not None
-    assert result.expires_at is not None  # retention_days → expires_at calculado
+    assert result.expires_at is not None  # retention_days → expires_at computed
 
 
 def test_logical_backup_failure_marks_failed(db, instance, monkeypatch):
@@ -159,7 +159,7 @@ def _completed_logical_backup(db, instance, tmp_path) -> Backup:
 def test_restore_success(db, instance, tmp_path, monkeypatch):
     backup = _completed_logical_backup(db, instance, tmp_path)
     monkeypatch.setattr(backup_service.subprocess, "run", _fake_run(returncode=0))
-    # Não levanta — restore concluído.
+    # Doesn't raise — restore completed.
     backup_service.restore_logical_backup(db, backup, instance)
 
 
@@ -271,8 +271,8 @@ def test_apply_retention_removes_expired(db, instance, tmp_path):
     db.refresh(expired)
     db.refresh(fresh)
     assert expired.status == BackupStatus.DELETED
-    assert not f.exists()  # arquivo físico removido
-    assert fresh.status == BackupStatus.COMPLETED  # não expirado, intacto
+    assert not f.exists()  # physical file removed
+    assert fresh.status == BackupStatus.COMPLETED  # not expired, untouched
 
 
 def test_list_backups_excludes_deleted_and_orders_desc(db, instance):

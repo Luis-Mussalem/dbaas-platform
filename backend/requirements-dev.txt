@@ -1,5 +1,5 @@
-# Dependências usadas apenas em desenvolvimento/CI (testes).
-# Instalar com: pip install -r requirements-dev.txt
+# Dependencies used only in development/CI (tests).
+# Install with: pip install -r requirements-dev.txt
 -r requirements.txt
 
 ruff==0.15.16

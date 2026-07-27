@@ -26,18 +26,18 @@ from src.schemas.maintenance import (
 @contextmanager
 def _get_conn(instance: DatabaseInstance):
     """
-    Conexão psycopg com autocommit=True.
+    psycopg connection with autocommit=True.
 
-    Por que autocommit é obrigatório para manutenção?
-    VACUUM, ANALYZE e REINDEX não podem rodar dentro de uma transação
-    explícita — o PostgreSQL os rejeita com:
+    Why is autocommit required for maintenance?
+    VACUUM, ANALYZE, and REINDEX cannot run inside an explicit
+    transaction — PostgreSQL rejects them with:
       "VACUUM cannot run inside a transaction block"
-    O psycopg 3 abre um BEGIN implícito em toda conexão por padrão.
-    autocommit=True desabilita esse BEGIN, permitindo que esses
-    comandos executem diretamente como statements avulsos.
+    psycopg 3 opens an implicit BEGIN on every connection by default.
+    autocommit=True disables that BEGIN, letting these
+    commands execute directly as standalone statements.
 
-    kill_idle e kill_long (pg_terminate_backend) são SELECTs e não
-    precisariam de autocommit, mas usam a mesma conexão por consistência.
+    kill_idle and kill_long (pg_terminate_backend) are SELECTs and wouldn't
+    need autocommit, but use the same connection for consistency.
     """
     uri = decrypt_value(instance.connection_uri)
     parsed = urlparse(uri)
@@ -90,7 +90,7 @@ def _finish_task(
 
 
 # ---------------------------------------------------------------------------
-# Executores de tarefa
+# Task runners
 # ---------------------------------------------------------------------------
 
 def run_vacuum(
@@ -99,16 +99,16 @@ def run_vacuum(
     target_table: str | None = None,
 ) -> MaintenanceTask:
     """
-    VACUUM ANALYZE em uma tabela ou no banco inteiro.
+    VACUUM ANALYZE on a table or on the entire database.
 
-    Por que VACUUM ANALYZE (não só VACUUM)?
-    VACUUM libera tuplas mortas (MVCC dead rows). ANALYZE atualiza as
-    estatísticas do query planner. Rodar ambos juntos é o padrão DBA —
-    um banco sem estatísticas recentes gera planos de execução ruins
-    mesmo que não haja bloat.
+    Why VACUUM ANALYZE (not just VACUUM)?
+    VACUUM frees dead tuples (MVCC dead rows). ANALYZE updates the
+    query planner's statistics. Running both together is the DBA standard —
+    a database without recent statistics produces bad execution plans
+    even without bloat.
 
-    psql.Identifier() garante quoting correto de nomes de tabela —
-    previne SQL injection mesmo que o nome venha de entrada do usuário.
+    psql.Identifier() guarantees correct quoting of table names —
+    prevents SQL injection even if the name comes from user input.
     """
     task = _make_task(db, instance.id, TaskType.VACUUM, target_table)
     try:
@@ -135,16 +135,16 @@ def run_vacuum_full(
     target_table: str,
 ) -> MaintenanceTask:
     """
-    VACUUM FULL em uma única tabela.
+    VACUUM FULL on a single table.
 
-    VACUUM FULL reescreve fisicamente a tabela em um novo arquivo —
-    recupera espaço em disco real (ao contrário do VACUUM normal, que
-    apenas marca o espaço como reutilizável). O custo: lock exclusivo
-    na tabela durante toda a operação, bloqueando leitura E escrita.
+    VACUUM FULL physically rewrites the table into a new file —
+    reclaims actual disk space (unlike regular VACUUM, which only
+    marks the space as reusable). The cost: an exclusive lock
+    on the table for the whole operation, blocking both reads AND writes.
 
-    Por isso é sempre obrigatório informar target_table — nunca VACUUM
-    FULL automático no banco inteiro. Use apenas com janela de manutenção
-    definida e quando bloat > ~30%.
+    That's why target_table is always required — never an automatic VACUUM
+    FULL on the entire database. Use only with a defined maintenance window
+    and when bloat > ~30%.
     """
     task = _make_task(db, instance.id, TaskType.VACUUM_FULL, target_table)
     try:
@@ -169,11 +169,11 @@ def run_analyze(
     target_table: str | None = None,
 ) -> MaintenanceTask:
     """
-    ANALYZE atualiza as estatísticas usadas pelo query planner.
+    ANALYZE updates the statistics used by the query planner.
 
-    Quando rodar manualmente: após carga batch (INSERT massivo em tabela grande),
-    o autovacuum ainda não terá rodado — o planner usaria estatísticas defasadas
-    e poderia escolher sequential scan onde deveria usar index scan.
+    When to run it manually: after a batch load (massive INSERT into a large table),
+    autovacuum won't have run yet — the planner would use stale statistics
+    and might pick a sequential scan where it should use an index scan.
     """
     task = _make_task(db, instance.id, TaskType.ANALYZE, target_table)
     try:
@@ -200,17 +200,17 @@ def run_reindex(
     target_table: str | None = None,
 ) -> MaintenanceTask:
     """
-    REINDEX recria índices do zero a partir dos dados nas tabelas.
+    REINDEX rebuilds indexes from scratch based on the data in the tables.
 
-    Quando usar: índices com bloat alto (estimado pela FASE 4 /bloat endpoint)
-    ou após corrupção de índice (raro, mas ocorre em crashes sem fsync).
+    When to use: indexes with high bloat (estimated by the PHASE 4 /bloat endpoint)
+    or after index corruption (rare, but happens in crashes without fsync).
 
-    target_table=None → REINDEX DATABASE (todos os índices, sequencialmente).
-    target_table fornecido → REINDEX TABLE (mais rápido, lock por tabela).
+    target_table=None → REINDEX DATABASE (all indexes, sequentially).
+    target_table given → REINDEX TABLE (faster, per-table lock).
 
-    Nota de produção: REINDEX TABLE adquire ShareLock — leitura ok, escrita bloqueada.
-    Para bancos em produção com SLA, use REINDEX CONCURRENTLY (não implementado
-    aqui por complexidade — requer PostgreSQL 12+ e não pode estar em transação).
+    Production note: REINDEX TABLE acquires a ShareLock — reads ok, writes blocked.
+    For production databases with an SLA, use REINDEX CONCURRENTLY (not implemented
+    here due to complexity — requires PostgreSQL 12+ and cannot be inside a transaction).
     """
     task = _make_task(db, instance.id, TaskType.REINDEX, target_table)
     try:
@@ -244,15 +244,15 @@ def kill_idle_connections(
     idle_minutes: int = 30,
 ) -> MaintenanceTask:
     """
-    Encerrar backends em estado 'idle' há mais de idle_minutes minutos.
+    Terminates backends in 'idle' state for more than idle_minutes minutes.
 
-    'idle' = conectado mas sem transação ativa. Cada conexão idle consome
-    um slot de max_connections e ~5–10 MB de memória shared no PostgreSQL.
-    Em aplicações que não fecham conexões corretamente, isso se acumula até
-    esgotar max_connections e impedir novas conexões.
+    'idle' = connected but with no active transaction. Each idle connection consumes
+    a max_connections slot and ~5-10 MB of shared memory in PostgreSQL.
+    In applications that don't close connections properly, this accumulates until
+    max_connections is exhausted and new connections are blocked.
 
-    pg_terminate_backend() envia SIGTERM ao processo backend — encerramento
-    gracioso. A role precisa de pg_signal_backend (concedido no provisioner).
+    pg_terminate_backend() sends SIGTERM to the backend process — a graceful
+    shutdown. The role needs pg_signal_backend (granted by the provisioner).
     """
     task = _make_task(db, instance.id, TaskType.KILL_IDLE, None)
     try:
@@ -285,13 +285,13 @@ def kill_long_queries(
     max_minutes: int = 60,
 ) -> MaintenanceTask:
     """
-    Encerrar queries ativas há mais de max_minutes minutos.
+    Terminates queries active for more than max_minutes minutes.
 
-    Exclui processos autovacuum — eles são gerenciados pelo PostgreSQL e
-    podem durar horas legitimamente em tabelas grandes.
+    Excludes autovacuum processes — they are managed by PostgreSQL and
+    can legitimately run for hours on large tables.
 
-    Quando usar: queries travadas (lock wait), full table scans acidentais,
-    ou queries de ETL que ultrapassaram o tempo esperado.
+    When to use: stuck queries (lock wait), accidental full table scans,
+    or ETL queries that exceeded their expected time.
     """
     task = _make_task(db, instance.id, TaskType.KILL_LONG, None)
     try:
@@ -319,7 +319,7 @@ def kill_long_queries(
         return _finish_task(db, task, False, str(exc))
 
 
-# Dispatcher: TaskType → função executora (para o scheduler e run_task)
+# Dispatcher: TaskType → runner function (for the scheduler and run_task)
 _TASK_RUNNERS = {
     TaskType.VACUUM:    run_vacuum,
     TaskType.ANALYZE:   run_analyze,
@@ -335,13 +335,13 @@ def run_task(
     data: MaintenanceTaskCreate,
 ) -> MaintenanceTask:
     """
-    Ponto de entrada do router — despacha para o executor correto.
+    Router entry point — dispatches to the correct runner.
 
-    VACUUM_FULL é tratado separadamente por exigir target_table obrigatório
-    (lock exclusivo — nunca permitir banco inteiro).
+    VACUUM_FULL is handled separately because it requires a mandatory target_table
+    (exclusive lock — never allow the whole database).
 
-    KILL_IDLE e KILL_LONG ignoram target_table — operam sobre conexões,
-    não sobre tabelas.
+    KILL_IDLE and KILL_LONG ignore target_table — they operate on connections,
+    not on tables.
     """
     if data.task_type == TaskType.VACUUM_FULL:
         if not data.target_table:
@@ -420,7 +420,7 @@ def advance_schedule(
     db: Session,
     schedule: MaintenanceSchedule,
 ) -> MaintenanceSchedule:
-    """Avançar next_run_at para o próximo horário no cron, a partir de agora."""
+    """Advances next_run_at to the next cron time, starting from now."""
     from croniter import croniter
 
     now = datetime.now(timezone.utc)
@@ -439,19 +439,19 @@ def get_config_recommendations(
     instance: DatabaseInstance,
 ) -> ConfigRecommendationsResponse:
     """
-    Calcular recomendações de configuração PostgreSQL baseadas nos recursos.
+    Computes PostgreSQL configuration recommendations based on the resources.
 
-    Não conecta ao banco — computa offline com memory_mb e cpu da instância.
-    Funciona mesmo com a instância STOPPED.
+    Doesn't connect to the database — computes offline using the instance's memory_mb and cpu.
+    Works even with the instance STOPPED.
 
-    As fórmulas seguem as recomendações do wiki.postgresql.org e do pgTune:
-    - shared_buffers:               25% da RAM
-    - effective_cache_size:         75% da RAM
-    - maintenance_work_mem:         5% da RAM, máximo 2 GB
-    - work_mem:                     RAM ÷ (max_connections × 2) — conservador
-    - max_parallel_workers:         igual ao número de vCPUs
-    - max_parallel_workers_per_gather: metade dos vCPUs
-    - wal_buffers:                  16 MB (fixo)
+    The formulas follow the recommendations from wiki.postgresql.org and from pgTune:
+    - shared_buffers:               25% of RAM
+    - effective_cache_size:         75% of RAM
+    - maintenance_work_mem:         5% of RAM, capped at 2 GB
+    - work_mem:                     RAM ÷ (max_connections × 2) — conservative
+    - max_parallel_workers:         equal to the number of vCPUs
+    - max_parallel_workers_per_gather: half of the vCPUs
+    - wal_buffers:                  16 MB (fixed)
     - checkpoint_completion_target: 0.9
     """
     recommendations: list[ConfigRecommendation] = []
@@ -484,7 +484,7 @@ def get_config_recommendations(
                 "used per VACUUM, REINDEX, CREATE INDEX, ALTER TABLE operation"
             ),
         ))
-        # Conservador: assume 100 conexões, 2 operações sort/hash cada
+        # Conservative: assumes 100 connections, 2 sort/hash operations each
         work_mem = max(4, mem // 200)
         recommendations.append(ConfigRecommendation(
             parameter="work_mem",

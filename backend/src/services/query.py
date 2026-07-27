@@ -1,16 +1,16 @@
 """
-Serviço do Console SQL (FRONTEND F7) — execução read-only de SELECT.
+SQL Console service (FRONTEND F7) — read-only SELECT execution.
 
-Reúsa o guard SELECT-only (src.core.sql_guard) e a conexão segura à instância
-(src.services.metrics.get_connection, que decripta a URI e impõe
-statement_timeout=30s). Nada novo de conexão/segurança é introduzido aqui.
+Reuses the SELECT-only guard (src.core.sql_guard) and the secure connection to the
+instance (src.services.metrics.get_connection, which decrypts the URI and enforces
+statement_timeout=30s). Nothing new about connections/security is introduced here.
 """
 from src.core.sql_guard import assert_read_only_select
 from src.models.database_instance import DatabaseInstance
 from src.services.metrics import get_connection
 
-# Cap de linhas devolvidas ao cliente. O tempo de execução já é limitado pelos
-# 30s de statement_timeout herdados de get_connection; este cap limita o volume.
+# Cap on rows returned to the client. Execution time is already limited by the
+# 30s statement_timeout inherited from get_connection; this cap limits the volume.
 MAX_ROWS = 1000
 
 
@@ -18,13 +18,13 @@ def execute_read_only(
     instance: DatabaseInstance, query: str
 ) -> tuple[list[str], list[list[str | None]], bool]:
     """
-    Executar um SELECT read-only e devolver (columns, rows, truncated).
+    Executes a read-only SELECT and returns (columns, rows, truncated).
 
-    - ``assert_read_only_select`` levanta ValueError em entrada inválida (→ 422).
-    - Erros de execução do Postgres propagam como psycopg.Error (→ 400 no router).
-    - As células viram str (None preservado): evita arapucas de serialização JSON
-      (Decimal, datetime, bytea, json). Um console exibe texto de qualquer forma.
-    - columns + rows como listas preservam a ordem e nomes duplicados (SELECT 1, 1).
+    - ``assert_read_only_select`` raises ValueError on invalid input (→ 422).
+    - Postgres execution errors propagate as psycopg.Error (→ 400 in the router).
+    - Cells become str (None preserved): avoids JSON serialization pitfalls
+      (Decimal, datetime, bytea, json). A console displays text either way.
+    - columns + rows as lists preserve order and duplicate names (SELECT 1, 1).
     """
     assert_read_only_select(query)
 
@@ -32,7 +32,7 @@ def execute_read_only(
         with conn.cursor() as cur:
             cur.execute(query)
             if cur.description is None:
-                # Statement válido que não devolve linhas (raro num SELECT puro).
+                # Valid statement that returns no rows (rare in a pure SELECT).
                 return [], [], False
             columns = [desc.name for desc in cur.description]
             raw_rows = cur.fetchmany(MAX_ROWS)

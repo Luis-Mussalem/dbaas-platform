@@ -16,7 +16,7 @@ const DOT: Record<string, string> = {
 
 const MAX_RESULTS = 6;
 
-// Busca rápida de instâncias: filtra por nome (client-side) e navega ao detalhe.
+// Quick instance search: filters by name (client-side) and navigates to the detail page.
 export function InstanceSearch() {
   const t = useTranslations("InstanceSearch");
   const { instances } = useInstances();
@@ -24,12 +24,12 @@ export function InstanceSearch() {
 
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
-  const [active, setActive] = useState(0); // índice destacado (teclado)
+  const [active, setActive] = useState(0); // highlighted index (keyboard)
 
   const inputRef = useRef<HTMLInputElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
 
-  // Resultados: só recalcula quando a query ou a lista muda (useMemo).
+  // Results: only recomputes when the query or the list changes (useMemo).
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
@@ -38,7 +38,7 @@ export function InstanceSearch() {
       .slice(0, MAX_RESULTS);
   }, [query, instances]);
 
-  // Atalho "/" foca a busca (ignorado se já estamos digitando em outro campo).
+  // "/" shortcut focuses the search (ignored if we're already typing in another field).
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const el = document.activeElement;
@@ -52,7 +52,7 @@ export function InstanceSearch() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // Fecha o dropdown ao clicar fora do componente.
+  // Closes the dropdown when clicking outside the component.
   useEffect(() => {
     function onClick(e: MouseEvent) {
       if (boxRef.current && !boxRef.current.contains(e.target as Node)) {
@@ -70,7 +70,7 @@ export function InstanceSearch() {
     inputRef.current?.blur();
   }
 
-  // Navegação por teclado dentro do campo.
+  // Keyboard navigation within the field.
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Escape") {
       setOpen(false);

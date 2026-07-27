@@ -12,14 +12,14 @@ import { ENVIRONMENTS } from "@/lib/environment";
 import { listRegions } from "@/lib/regions";
 import type { Environment } from "@/lib/types";
 
-// Versões disponíveis (viram a tag postgres:<v>-alpine no provisionador).
+// Available versions (become the postgres:<v>-alpine tag in the provisioner).
 const PG_VERSIONS = ["17", "16", "15", "14"] as const;
 const RECOMMENDED = "16";
 
 const REGIONS = listRegions();
 
-// "Planos" do design viram presets de recursos reais (cpu/memória/disco).
-// `id` é a chave do i18n da descrição; `label` é nome de plano — não se traduz.
+// The design's "plans" become presets of real resources (cpu/memory/disk).
+// `id` is the i18n key for the description; `label` is the plan name — it isn't translated.
 type Size = {
   id: "hobby" | "starter" | "pro" | "business";
   label: string;
@@ -42,7 +42,7 @@ export default function CreateInstancePage() {
   const tEnv = useTranslations("Environments");
   const router = useRouter();
 
-  // ── estado do wizard ──
+  // ── wizard state ──
   const [step, setStep] = useState(0);
   const [name, setName] = useState("");
   const [version, setVersion] = useState<string>(RECOMMENDED);
@@ -55,22 +55,22 @@ export default function CreateInstancePage() {
 
   const size = SIZES.find((s) => s.id === sizeId)!;
 
-  // Só deixa avançar do passo 0 com um nome válido.
+  // Only lets you advance from step 0 with a valid name.
   const canNext = step === 0 ? name.trim().length >= 2 : true;
 
   async function handleCreate() {
     setCreating(true);
     setError(null);
     try {
-      // Submit REAL: este await dura ~10-30s (o backend sobe o container,
-      // espera o PostgreSQL aceitar conexões e cria role + banco).
+      // REAL submit: this await takes ~10-30s (the backend brings up the container,
+      // waits for PostgreSQL to accept connections, and creates the role + database).
       const created = await createInstance({
         name: name.trim(),
         engine_version: version as "14" | "15" | "16" | "17",
         cpu: size.cpu,
         memory_mb: size.memory_mb,
         storage_gb: size.storage_gb,
-        // Campos opcionais: só enviados quando o usuário escolheu.
+        // Optional fields: only sent when the user chose them.
         ...(environment ? { environment } : {}),
         ...(region ? { region } : {}),
       });
@@ -84,7 +84,7 @@ export default function CreateInstancePage() {
     }
   }
 
-  // ── tela de provisionamento (enquanto o POST não volta) ──
+  // ── provisioning screen (while the POST hasn't returned) ──
   if (creating) {
     return (
       <div className="mx-auto mt-20 max-w-md text-center">
@@ -223,7 +223,7 @@ export default function CreateInstancePage() {
               </div>
             </div>
 
-            {/* Região (opcional) */}
+            {/* Region (optional) */}
             <div className="flex flex-col gap-2">
               <label className="text-[11px] font-medium uppercase tracking-wide text-fg-3">
                 {t("region")} <span className="text-fg-faint">{t("optional")}</span>
@@ -310,7 +310,7 @@ export default function CreateInstancePage() {
         </div>
       )}
 
-      {/* footer de navegação */}
+      {/* navigation footer */}
       <div className="mt-6 flex items-center justify-between">
         <button
           onClick={() => (step > 0 ? setStep(step - 1) : router.push("/instances"))}

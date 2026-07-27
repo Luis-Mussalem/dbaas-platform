@@ -50,9 +50,9 @@ class User(Base):
         default=UserRole.MEMBER,
         server_default=UserRole.MEMBER.value,
     )
-    # Vínculo com a empresa (multi-tenant). NULL = usuário de nível-plataforma
-    # (superuser, sem empresa única); preenchido = funcionário daquela empresa.
-    # Nullable mantém a migração segura para o admin já existente (fica NULL).
+    # Link to the company (multi-tenant). NULL = platform-level user
+    # (superuser, no single company); set = employee of that company.
+    # Nullable keeps the migration safe for the already-existing admin (stays NULL).
     company_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("companies.id", ondelete="SET NULL"),

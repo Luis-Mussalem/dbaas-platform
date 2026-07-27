@@ -1,9 +1,9 @@
 """
-Testes de gerenciamento de funcionários (PHASE 11 — Stage C).
+Tests for employee management (PHASE 11 — Stage C).
 
-Cobre os endpoints superuser-gated de criação, listagem, atualização e
-desativação de usuários. Usuários comuns devem receber 403 em todas as rotas
-administrativas.
+Covers the superuser-gated endpoints for creating, listing, updating, and
+deactivating users. Regular users should get 403 on all
+administrative routes.
 """
 API = "/api/v1/users"
 STRONG_PASSWORD = "ValidPass123!"
@@ -11,7 +11,7 @@ WEAK_PASSWORD = "weak"
 
 
 # --------------------------------------------------------------------------- #
-# Criação de usuários (POST /users)
+# User creation (POST /users)
 # --------------------------------------------------------------------------- #
 
 
@@ -132,7 +132,7 @@ def test_regular_user_cannot_create_user(client, auth_headers, make_company):
 
 
 # --------------------------------------------------------------------------- #
-# Listagem (GET /users)
+# Listing (GET /users)
 # --------------------------------------------------------------------------- #
 
 
@@ -141,7 +141,7 @@ def test_list_users_filtered_by_company(client, auth_headers, make_company, db):
     company_b = make_company(name="Company B")
     headers, _ = auth_headers(email="su@example.com", is_superuser=True)
 
-    # Cria um funcionário em A e outro em B via API
+    # Creates one employee in A and another in B via the API
     client.post(
         API,
         headers=headers,
@@ -206,7 +206,7 @@ def test_regular_user_cannot_list_users(client, auth_headers, make_company):
 
 
 # --------------------------------------------------------------------------- #
-# Atualização admin (PATCH /users/{id}/admin)
+# Admin update (PATCH /users/{id}/admin)
 # --------------------------------------------------------------------------- #
 
 
@@ -250,7 +250,7 @@ def test_regular_user_cannot_admin_patch(client, auth_headers, make_company):
 
 
 # --------------------------------------------------------------------------- #
-# Desativação
+# Deactivation
 # --------------------------------------------------------------------------- #
 
 
@@ -258,7 +258,7 @@ def test_deactivated_user_cannot_login(client, auth_headers, make_company):
     company = make_company()
     su_headers, _ = auth_headers(email="su@example.com", is_superuser=True)
 
-    # Cria funcionário
+    # Creates employee
     create_resp = client.post(
         API,
         headers=su_headers,
@@ -270,7 +270,7 @@ def test_deactivated_user_cannot_login(client, auth_headers, make_company):
     )
     user_id = create_resp.json()["id"]
 
-    # Desativa
+    # Deactivates
     deact_resp = client.patch(
         f"{API}/{user_id}/admin",
         headers=su_headers,
@@ -279,7 +279,7 @@ def test_deactivated_user_cannot_login(client, auth_headers, make_company):
     assert deact_resp.status_code == 200
     assert deact_resp.json()["is_active"] is False
 
-    # Tenta login com as credenciais desativadas
+    # Tries logging in with the deactivated credentials
     login_resp = client.post(
         "/api/v1/auth/login",
         data={"username": "emp@acme.com", "password": STRONG_PASSWORD},
@@ -288,13 +288,13 @@ def test_deactivated_user_cannot_login(client, auth_headers, make_company):
 
 
 # --------------------------------------------------------------------------- #
-# Guards de lockout
+# Lockout guards
 # --------------------------------------------------------------------------- #
 
 
 def test_superuser_cannot_deactivate_self(client, auth_headers):
-    # Com dois superusers ativos, o guard last-superuser não dispara;
-    # o self-lockout deve disparar.
+    # With two active superusers, the last-superuser guard doesn't fire;
+    # the self-lockout guard should fire.
     headers, su = auth_headers(email="su@example.com", is_superuser=True)
     client.post(
         API,
@@ -312,7 +312,7 @@ def test_superuser_cannot_deactivate_self(client, auth_headers):
 
 
 def test_superuser_cannot_demote_self(client, auth_headers):
-    # Mesmo que seja o único superuser ativo, tentar demitir-se dispara 400.
+    # Even being the only active superuser, trying to demote yourself triggers 400.
     headers, su = auth_headers(email="su@example.com", is_superuser=True)
 
     resp = client.patch(
@@ -325,10 +325,10 @@ def test_superuser_cannot_demote_self(client, auth_headers):
 
 def test_cannot_deactivate_last_superuser(client, auth_headers, make_company):
     make_company()
-    # O fixture auth_headers já cria um superuser (su@example.com)
+    # The auth_headers fixture already creates a superuser (su@example.com)
     su_headers, su = auth_headers(email="su@example.com", is_superuser=True)
 
-    # Cria um segundo superuser
+    # Creates a second superuser
     resp = client.post(
         API,
         headers=su_headers,
@@ -340,7 +340,7 @@ def test_cannot_deactivate_last_superuser(client, auth_headers, make_company):
     )
     su2_id = resp.json()["id"]
 
-    # Desativa o segundo — ok, ainda sobra o primeiro
+    # Deactivates the second — ok, the first one is still left
     ok = client.patch(
         f"{API}/{su2_id}/admin",
         headers=su_headers,
@@ -348,7 +348,7 @@ def test_cannot_deactivate_last_superuser(client, auth_headers, make_company):
     )
     assert ok.status_code == 200
 
-    # Agora tenta desativar o primeiro (último ativo) — deve falhar
+    # Now tries deactivating the first one (last active) — should fail
     fail = client.patch(
         f"{API}/{su.id}/admin",
         headers=su_headers,

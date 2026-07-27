@@ -1,12 +1,12 @@
 """
-Testes de audit scoping (PHASE 11 — Stage E).
+Audit scoping tests (PHASE 11 — Stage E).
 
-Garantem que o audit log é multi-tenant seguro:
-- company-admin vê apenas os logs da própria empresa;
-- member recebe 403;
-- superuser sem header vê tudo (incl. entradas de NULL-company);
-- superuser com X-Company-Id vê apenas aquela empresa;
-- write_audit_log stampa corretamente o company_id.
+Ensure the audit log is multi-tenant safe:
+- company-admin sees only their own company's logs;
+- member gets 403;
+- superuser with no header sees everything (incl. NULL-company entries);
+- superuser with X-Company-Id sees only that company;
+- write_audit_log correctly stamps the company_id.
 """
 from src.models.audit_log import AuditLog
 from src.models.user import UserRole
@@ -16,7 +16,7 @@ AUDIT = "/api/v1/admin/audit-log"
 
 
 # --------------------------------------------------------------------------- #
-# Acesso / autorização
+# Access / authorization
 # --------------------------------------------------------------------------- #
 
 
@@ -121,14 +121,14 @@ def test_write_audit_log_null_company_for_system_events(db):
 
 
 # --------------------------------------------------------------------------- #
-# Write-time stamping (via middleware — request HTTP real)
+# Write-time stamping (via middleware — real HTTP request)
 # --------------------------------------------------------------------------- #
 
 
 def test_middleware_stamps_company_id_from_user(client, auth_headers, make_company, db):
     """
-    Um usuário comum fazendo logout gera um AuditLog com o company_id da sua empresa.
-    O middleware resolve o company_id consultando o banco pelo user_id extraído do JWT.
+    A regular user logging out generates an AuditLog with their company's company_id.
+    The middleware resolves the company_id by querying the database with the user_id extracted from the JWT.
     """
     company = make_company()
     headers, user = auth_headers(email="op@example.com", company_id=company.id, role=UserRole.MEMBER)
@@ -157,7 +157,7 @@ def test_middleware_stamps_null_for_superuser_without_header(client, auth_header
 def test_middleware_stamps_active_company_for_superuser_with_header(
     client, auth_headers, make_company, db
 ):
-    """Superuser com X-Company-Id ativo gera AuditLog com aquele company_id."""
+    """Superuser with an active X-Company-Id produces an AuditLog with that company_id."""
     company = make_company()
     headers, _ = auth_headers(email="root@example.com", is_superuser=True)
 

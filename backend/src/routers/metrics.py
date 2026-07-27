@@ -42,11 +42,11 @@ def _require_connected(
     current_user: User,
 ) -> DatabaseInstance:
     """
-    Garante que a instância está RUNNING e tem connection_uri.
+    Ensures the instance is RUNNING and has a connection_uri.
 
-    Todos os endpoints de monitoramento live precisam de conexão ativa ao banco.
-    Endpoints históricos (metrics snapshot) usam get_instance_or_404 diretamente.
-    O current_user propaga o scoping multi-tenant para todos os endpoints live.
+    All live monitoring endpoints need an active connection to the database.
+    Historical endpoints (metrics snapshot) use get_instance_or_404 directly.
+    current_user propagates multi-tenant scoping to all live endpoints.
     """
     instance = get_instance_if_running(instance_id, db, current_user)
     if not instance.connection_uri:
@@ -60,7 +60,7 @@ def _require_connected(
 @router.get(
     "/{instance_id}/metrics",
     response_model=MetricsSnapshot,
-    summary="Retornar o snapshot mais recente de métricas escalares",
+    summary="Return the most recent snapshot of scalar metrics",
 )
 def get_metrics(
     instance_id: uuid.UUID,
@@ -68,13 +68,13 @@ def get_metrics(
     current_user: User = Depends(get_current_user),
 ) -> MetricsSnapshot:
     """
-    Retorna os valores mais recentes de cada métrica coletada pelo poller.
+    Returns the most recent value of each metric collected by the poller.
 
-    Dados históricos — lidos do banco da plataforma, não do banco monitorado.
-    Disponível mesmo se a instância estiver STOPPED (exibe última leitura).
+    Historical data — read from the platform's database, not the monitored one.
+    Available even if the instance is STOPPED (shows the last reading).
     """
-    # Escopado por empresa (404 para instância de outra empresa). Reusa o gargalo
-    # em vez de repetir a query inline.
+    # Scoped by company (404 for an instance from another company). Reuses the
+    # bottleneck instead of repeating the query inline.
     get_instance_or_404(instance_id, db, current_user)
 
     current_metrics = metrics_service.get_latest_metrics(db, instance_id)
@@ -84,37 +84,37 @@ def get_metrics(
     )
 
 
-# Janelas suportadas → minutos. Mantém o contrato pequeno e previsível para a UI.
+# Supported windows → minutes. Keeps the contract small and predictable for the UI.
 _WINDOW_MINUTES = {"15m": 15, "1h": 60, "6h": 360, "24h": 1440}
 
 
 @router.get(
     "/{instance_id}/metrics/history",
     response_model=MetricHistoryResponse,
-    summary="Retornar a série temporal de uma métrica para sparklines/gráficos",
+    summary="Return a metric's time series for sparklines/charts",
 )
 def get_metrics_history(
     instance_id: uuid.UUID,
-    metric: str = Query(..., min_length=1, max_length=100, description="metric_name coletado pelo poller"),
+    metric: str = Query(..., min_length=1, max_length=100, description="metric_name collected by the poller"),
     window: Literal["15m", "1h", "6h", "24h"] = "1h",
     points: int = Query(
         120, ge=10, le=500,
-        description="Resolução: a série é reamostrada em até N baldes (média por balde)",
+        description="Resolution: the series is resampled into up to N buckets (average per bucket)",
     ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> MetricHistoryResponse:
     """
-    Série histórica de uma única métrica na janela escolhida.
+    Historical series of a single metric over the chosen window.
 
-    Lê da tabela metrics (banco da plataforma) — funciona mesmo com a instância
-    STOPPED, exibindo o histórico já coletado. Retorna lista vazia se a métrica
-    não foi coletada ainda.
+    Reads from the metrics table (platform database) — works even with the instance
+    STOPPED, showing the history already collected. Returns an empty list if the metric
+    hasn't been collected yet.
 
-    A série é reamostrada em até `points` baldes (média por balde): a cadência
-    de coleta varia (60s normalmente, 5s durante a simulação de uso) e sem isso
-    o mesmo gráfico apareceria liso ou serrilhado conforme o momento. Um
-    sparkline de card pede menos pontos que um gráfico de página inteira.
+    The series is resampled into up to `points` buckets (average per bucket): the
+    collection cadence varies (60s normally, 5s during the usage simulation) and without
+    this the same chart would look smooth or jagged depending on the moment. A
+    card sparkline needs fewer points than a full-page chart.
     """
     get_instance_or_404(instance_id, db, current_user)
     series = metrics_service.get_metric_history(
@@ -131,7 +131,7 @@ def get_metrics_history(
 @router.get(
     "/{instance_id}/health",
     response_model=HealthCheck,
-    summary="Verificar conectividade e responsividade da instância",
+    summary="Check the instance's connectivity and responsiveness",
 )
 async def get_health(
     instance_id: uuid.UUID,
@@ -139,9 +139,9 @@ async def get_health(
     current_user: User = Depends(get_current_user),
 ) -> HealthCheck:
     """
-    Executa SELECT 1 no banco monitorado e mede response time end-to-end.
+    Runs SELECT 1 on the monitored database and measures end-to-end response time.
 
-    Endpoint live — conecta ao banco da instância no momento da chamada.
+    Live endpoint — connects to the instance's database at call time.
     """
     instance = _require_connected(instance_id, db, current_user)
     result = await asyncio.to_thread(metrics_service.check_health, instance)
@@ -156,7 +156,7 @@ async def get_health(
 @router.get(
     "/{instance_id}/slow-queries",
     response_model=SlowQueriesResponse,
-    summary="Retornar queries com maior tempo total de execução",
+    summary="Return queries with the highest total execution time",
 )
 async def get_slow_queries(
     instance_id: uuid.UUID,
@@ -165,10 +165,10 @@ async def get_slow_queries(
     current_user: User = Depends(get_current_user),
 ) -> SlowQueriesResponse:
     """
-    Consulta pg_stat_statements ordenado por total_exec_time DESC.
+    Queries pg_stat_statements ordered by total_exec_time DESC.
 
-    Requer pg_stat_statements instalado. Instâncias provisionadas após
-    o Passo 4A já têm a extensão. Instâncias antigas retornam lista vazia.
+    Requires pg_stat_statements to be installed. Instances provisioned after
+    Step 4A already have the extension. Older instances return an empty list.
     """
     instance = _require_connected(instance_id, db, current_user)
     rows = await asyncio.to_thread(
@@ -183,7 +183,7 @@ async def get_slow_queries(
 @router.get(
     "/{instance_id}/indexes",
     response_model=IndexStatsResponse,
-    summary="Retornar estatísticas de uso de índices",
+    summary="Return index usage statistics",
 )
 async def get_indexes(
     instance_id: uuid.UUID,
@@ -191,7 +191,7 @@ async def get_indexes(
     current_user: User = Depends(get_current_user),
 ) -> IndexStatsResponse:
     """
-    Consulta pg_stat_user_indexes. Índices com idx_scan=0 são candidatos a DROP.
+    Queries pg_stat_user_indexes. Indexes with idx_scan=0 are candidates for DROP.
     """
     instance = _require_connected(instance_id, db, current_user)
     rows = await asyncio.to_thread(metrics_service.get_index_stats, instance)
@@ -204,7 +204,7 @@ async def get_indexes(
 @router.get(
     "/{instance_id}/locks",
     response_model=LocksResponse,
-    summary="Retornar locks ativos em tabelas",
+    summary="Return active locks on tables",
 )
 async def get_locks(
     instance_id: uuid.UUID,
@@ -212,8 +212,8 @@ async def get_locks(
     current_user: User = Depends(get_current_user),
 ) -> LocksResponse:
     """
-    Consulta pg_locks filtrado por locktype='relation'.
-    has_blocked_queries=True indica que há queries aguardando lock.
+    Queries pg_locks filtered by locktype='relation'.
+    has_blocked_queries=True indicates there are queries waiting on a lock.
     """
     instance = _require_connected(instance_id, db, current_user)
     rows = await asyncio.to_thread(metrics_service.get_locks, instance)
@@ -228,7 +228,7 @@ async def get_locks(
 @router.get(
     "/{instance_id}/bloat",
     response_model=BloatResponse,
-    summary="Retornar estimativa de bloat por tabela",
+    summary="Return an estimate of bloat per table",
 )
 async def get_bloat(
     instance_id: uuid.UUID,
@@ -236,8 +236,8 @@ async def get_bloat(
     current_user: User = Depends(get_current_user),
 ) -> BloatResponse:
     """
-    Estima percentual de tuplas mortas por tabela via pg_stat_user_tables.
-    dead_ratio > 20% indica necessidade de VACUUM (FASE 6).
+    Estimates the percentage of dead tuples per table via pg_stat_user_tables.
+    dead_ratio > 20% indicates the need for VACUUM (PHASE 6).
     """
     instance = _require_connected(instance_id, db, current_user)
     rows = await asyncio.to_thread(metrics_service.get_bloat, instance)
@@ -250,7 +250,7 @@ async def get_bloat(
 @router.get(
     "/{instance_id}/connections",
     response_model=ActiveConnectionsResponse,
-    summary="Listar conexões ativas (pg_stat_activity)",
+    summary="List active connections (pg_stat_activity)",
 )
 async def get_connections(
     instance_id: uuid.UUID,
@@ -259,8 +259,8 @@ async def get_connections(
     current_user: User = Depends(get_current_user),
 ) -> ActiveConnectionsResponse:
     """
-    Lista os backends conectados ao banco da instância (PID, usuário, estado,
-    espera, duração e query). Endpoint live — exige a instância RUNNING.
+    Lists the backends connected to the instance's database (PID, user, state,
+    wait, duration, and query). Live endpoint — requires the instance to be RUNNING.
     """
     instance = _require_connected(instance_id, db, current_user)
     rows = await asyncio.to_thread(
@@ -272,7 +272,7 @@ async def get_connections(
 @router.get(
     "/{instance_id}/schema",
     response_model=SchemaResponse,
-    summary="Explorar o schema do banco (tabelas por schema)",
+    summary="Explore the database schema (tables per schema)",
 )
 async def get_schema(
     instance_id: uuid.UUID,
@@ -280,8 +280,8 @@ async def get_schema(
     current_user: User = Depends(get_current_user),
 ) -> SchemaResponse:
     """
-    Retorna as tabelas de usuário agrupadas por schema, com estimativa de linhas
-    (pg_class.reltuples). Endpoint live — exige a instância RUNNING.
+    Returns user tables grouped by schema, with an estimated row count
+    (pg_class.reltuples). Live endpoint — requires the instance to be RUNNING.
     """
     instance = _require_connected(instance_id, db, current_user)
     groups = await asyncio.to_thread(metrics_service.get_schema, instance)
@@ -291,7 +291,7 @@ async def get_schema(
 @router.post(
     "/{instance_id}/explain",
     response_model=ExplainResponse,
-    summary="Executar EXPLAIN ANALYZE para uma query SELECT",
+    summary="Run EXPLAIN ANALYZE for a SELECT query",
 )
 async def explain_query(
     instance_id: uuid.UUID,
@@ -300,10 +300,10 @@ async def explain_query(
     current_user: User = Depends(get_current_user),
 ) -> ExplainResponse:
     """
-    Executa EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) na query fornecida.
+    Runs EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) on the given query.
 
-    Restrito a SELECT: EXPLAIN ANALYZE executa a query de verdade,
-    portanto DML causaria efeitos reais nos dados do cliente.
+    Restricted to SELECT: EXPLAIN ANALYZE actually executes the query,
+    so DML would cause real effects on the client's data.
     """
     instance = _require_connected(instance_id, db, current_user)
     try:

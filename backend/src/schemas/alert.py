@@ -8,13 +8,13 @@ from pydantic import BaseModel, Field
 
 class AlertMetricType(str, Enum):
     """
-    Tipos de métricas que o avaliador de alertas suporta.
+    Metric types supported by the alert evaluator.
 
-    connections_ratio   — % das conexões máximas em uso (connections_active / connections_max * 100)
-    cache_hit_ratio     — % de leituras atendidas pelo cache (meta: > 95%)
-    db_usage_percent    — % do storage alocado consumido pelo banco (db_size_bytes / storage_gb)
-    long_query_seconds  — duração em segundos da query ativa mais antiga (via pg_stat_activity)
-    backup_age_hours    — horas desde o último backup COMPLETED (999h se nunca houve backup)
+    connections_ratio   — % of max connections in use (connections_active / connections_max * 100)
+    cache_hit_ratio     — % of reads served by the cache (target: > 95%)
+    db_usage_percent    — % of allocated storage consumed by the database (db_size_bytes / storage_gb)
+    long_query_seconds  — duration in seconds of the oldest active query (via pg_stat_activity)
+    backup_age_hours    — hours since the last COMPLETED backup (999h if there was never a backup)
     """
 
     CONNECTIONS_RATIO  = "connections_ratio"

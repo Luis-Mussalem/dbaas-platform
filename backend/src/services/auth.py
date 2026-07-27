@@ -72,14 +72,14 @@ def blacklist_token(
 
 def cleanup_expired_tokens(db: Session) -> int:
     """
-    Remove tokens já expirados da blacklist.
+    Removes already-expired tokens from the blacklist.
 
-    Tokens expirados são inválidos independentemente de estar na blacklist —
-    o JWT decode os rejeita por 'exp'. Manter esses registros só desperdiça
-    espaço e deixa o índice de jti crescer desnecessariamente.
+    Expired tokens are invalid regardless of being in the blacklist —
+    the JWT decode rejects them via 'exp'. Keeping these records just wastes
+    space and lets the jti index grow unnecessarily.
 
-    Retorna o número de registros removidos.
-    Deve ser chamado periodicamente por um background task (ex: diariamente).
+    Returns the number of records removed.
+    Should be called periodically by a background task (e.g. daily).
     """
     now = datetime.now(timezone.utc)
     deleted = (

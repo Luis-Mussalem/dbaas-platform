@@ -1,22 +1,22 @@
-// Guard-rail do i18n: falha o CI quando en.json e pt.json divergem.
+// i18n guard-rail: fails CI when en.json and pt.json diverge.
 //
-// Mora aqui, e não em scripts/, porque o .gitignore da raiz ignora QUALQUER
-// diretório chamado "scripts/" (regra de privacidade) — o arquivo sumiria do
-// repo e o CI quebraria com "file not found".
+// Lives here, not in scripts/, because the root .gitignore ignores ANY
+// directory called "scripts/" (privacy rule) — the file would disappear from
+// the repo and CI would break with "file not found".
 //
-// Checa três coisas, nesta ordem:
-//   1. paridade  — as mesmas chaves nos dois arquivos, nos dois sentidos;
-//   2. ordem     — mesma sequência de chaves (mantém os diffs legíveis);
-//   3. ICU       — mesmos placeholders, ramos de plural/select e tags de rich
-//                  text, via parser de verdade. Regex NÃO serve aqui: em
-//                  "{count, plural, one {# alerta}}" ela captura "alerta"/"alert"
-//                  como se fosse placeholder e acusa falso positivo.
+// Checks three things, in this order:
+//   1. parity — the same keys in both files, in both directions;
+//   2. order  — same key sequence (keeps diffs readable);
+//   3. ICU    — same placeholders, plural/select branches and rich-text tags,
+//               via a real parser. Regex does NOT work here: in
+//               "{count, plural, one {# alerta}}" it would capture "alerta"/"alert"
+//               as if it were a placeholder and raise a false positive.
 
 import { parse, TYPE } from "@formatjs/icu-messageformat-parser";
 import en from "./../messages/en.json" with { type: "json" };
 import pt from "./../messages/pt.json" with { type: "json" };
 
-// { "Ns": { "a": "x" } } → [["Ns.a", "x"], …], preservando a ordem de declaração.
+// { "Ns": { "a": "x" } } → [["Ns.a", "x"], …], preserving declaration order.
 function flatten(node, prefix = "") {
   return Object.entries(node).flatMap(([key, value]) => {
     const path = prefix ? `${prefix}.${key}` : key;
@@ -26,8 +26,8 @@ function flatten(node, prefix = "") {
   });
 }
 
-// Assinatura ICU da mensagem: o que um tradutor NÃO pode mudar sem quebrar o
-// código. Percorre a AST recursivamente porque plural/select aninham mensagens.
+// A message's ICU signature: what a translator CANNOT change without breaking the
+// code. Walks the AST recursively because plural/select nest messages.
 function signature(ast, acc = { args: new Set(), tags: new Set(), branches: new Set() }) {
   for (const node of ast) {
     if (node.type === TYPE.argument) acc.args.add(node.value);
@@ -38,8 +38,8 @@ function signature(ast, acc = { args: new Set(), tags: new Set(), branches: new 
     if (node.type === TYPE.plural || node.type === TYPE.select) {
       acc.args.add(node.value);
       for (const [name, branch] of Object.entries(node.options)) {
-        // Os ramos de plural são regras do CLDR e VARIAM por idioma de propósito
-        // (pt tem "one" para zero, en não) — só os de `select` são comparáveis.
+        // Plural branches are CLDR rules and VARY by language on purpose
+        // (pt has "one" for zero, en doesn't) — only `select` branches are comparable.
         if (node.type === TYPE.select) acc.branches.add(name);
         signature(branch.value, acc);
       }
@@ -56,21 +56,21 @@ const ptEntries = flatten(pt);
 const enKeys = enEntries.map(([k]) => k);
 const ptKeys = ptEntries.map(([k]) => k);
 
-// 1. paridade
-for (const k of enKeys) if (!ptKeys.includes(k)) errors.push(`falta em pt.json: ${k}`);
-for (const k of ptKeys) if (!enKeys.includes(k)) errors.push(`sobra em pt.json: ${k}`);
+// 1. parity
+for (const k of enKeys) if (!ptKeys.includes(k)) errors.push(`missing in pt.json: ${k}`);
+for (const k of ptKeys) if (!enKeys.includes(k)) errors.push(`extra in pt.json: ${k}`);
 
-// 2. ordem (só quando a paridade passa — senão o ruído esconde a causa real)
+// 2. order (only once parity passes — otherwise the noise hides the real cause)
 if (errors.length === 0) {
   for (let i = 0; i < enKeys.length; i++) {
     if (enKeys[i] !== ptKeys[i]) {
-      errors.push(`ordem divergente na posição ${i}: en="${enKeys[i]}" pt="${ptKeys[i]}"`);
+      errors.push(`order diverges at position ${i}: en="${enKeys[i]}" pt="${ptKeys[i]}"`);
       break;
     }
   }
 }
 
-// 3. estrutura ICU
+// 3. ICU structure
 if (errors.length === 0) {
   const ptMap = new Map(ptEntries);
   for (const [key, enMsg] of enEntries) {
@@ -79,28 +79,28 @@ if (errors.length === 0) {
     try {
       a = signature(parse(enMsg));
     } catch (e) {
-      errors.push(`ICU inválido em en.json → ${key}: ${e.message}`);
+      errors.push(`invalid ICU in en.json → ${key}: ${e.message}`);
       continue;
     }
     try {
       b = signature(parse(ptMsg));
     } catch (e) {
-      errors.push(`ICU inválido em pt.json → ${key}: ${e.message}`);
+      errors.push(`invalid ICU in pt.json → ${key}: ${e.message}`);
       continue;
     }
     for (const field of ["args", "tags", "branches"]) {
       if (show(a[field]) !== show(b[field])) {
-        errors.push(`${field} divergem em ${key}: en={${show(a[field])}} pt={${show(b[field])}}`);
+        errors.push(`${field} diverge in ${key}: en={${show(a[field])}} pt={${show(b[field])}}`);
       }
     }
   }
 }
 
 if (errors.length > 0) {
-  console.error(`✗ i18n:check — ${errors.length} problema(s):\n`);
+  console.error(`✗ i18n:check — ${errors.length} problem(s):\n`);
   for (const e of errors) console.error(`  • ${e}`);
-  console.error("\nen.json é a fonte da verdade: as chaves de pt.json devem espelhá-la.");
+  console.error("\nen.json is the source of truth: pt.json's keys must mirror it.");
   process.exit(1);
 }
 
-console.log(`✓ i18n:check — ${enKeys.length} chaves, paridade/ordem/ICU conferem em en e pt.`);
+console.log(`✓ i18n:check — ${enKeys.length} keys, parity/order/ICU match across en and pt.`);

@@ -26,7 +26,7 @@ interface ConfirmOptions {
   description?: string;
   confirmText?: string;
   cancelText?: string;
-  danger?: boolean; // botão de confirmação em vermelho (ação destrutiva)
+  danger?: boolean; // confirm button in red (destructive action)
 }
 
 interface ConfirmContextValue {
@@ -43,10 +43,10 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
   const t = useTranslations("Common");
   const [open, setOpen] = useState(false);
   const [options, setOptions] = useState<ConfirmOptions | null>(null);
-  // Guarda o `resolve` da Promise pendente para chamá-lo quando o usuário responde.
+  // Holds the pending Promise's `resolve` to call it when the user responds.
   const resolveRef = useRef<((value: boolean) => void) | null>(null);
 
-  // Abre o diálogo e devolve uma Promise que só resolve quando o usuário decide.
+  // Opens the dialog and returns a Promise that only resolves once the user decides.
   const confirm = useCallback((opts: ConfirmOptions) => {
     setOptions(opts);
     setOpen(true);

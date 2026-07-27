@@ -3,8 +3,8 @@ import { useTranslations } from "next-intl";
 import { getAuditLogs } from "@/lib/api";
 import type { AuditLog } from "@/lib/types";
 
-// Quantos registros buscar por página. Se a resposta vier com exatamente esse
-// tamanho, assumimos que PODE haver mais (habilita o "Carregar mais").
+// How many records to fetch per page. If the response comes back with exactly this
+// size, we assume there COULD be more (enables "Load more").
 const PAGE_SIZE = 20;
 
 interface AuditFilters {
@@ -20,10 +20,10 @@ interface UseAuditResult {
   loadMore: () => Promise<void>;
 }
 
-// Paginação por offset/limit ACUMULANDO: diferente das outras hooks (que
-// substituem a lista a cada busca), aqui a primeira página substitui e as
-// seguintes são CONCATENADAS no fim (setLogs(prev => [...prev, ...data])).
-// Mudar qualquer filtro reseta tudo para a página 0.
+// Offset/limit pagination that ACCUMULATES: unlike the other hooks (which
+// replace the list on every fetch), here the first page replaces and the
+// following ones are APPENDED at the end (setLogs(prev => [...prev, ...data])).
+// Changing any filter resets everything to page 0.
 export function useAudit(filters: AuditFilters): UseAuditResult {
   const t = useTranslations("Audit");
   const [logs, setLogs] = useState<AuditLog[]>([]);
@@ -32,13 +32,13 @@ export function useAudit(filters: AuditFilters): UseAuditResult {
   const [hasMore, setHasMore] = useState(false);
   const [offset, setOffset] = useState(0);
 
-  // Primeira página (e reset quando um filtro muda). Dependemos dos campos
-  // primitivos (não do objeto `filters`), senão o effect rodaria a cada render
-  // — um objeto novo é criado pelo componente toda vez.
+  // First page (and reset when a filter changes). We depend on the
+  // primitive fields (not the `filters` object), otherwise the effect would run on every render
+  // — a new object is created by the component every time.
   useEffect(() => {
     let active = true;
-    // Reset síncrono para "carregando" antes do refetch (mudança de filtro).
-    // Intencional e abort-guarded; set-state-in-effect é conservadora demais aqui.
+    // Synchronous reset to "loading" before the refetch (filter change).
+    // Intentional and abort-guarded; set-state-in-effect is too conservative here.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsLoading(true);
     getAuditLogs({
@@ -75,7 +75,7 @@ export function useAudit(filters: AuditFilters): UseAuditResult {
         action: filters.action,
         resource_type: filters.resource_type,
       });
-      // Concatena a nova página ao que já está na tela.
+      // Appends the new page to what's already on screen.
       setLogs((prev) => [...prev, ...data]);
       setOffset(nextOffset);
       setHasMore(data.length === PAGE_SIZE);

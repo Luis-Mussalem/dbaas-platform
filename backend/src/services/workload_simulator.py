@@ -1,36 +1,36 @@
 """
-Gerador de carga sintética para a frota de demonstração.
+Synthetic load generator for the demo fleet.
 
-Um clone limpo sobe containers PostgreSQL reais, mas ninguém os usa: o poller
-mede 1 conexão, 0 transação/s e o pg_stat_statements fica vazio. O produto
-funciona, só que parece desligado — sparklines planos, KPIs zerados, nenhuma
-query lenta para investigar.
+A clean clone brings up real PostgreSQL containers, but nobody uses them: the poller
+measures 1 connection, 0 transactions/s, and pg_stat_statements stays empty. The product
+works, it just looks turned off — flat sparklines, zeroed KPIs, no slow
+query to investigate.
 
-Este loop de background dá "vida" a essas instâncias: mantém um pool de
-conexões abertas cujo tamanho segue uma curva diária (pico à tarde, vale de
-madrugada, fim de semana mais fraco) e dispara um mix de queries por ciclo.
-Tudo o que o resto da plataforma mede passa a ter sinal real — conexões,
-transações/s, cache hit, p95 de latência, queries lentas, crescimento de disco.
+This background loop gives these instances "life": it keeps a pool of open
+connections whose size follows a daily curve (peak in the afternoon, trough in the
+early hours, weaker on weekends) and fires off a mix of queries per cycle.
+Everything the rest of the platform measures gets a real signal — connections,
+transactions/s, cache hit, p95 latency, slow queries, disk growth.
 
-Em modo demo ele roda o tempo todo numa **carga-base** leve
-(`BASELINE_INTENSITY`), para a frota nunca parecer morta desde o primeiro login.
-Fora do modo demo os loops nem sobem (main.py), então instâncias criadas pelo
-usuário jamais recebem carga.
+In demo mode it runs all the time at a light **baseline load**
+(`BASELINE_INTENSITY`), so the fleet never looks dead from the first login onward.
+Outside demo mode the loops don't even start (main.py), so instances created by the
+user never receive load.
 
-Escopo e segurança:
-- Só toca instâncias da frota demo (`notes == DEMO_MARKER`), RUNNING e com
-  connection_uri. Instâncias criadas pelo usuário nunca recebem carga.
-- Só roda com `DEMO_MODE=true` e simulação ativa; o teto de conexões por
-  instância é configurável (`DEMO_WORKLOAD_MAX_CONNECTIONS`).
-- As conexões usam application_name='dbaas-demo-workload', então aparecem
-  identificadas na tela de conexões ativas — nada disso se disfarça de
-  tráfego de usuário.
-- Escritas ficam confinadas à tabela `workload_events`, criada por este módulo.
-  O schema de negócio semeado (catálogo + tabela-fato payments/sales) é só lido.
+Scope and safety:
+- Only touches instances of the demo fleet (`notes == DEMO_MARKER`), RUNNING and with a
+  connection_uri. Instances created by the user never receive load.
+- Only runs with `DEMO_MODE=true` and the simulation active; the connection cap per
+  instance is configurable (`DEMO_WORKLOAD_MAX_CONNECTIONS`).
+- Connections use application_name='dbaas-demo-workload', so they show up
+  identified on the active-connections screen — none of this disguises itself as
+  user traffic.
+- Writes are confined to the `workload_events` table, created by this module.
+  The seeded business schema (catalog + fact table payments/sales) is only read.
 
-A MESMA curva (`target_connections`) alimenta o backfill histórico do seed,
-para o gráfico de 24h emendar sem degrau no ponto em que o histórico sintético
-termina e a carga ao vivo começa.
+The SAME curve (`target_connections`) feeds the seed's historical backfill,
+so the 24h chart joins up seamlessly at the point where the synthetic history
+ends and the live load begins.
 """
 import asyncio
 import logging
@@ -49,70 +49,70 @@ from src.models.database_instance import DatabaseInstance, Environment, Instance
 
 logger = logging.getLogger(__name__)
 
-# Nome com que as conexões do simulador se identificam no pg_stat_activity.
+# Name the simulator's connections identify themselves with in pg_stat_activity.
 APPLICATION_NAME = "dbaas-demo-workload"
 
-# Tabela de escrita do simulador (criada na primeira passagem por instância).
+# Table the simulator writes to (created on the first pass through an instance).
 WORKLOAD_TABLE = "workload_events"
 
-# Linhas mantidas na tabela de escrita: o insert contínuo faria o banco crescer
-# sem limite, e o gráfico de tamanho viraria uma rampa infinita.
+# Rows kept in the write table: continuous inserting would make the database grow
+# without bound, and the size chart would turn into an infinite ramp.
 _WORKLOAD_TABLE_MAX_ROWS = 2_000
 
-# Hora (UTC) do pico de tráfego. A frota é global (us/eu/sa), então uma curva
-# única com defasagem por instância é mais honesta que fingir fuso por região.
+# Hour (UTC) of peak traffic. The fleet is global (us/eu/sa), so a single
+# curve with a per-instance offset is more honest than faking a timezone per region.
 _PEAK_HOUR_UTC = 15.0
 
-# Piso da curva: mesmo de madrugada um app real mantém conexões ociosas.
+# Floor of the curve: even in the early hours a real app keeps idle connections.
 _TROUGH_FACTOR = 0.18
 
-# Fim de semana movimenta menos.
+# Weekends move less.
 _WEEKEND_FACTOR = 0.55
 
-# Passo máximo de variação do pool por ciclo — rampa suave em vez de degrau.
-# Com o ciclo acelerado (5s) da simulação, 4 conexões por passo levam o pool ao
-# alvo dentro dos 18s da fase WARMUP sem virar um salto instantâneo.
+# Max pool-size change per cycle — a smooth ramp instead of a step. With the
+# simulation's sped-up cycle (5s), 4 connections per step gets the pool to
+# target within the WARMUP phase's 18s without turning into an instant jump.
 _MAX_POOL_STEP = 4
 
-# Linhas varridas pela query pesada do mix: uma agregação "receita por hora" sobre
-# uma FATIA limitada da tabela-fato de negócio (payments/sales). ~20k linhas
-# varridas + agregadas custam dezenas de ms contra ~2 ms de uma leitura pontual:
-# cauda suficiente para aparecer no p95 e no pg_stat_statements, ainda muito abaixo
-# do statement_timeout. Sai em ~1 a cada 10s por instância (5% do mix) — uma query
-# de negócio cara, não um teste de carga.
+# Rows scanned by the mix's heavy query: an "hourly revenue" aggregation over a
+# LIMITED slice of the business fact table (payments/sales). ~20k rows
+# scanned + aggregated cost tens of ms against ~2 ms for a point read: enough of a
+# tail to show up in p95 and pg_stat_statements, while still well below
+# statement_timeout. Fires roughly once every 10s per instance (5% of the mix) — a
+# pricey business query, not a load test.
 _HEAVY_QUERY_ROWS = 20_000
 
-# Fração do alvo de conexões que a frota demo mantém em repouso — a carga-base
-# contínua que deixa o dashboard vivo desde o primeiro login (conexões, queries/s,
-# latência e crescimento de disco sempre com sinal real, medido). O backfill de 24h
-# do seed usa a MESMA fração (ver seed/history), para o histórico emendar com a
-# medição ao vivo sem degrau. Tunável: subir deixa a frota em repouso mais
-# movimentada, ao custo de mais conexões abertas por instância.
+# Fraction of the connection target the demo fleet keeps at rest — the continuous
+# baseline load that keeps the dashboard alive from the first login onward (connections, queries/s,
+# latency, and disk growth always with a real, measured signal). The seed's 24h
+# backfill uses the SAME fraction (see seed/history), so the history joins up with the
+# live measurement without a step. Tunable: raising it makes the fleet at rest more
+# active, at the cost of more open connections per instance.
 BASELINE_INTENSITY = 0.3
 
-# Fração das conexões do pool que dispara uma query a cada ciclo de _drive. Cada
-# query roda em autocommit (= 1 transação = 1 xact_commit), então esta fração é o
-# que converte "conexões abertas" em "commits por ciclo" — a base do queries/s.
-# Nomeada porque `target_queries_per_second` precisa do MESMO valor que _drive usa
-# para modelar a taxa que o poller vai medir.
+# Fraction of the pool's connections that fires a query on each _drive cycle. Each
+# query runs in autocommit (= 1 transaction = 1 xact_commit), so this fraction is what
+# converts "open connections" into "commits per cycle" — the basis of queries/s.
+# Named because `target_queries_per_second` needs the SAME value that _drive uses
+# to model the rate the poller will measure.
 _ACTIVE_FRACTION = 0.45
 
-# Quantas queries LEVES cada conexão ativa dispara por ciclo. É o que dá um
-# queries/s vivo (~6-12/s em prod, ~3-6/s em staging) em vez de ~0.1/s, que o card
-# arredondava para "0". São leituras pontuais indexadas (microssegundos), então o
-# volume é barato — a query PESADA fica de fora da rajada (_HEAVY_QUERY_PROB), para
-# tráfego não virar teste de carga.
+# How many LIGHT queries each active connection fires per cycle. This is what gives a
+# live queries/s (~6-12/s in prod, ~3-6/s in staging) instead of ~0.1/s, which the card
+# used to round down to "0". These are point, indexed reads (microseconds), so the
+# volume is cheap — the HEAVY query is kept out of the burst (_HEAVY_QUERY_PROB), so
+# traffic doesn't turn into a load test.
 #
-# Dimensionado JUNTO com DEMO_WORKLOAD_INTERVAL_SECONDS (5s): a taxa-base é
-# `_ACTIVE_FRACTION × conns × este / intervalo`, então rajadas menores e mais
-# frequentes (5s) dão o MESMO queries/s que 100/15s, porém distribuído — cada
-# janela de coleta de 15s cobre ~3 rajadas, o que tira o aliasing do gráfico de
-# queries/s (antes, poll e rajada tinham o mesmo período de 15s e batiam mal).
+# Sized TOGETHER with DEMO_WORKLOAD_INTERVAL_SECONDS (5s): the baseline rate is
+# `_ACTIVE_FRACTION × conns × this / interval`, so smaller, more frequent
+# bursts (5s) give the SAME queries/s as 100/15s, but spread out — each
+# 15s collection window covers ~3 bursts, which removes the aliasing from the
+# queries/s chart (before, poll and burst shared the same 15s period and beat against each other).
 _QUERIES_PER_ACTIVE_CONN = 33
 
-# Probabilidade de uma conexão ativa disparar UMA query pesada no ciclo — a cauda
-# que popula a tela de queries lentas. Rara de propósito (fora da rajada leve): é
-# a mesma cadência esparsa de antes, agora independente do volume de leitura.
+# Probability that an active connection fires ONE heavy query in the cycle — the tail
+# that populates the slow-queries screen. Rare on purpose (outside the light burst): it's
+# the same sparse cadence as before, now independent of the read volume.
 _HEAVY_QUERY_PROB = 0.05
 
 
@@ -121,27 +121,27 @@ def _now() -> datetime:
 
 
 # --------------------------------------------------------------------------- #
-# Curva de tráfego (compartilhada com o backfill histórico do seed)
+# Traffic curve (shared with the seed's historical backfill)
 # --------------------------------------------------------------------------- #
 def _instance_phase_hours(name: str) -> float:
-    """Defasagem estável (±2h) do pico por instância — evita frota em uníssono."""
+    """Stable peak offset (±2h) per instance — avoids the fleet moving in unison."""
     return random.Random(f"workload-phase::{name}").uniform(-2.0, 2.0)
 
 
 def _jitter(name: str, at: datetime) -> float:
-    """Ruído determinístico por instância e bucket de 5 min, em [-1, 1]."""
+    """Deterministic noise per instance and 5-min bucket, in [-1, 1]."""
     bucket = int(at.timestamp()) // 300
     return random.Random(f"workload-jitter::{name}::{bucket}").uniform(-1.0, 1.0)
 
 
 def traffic_factor(name: str, at: datetime) -> float:
     """
-    Intensidade do tráfego em [0, 1] para uma instância num instante.
+    Traffic intensity in [0, 1] for an instance at a given instant.
 
-    Cosseno de período 24h (1.0 no pico, piso em _TROUGH_FACTOR), defasado por
-    instância, amortecido no fim de semana. Determinístico: o mesmo (name, at)
-    devolve sempre o mesmo valor, o que torna a curva testável e faz o
-    histórico semeado bater com a carga ao vivo.
+    A 24h-period cosine (1.0 at the peak, floor at _TROUGH_FACTOR), offset per
+    instance, dampened on weekends. Deterministic: the same (name, at)
+    always returns the same value, which makes the curve testable and makes the
+    seeded history match up with the live load.
     """
     hour = at.hour + at.minute / 60.0 + _instance_phase_hours(name)
     daily = 0.5 + 0.5 * cos(2 * pi * (hour - _PEAK_HOUR_UTC) / 24.0)
@@ -159,14 +159,14 @@ def target_connections(
     intensity: float = 1.0,
 ) -> int:
     """
-    Quantas conexões esta instância deve manter abertas em `at`.
+    How many connections this instance should keep open at `at`.
 
-    Produção usa a faixa inteira até o teto; staging fica em ~metade dela —
-    a diferença de porte entre os ambientes é o que faz a frota parecer real
-    no dashboard, não só cada card isolado.
+    Production uses the whole range up to the cap; staging stays at ~half of it —
+    the size difference between environments is what makes the fleet look real
+    on the dashboard, not just each card in isolation.
 
-    `intensity` é o multiplicador da carga (`BASELINE_INTENSITY` ao vivo; 1.0 no
-    pico da curva usado pelo backfill para dimensionar a latência).
+    `intensity` is the load multiplier (`BASELINE_INTENSITY` live; 1.0 at the
+    curve's peak, used by the backfill to size the latency).
     """
     cap = cap or settings.DEMO_WORKLOAD_MAX_CONNECTIONS
     if environment == Environment.PRODUCTION:
@@ -184,15 +184,15 @@ def target_queries_per_second(
     intensity: float = BASELINE_INTENSITY,
 ) -> float:
     """
-    Commits/s que a carga-base produz nesta instância em `at`.
+    Commits/s the baseline load produces on this instance at `at`.
 
-    Modela o que `_drive` faz de fato: ~`_ACTIVE_FRACTION` das conexões abertas
-    dispara uma query — cada uma em autocommit, logo uma transação e um
-    `xact_commit` — a cada ciclo de `DEMO_WORKLOAD_INTERVAL_SECONDS`. Deriva do
-    MESMO `target_connections` da carga viva, então a taxa modelada bate com a que
-    o poller mede. É o que o seed usa para ancorar o par de `xact_commit` no boot
-    (ver `seed/history._seed_xact_commit_anchor`), para o card mostrar queries/s
-    já no primeiro render em vez de "—" por dois ciclos do poller.
+    Models what `_drive` actually does: ~`_ACTIVE_FRACTION` of the open connections
+    fire a query — each in autocommit, hence one transaction and one
+    `xact_commit` — on every `DEMO_WORKLOAD_INTERVAL_SECONDS` cycle. It's derived from the
+    SAME `target_connections` as the live load, so the modeled rate matches what
+    the poller measures. This is what the seed uses to anchor the `xact_commit` pair at
+    boot (see `seed/history._seed_xact_commit_anchor`), so the card shows queries/s
+    right on the first render instead of "—" for two poller cycles.
     """
     conns = target_connections(name, environment, at, intensity=intensity)
     return (
@@ -204,19 +204,19 @@ def target_queries_per_second(
 
 
 # --------------------------------------------------------------------------- #
-# Pool de conexões por instância
+# Per-instance connection pool
 # --------------------------------------------------------------------------- #
 class _InstancePool:
-    """Conexões vivas de uma instância + o estado que sobrevive entre ciclos."""
+    """An instance's live connections + the state that survives between cycles."""
 
     def __init__(self, name: str) -> None:
         self.name = name
         self.conns: list[psycopg.Connection] = []
-        # Maior tabela de negócio (a fato: payments/sales), descoberta na primeira
-        # conexão. É o alvo das leituras leves e da query pesada.
+        # Largest business table (the fact table: payments/sales), discovered on
+        # the first connection. It's the target of the light reads and the heavy query.
         self.dataset_table: str | None = None
-        # A tabela-fato tem `amount` + `created_at`? Só então a query pesada roda a
-        # agregação "receita por hora"; senão cai para uma contagem barata.
+        # Does the fact table have `amount` + `created_at`? Only then does the heavy query run
+        # the "hourly revenue" aggregation; otherwise it falls back to a cheap count.
         self.bulk_ready = False
         self.prepared = False
 
@@ -224,21 +224,21 @@ class _InstancePool:
         for conn in self.conns:
             try:
                 conn.close()
-            except Exception:  # noqa: BLE001 — encerrando, o motivo não importa
+            except Exception:  # noqa: BLE001 — shutting down, the reason doesn't matter
                 pass
         self.conns = []
 
 
-# Pools vivos, por instância. Estado de módulo (como o contador de ciclos do
-# metrics_poller): o loop é único por processo.
+# Live pools, per instance. Module-level state (like the metrics_poller's cycle
+# counter): the loop is a singleton per process.
 _pools: dict[uuid.UUID, _InstancePool] = {}
 
 
 def _connect(uri: str) -> psycopg.Connection:
     """
-    Conexão do simulador: autocommit (cada query = uma transação, alimentando
-    xact_commit, que é a base do KPI de queries/s) e statement_timeout curto
-    para nenhuma query sintética prender um backend.
+    Simulator connection: autocommit (each query = one transaction, feeding
+    xact_commit, which is the basis of the queries/s KPI) and a short statement_timeout
+    so no synthetic query holds a backend hostage.
     """
     return psycopg.connect(
         uri,
@@ -250,7 +250,7 @@ def _connect(uri: str) -> psycopg.Connection:
 
 
 def _prepare(pool: _InstancePool, conn: psycopg.Connection) -> None:
-    """Cria a tabela de escrita e descobre a tabela-fato (numa conexão nova)."""
+    """Creates the write table and discovers the fact table (on a fresh connection)."""
     conn.execute(
         psql.SQL(
             "CREATE TABLE IF NOT EXISTS {} ("
@@ -266,22 +266,22 @@ def _prepare(pool: _InstancePool, conn: psycopg.Connection) -> None:
 
 def _discover(pool: _InstancePool, conn: psycopg.Connection) -> None:
     """
-    (Re)descobre a maior tabela de negócio (payments/sales) e se ela serve à query
-    pesada. Barato — roda de novo a cada ciclo ENQUANTO ainda não achou a fato, e
-    após um erro (ex.: o seed migrou o schema por baixo do pool, dropando a antiga).
-    `prepared` só vira True quando há uma fato, então um boot onde a carga sobe antes
-    do seed terminar continua tentando até a tabela existir.
+    (Re)discovers the largest business table (payments/sales) and whether it serves the heavy
+    query. Cheap — runs again every cycle WHILE the fact table hasn't been found yet, and
+    after an error (e.g.: the seed migrated the schema out from under the pool, dropping the old one).
+    `prepared` only becomes True when there is a fact table, so a boot where the load ramps up before
+    the seed finishes keeps trying until the table exists.
     """
-    # A maior tabela (excluída a de escrita) é a fato de negócio (payments/sales):
-    # é onde a leitura pontual busca e onde a query pesada agrega uma fatia.
+    # The largest table (excluding the write table) is the business fact table (payments/sales):
+    # it's where the point read looks and where the heavy query aggregates a slice.
     row = conn.execute(
         "SELECT relname FROM pg_stat_user_tables "
         "WHERE relname <> %s ORDER BY n_live_tup DESC LIMIT 1",
         (WORKLOAD_TABLE,),
     ).fetchone()
     pool.dataset_table = row[0] if row else None
-    # A query pesada agrega por `amount`/`created_at`; só a rode se a tabela os tem
-    # (toda tabela-fato do seed tem — mas uma instância a meio de semear, não).
+    # The heavy query aggregates by `amount`/`created_at`; only run it if the table has them
+    # (every seeded fact table does — but an instance mid-seeding might not).
     pool.bulk_ready = bool(
         pool.dataset_table
         and conn.execute(
@@ -294,7 +294,7 @@ def _discover(pool: _InstancePool, conn: psycopg.Connection) -> None:
 
 
 def _resize(pool: _InstancePool, uri: str, target: int) -> None:
-    """Aproxima o pool do alvo, no máximo _MAX_POOL_STEP conexões por ciclo."""
+    """Moves the pool toward the target, at most _MAX_POOL_STEP connections per cycle."""
     current = len(pool.conns)
     if current < target:
         for _ in range(min(_MAX_POOL_STEP, target - current)):
@@ -313,17 +313,17 @@ def _resize(pool: _InstancePool, uri: str, target: int) -> None:
 
 def _run_light_query(pool: _InstancePool, conn: psycopg.Connection, rng: random.Random) -> None:
     """
-    Uma query LEVE do mix OLTP: leitura pontual (dominante), escrita esporádica ou
-    agregação. Cada chamada é uma transação em autocommit (= 1 xact_commit) — é o
-    VOLUME destas, disparado em rajada por `_drive`, que dá o queries/s vivo do
-    card. Leituras dominam de propósito: são microssegundos e não incham a tabela,
-    então o volume alto sai barato. A query PESADA fica fora daqui
-    (`_run_heavy_query`), para a rajada não virar teste de carga.
+    One LIGHT query from the OLTP mix: a point read (dominant), an occasional write, or an
+    aggregation. Each call is one transaction in autocommit (= 1 xact_commit) — it's the
+    VOLUME of these, fired in a burst by `_drive`, that gives the card its live queries/s.
+    Reads dominate on purpose: they're microseconds and don't bloat the table,
+    so the high volume is cheap. The HEAVY query is kept out of here
+    (`_run_heavy_query`), so the burst doesn't turn into a load test.
     """
     table = pool.dataset_table
     roll = rng.random()
 
-    if roll < 0.90:  # leitura pontual (domina o mix)
+    if roll < 0.90:  # point read (dominates the mix)
         if table:
             conn.execute(
                 psql.SQL("SELECT * FROM {} ORDER BY id LIMIT 20 OFFSET %s").format(
@@ -331,20 +331,20 @@ def _run_light_query(pool: _InstancePool, conn: psycopg.Connection, rng: random.
                 ),
                 (rng.randint(0, 80),),
             ).fetchall()
-        else:  # sem tabela-fato ainda: lê a própria tabela de workload
+        else:  # no fact table yet: reads the workload table itself
             conn.execute(
                 psql.SQL("SELECT count(*), max(created_at) FROM {}").format(
                     psql.Identifier(WORKLOAD_TABLE)
                 )
             ).fetchone()
-    elif roll < 0.97:  # escrita esporádica
+    elif roll < 0.97:  # occasional write
         conn.execute(
             psql.SQL("INSERT INTO {} (kind, payload) VALUES (%s, %s)").format(
                 psql.Identifier(WORKLOAD_TABLE)
             ),
             ("page_view", f"session-{rng.randint(1000, 9999)}"),
         )
-        if rng.random() < 0.1:  # poda: mantém a tabela num tamanho estável
+        if rng.random() < 0.1:  # pruning: keeps the table at a stable size
             conn.execute(
                 psql.SQL(
                     "DELETE FROM {t} WHERE id < "
@@ -352,9 +352,9 @@ def _run_light_query(pool: _InstancePool, conn: psycopg.Connection, rng: random.
                 ).format(t=psql.Identifier(WORKLOAD_TABLE)),
                 (_WORKLOAD_TABLE_MAX_ROWS,),
             )
-    else:  # agregação LEVE: contagem sobre uma cauda recente, não a tabela inteira
-        # (count(*) na fato de milhões de linhas seria um seq scan caro no meio da
-        # rajada; aqui a fatia é limitada pela PK e sai em microssegundos).
+    else:  # LIGHT aggregation: a count over a recent tail, not the whole table
+        # (count(*) on a fact table with millions of rows would be an expensive seq scan mid-
+        # burst; here the slice is bounded by the PK and comes back in microseconds).
         target = table or WORKLOAD_TABLE
         conn.execute(
             psql.SQL(
@@ -365,15 +365,15 @@ def _run_light_query(pool: _InstancePool, conn: psycopg.Connection, rng: random.
 
 def _run_heavy_query(pool: _InstancePool, conn: psycopg.Connection, rng: random.Random) -> None:
     """
-    A query cara que popula a tela de queries lentas. Chamada raramente por
-    `_drive` (`_HEAVY_QUERY_PROB`), fora da rajada leve.
+    The expensive query that populates the slow-queries screen. Called rarely by
+    `_drive` (`_HEAVY_QUERY_PROB`), outside the light burst.
     """
     table = pool.dataset_table
     if pool.bulk_ready and table:
-        # Relatório "receita por hora" sobre uma FATIA limitada da tabela-fato:
-        # varre ~_HEAVY_QUERY_ROWS linhas e agrega por hora — dezenas de ms, uma
-        # cauda de p95 de verdade e uma query que faz sentido de negócio na tela de
-        # slow queries. A fatia é LIMITADA de propósito: cara, não perigosa.
+        # "Hourly revenue" report over a LIMITED slice of the fact table:
+        # scans ~_HEAVY_QUERY_ROWS rows and aggregates by hour — tens of ms, a
+        # real p95 tail, and a query that makes business sense on the
+        # slow-queries screen. The slice is LIMITED on purpose: expensive, not dangerous.
         conn.execute(
             psql.SQL(
                 "SELECT date_trunc('hour', created_at) AS bucket, count(*), "
@@ -383,7 +383,7 @@ def _run_heavy_query(pool: _InstancePool, conn: psycopg.Connection, rng: random.
             ).format(psql.Identifier(table)),
             (rng.randint(0, 20_000), _HEAVY_QUERY_ROWS),
         ).fetchall()
-    else:  # tabela-fato ainda não pronta: contagem barata no buffer de escrita
+    else:  # fact table not ready yet: cheap count on the write buffer
         conn.execute(
             psql.SQL("SELECT count(*), max(created_at) FROM {}").format(
                 psql.Identifier(WORKLOAD_TABLE)
@@ -392,26 +392,26 @@ def _run_heavy_query(pool: _InstancePool, conn: psycopg.Connection, rng: random.
 
 
 def _drive(pool: _InstancePool, rng: random.Random) -> int:
-    """Dispara o mix em parte do pool. Conexão que falha é descartada."""
+    """Fires the mix on part of the pool. A connection that fails is discarded."""
     executed = 0
     for conn in list(pool.conns):
-        # Nem toda conexão de um app está executando algo a cada instante —
-        # as ociosas contam para numbackends e mantêm a curva de conexões.
+        # Not every connection of an app is executing something at every instant —
+        # the idle ones count toward numbackends and keep the connections curve up.
         if rng.random() > _ACTIVE_FRACTION:
             continue
         try:
-            # Rajada de queries leves: o volume que dá o queries/s vivo do card.
+            # Burst of light queries: the volume that gives the card its live queries/s.
             for _ in range(_QUERIES_PER_ACTIVE_CONN):
                 _run_light_query(pool, conn, rng)
                 executed += 1
-            # Uma pesada de vez em quando, para a tela de queries lentas ter carne.
+            # A heavy one every once in a while, to give the slow-queries screen some substance.
             if rng.random() < _HEAVY_QUERY_PROB:
                 _run_heavy_query(pool, conn, rng)
                 executed += 1
         except Exception as exc:  # noqa: BLE001
-            logger.debug("Workload: conexão descartada em %s: %s", pool.name, exc)
-            # O schema pode ter mudado sob o pool (o seed migrou a tabela-fato):
-            # força a redescoberta no próximo ciclo, contra o schema atual.
+            logger.debug("Workload: connection discarded on %s: %s", pool.name, exc)
+            # The schema may have changed under the pool (the seed migrated the fact table):
+            # forces rediscovery on the next cycle, against the current schema.
             pool.prepared = False
             try:
                 conn.close()
@@ -423,10 +423,10 @@ def _drive(pool: _InstancePool, rng: random.Random) -> int:
 
 
 # --------------------------------------------------------------------------- #
-# Ciclo e loop
+# Cycle and loop
 # --------------------------------------------------------------------------- #
 def _demo_instances(db) -> list[DatabaseInstance]:
-    from src.seed.demo import DEMO_MARKER  # lazy: evita import circular
+    from src.seed.demo import DEMO_MARKER  # lazy: avoids a circular import
 
     return (
         db.query(DatabaseInstance)
@@ -442,31 +442,31 @@ def _demo_instances(db) -> list[DatabaseInstance]:
 
 def simulate_once() -> None:
     """
-    Um ciclo: ajusta o pool de cada instância demo ao alvo da carga-base e roda o
-    mix de queries. Erro numa instância (container parado, rede) não cancela as
-    demais — o pool dela é fechado e recomeça no ciclo seguinte.
+    One cycle: adjusts each demo instance's pool to the baseline load target and runs the
+    query mix. An error on one instance (stopped container, network) doesn't cancel the
+    others — its pool is closed and restarts on the next cycle.
 
-    Roda sempre à intensidade da carga-base: o loop só sobe em modo demo (main.py),
-    então os pools ficam abertos continuamente enquanto houver instâncias demo, e
-    a frota nunca parece morta.
+    Always runs at the baseline load's intensity: the loop only starts in demo mode (main.py),
+    so the pools stay continuously open as long as there are demo instances, and
+    the fleet never looks dead.
     """
     db = SessionLocal()
     try:
         instances = _demo_instances(db)
         alive = {inst.id for inst in instances}
 
-        # Instância que saiu da frota (parada, removida): devolve as conexões.
+        # An instance that left the fleet (stopped, removed): return its connections.
         for instance_id in list(_pools):
             if instance_id not in alive:
                 _pools.pop(instance_id).close_all()
 
-        # Hora-do-dia real: a curva posiciona o alvo de conexões pelo horário.
+        # Real time-of-day: the curve positions the connection target by the clock.
         now = _now()
         for inst in instances:
             pool = _pools.setdefault(inst.id, _InstancePool(inst.name))
             try:
-                # A URI decriptada vive só dentro deste ciclo — nunca é guardada
-                # no pool (mesma disciplina do metrics.get_connection).
+                # The decrypted URI lives only within this cycle — never stored
+                # in the pool (same discipline as metrics.get_connection).
                 uri = decrypt_value(inst.connection_uri)
                 _resize(
                     pool,
@@ -475,27 +475,27 @@ def simulate_once() -> None:
                         inst.name, inst.environment, now, intensity=BASELINE_INTENSITY
                     ),
                 )
-                # A fato pode surgir DEPOIS de o pool já estar no alvo (o seed ainda
-                # semeando no boot): enquanto não a achamos, redescobre a cada ciclo
-                # numa conexão existente, sem esperar o pool crescer.
+                # The fact table can appear AFTER the pool is already at target (the seed still
+                # seeding at boot): until we find it, rediscover every cycle
+                # on an existing connection, without waiting for the pool to grow.
                 if not pool.prepared and pool.conns:
                     _discover(pool, pool.conns[0])
                 executed = _drive(pool, random.Random())
                 logger.debug(
-                    "Workload %s: %d conexões, %d queries",
+                    "Workload %s: %d connections, %d queries",
                     inst.name,
                     len(pool.conns),
                     executed,
                 )
             except Exception as exc:  # noqa: BLE001
-                logger.debug("Workload: ciclo falhou em %s: %s", inst.name, exc)
+                logger.debug("Workload: cycle failed on %s: %s", inst.name, exc)
                 pool.close_all()
     finally:
         db.close()
 
 
 def shutdown_pools() -> None:
-    """Fecha todas as conexões — chamado no shutdown do app."""
+    """Closes all connections — called on app shutdown."""
     for pool in _pools.values():
         pool.close_all()
     _pools.clear()
@@ -503,19 +503,19 @@ def shutdown_pools() -> None:
 
 async def workload_loop(stop_event: asyncio.Event) -> None:
     """
-    Loop async do simulador (mesmo padrão do metrics_polling_loop).
+    Async loop of the simulator (same pattern as metrics_polling_loop).
 
-    O intervalo é bem menor que o do poller de métricas: a curva precisa se
-    mover entre duas coletas, senão o gráfico de conexões vira uma escada.
+    The interval is much shorter than the metrics poller's: the curve needs to
+    move between two collections, otherwise the connections chart turns into a staircase.
     """
     interval = settings.DEMO_WORKLOAD_INTERVAL_SECONDS
-    logger.info("Demo workload generator iniciado (intervalo: %ds)", interval)
+    logger.info("Demo workload generator started (interval: %ds)", interval)
 
     while not stop_event.is_set():
         try:
             await asyncio.to_thread(simulate_once)
         except Exception as exc:  # noqa: BLE001
-            logger.exception("Erro no ciclo do workload generator: %s", exc)
+            logger.exception("Error in workload generator cycle: %s", exc)
 
         try:
             await asyncio.wait_for(stop_event.wait(), timeout=interval)
@@ -523,4 +523,4 @@ async def workload_loop(stop_event: asyncio.Event) -> None:
             continue
 
     await asyncio.to_thread(shutdown_pools)
-    logger.info("Demo workload generator encerrado.")
+    logger.info("Demo workload generator stopped.")

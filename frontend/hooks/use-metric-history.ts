@@ -2,19 +2,19 @@ import { useEffect, useState } from "react";
 import { getMetricHistory } from "@/lib/api";
 import type { MetricWindow } from "@/lib/types";
 
-// Busca a série temporal de uma métrica e devolve só os valores (number[]),
-// prontos para o <Sparkline>. Mesmo padrão das outras hooks: fetch no mount,
-// guard `active` para descartar resposta se o componente desmontar.
+// Fetches a metric's time series and returns only the values (number[]),
+// ready for <Sparkline>. Same pattern as the other hooks: fetch on mount,
+// `active` guard to discard the response if the component unmounts.
 //
-// `pollMs` (DASHBOARD_POLL_MS nos chamadores) mantém a série fresca: sem ele, o
-// gráfico ficava congelado na última busca até um F5.
+// `pollMs` (DASHBOARD_POLL_MS in the callers) keeps the series fresh: without it, the
+// chart would stay frozen on the last fetch until an F5.
 export function useMetricHistory(
   instanceId: string,
   metric: string,
   window: MetricWindow = "1h",
   pollMs?: number,
   points?: number,
-  // Ver useResource: força a releitura imediata após uma ação da simulação.
+  // See useResource: forces an immediate re-read after a simulation action.
   version?: number
 ): number[] {
   const [values, setValues] = useState<number[]>([]);
@@ -33,9 +33,9 @@ export function useMetricHistory(
     }
 
     load();
-    // Durante a simulação a série cresce a cada poucos segundos; fora dela, a
-    // cada minuto (cadência do poller). O intervalo só some se o chamador
-    // deliberadamente não passar um.
+    // During the simulation the series grows every few seconds; outside of it,
+    // every minute (the poller's cadence). The interval only disappears if the caller
+    // deliberately doesn't pass one.
     const intervalId = pollMs ? setInterval(load, pollMs) : undefined;
 
     return () => {

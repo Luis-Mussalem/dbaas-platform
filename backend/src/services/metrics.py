@@ -32,20 +32,20 @@ def get_connection(
     instance: DatabaseInstance,
 ) -> Generator[psycopg.Connection, None, None]:
     """
-    Context manager que decripta a URI de conexão e abre uma conexão psycopg
-    com o banco da instância gerenciada.
+    Context manager that decrypts the connection URI and opens a psycopg
+    connection to the managed instance's database.
 
-    A URI decriptada existe apenas dentro deste bloco 'with'. Ao sair do
-    context manager — por sucesso ou exceção — a variável 'uri' é coletada
-    pelo GC. Ela nunca é logada, nunca vai para o banco da plataforma,
-    nunca aparece em stack traces.
+    The decrypted URI exists only inside this 'with' block. Upon leaving the
+    context manager — whether by success or exception — the 'uri' variable is
+    collected by the GC. It is never logged, never sent to the platform's
+    database, never shows up in stack traces.
     """
     uri = decrypt_value(instance.connection_uri)
-    # statement_timeout limita qualquer query nesta conexão (30s). Cobre as
-    # leituras de monitoramento — em especial EXPLAIN ANALYZE, que executa a
-    # query de verdade: sem o cap, um `SELECT pg_sleep(...)` seguraria o worker
-    # do thread pool indefinidamente. A conexão de manutenção (VACUUM/REINDEX)
-    # NÃO usa este helper de propósito — essas operações podem ser longas.
+    # statement_timeout caps any query on this connection (30s). Covers the
+    # monitoring reads — especially EXPLAIN ANALYZE, which actually executes the
+    # query: without the cap, a `SELECT pg_sleep(...)` would hold the thread pool
+    # worker indefinitely. The maintenance connection (VACUUM/REINDEX) does
+    # NOT use this helper on purpose — those operations can be long-running.
     with psycopg.connect(
         uri,
         connect_timeout=5,
@@ -59,7 +59,7 @@ def _latest_values(
     instance_id: uuid.UUID,
     names: tuple[str, ...],
 ) -> dict[str, float]:
-    """Último valor de cada métrica em `names` (as ausentes ficam de fora)."""
+    """Latest value of each metric in `names` (missing ones are left out)."""
     subq = (
         db.query(
             Metric.metric_name,
@@ -89,22 +89,22 @@ def _interval_cache_hit_ratio(
     blks_read: float,
 ) -> float | None:
     """
-    Cache hit ratio do INTERVALO entre esta coleta e a anterior, em %.
+    Cache hit ratio for the INTERVAL between this collection and the previous one, in %.
 
-    O pg_stat_database só expõe contadores acumulados; a razão sobre eles mede a
-    vida inteira do servidor e não o presente. Um banco que passou o dia a 99%
-    continuaria reportando ~99% durante uma hora inteira de leituras em disco —
-    e, pior, um restart zera os contadores e a razão desaba para perto de 0%
-    ainda que o banco esteja saudável. Derivar do delta responde à pergunta que
-    o alerta faz de fato: "e agora, está lendo do cache?".
+    pg_stat_database only exposes cumulative counters; the ratio over them measures the
+    server's entire lifetime, not the present. A database that spent the day at 99%
+    would keep reporting ~99% during a whole hour of disk reads —
+    and, worse, a restart zeroes the counters and the ratio collapses toward 0%
+    even though the database is healthy. Deriving from the delta answers the question
+    the alert actually asks: "right now, is it reading from cache?".
 
-    Retorna None quando o intervalo não permite uma resposta honesta:
-    - sem coleta anterior (primeira da instância) → não há delta;
-    - contador andou para trás → servidor reiniciou e zerou as estatísticas;
-    - nenhum bloco lido no intervalo → banco ocioso, razão indefinida.
+    Returns None when the interval doesn't allow an honest answer:
+    - no previous collection (the instance's first) → there's no delta;
+    - the counter went backwards → the server restarted and reset the statistics;
+    - no blocks read in the interval → the database is idle, the ratio is undefined.
 
-    Nos dois últimos casos devolve o valor anterior, se houver: um ciclo de
-    dado repetido é melhor que um falso "0%" que abriria alerta sozinho.
+    In the last two cases it returns the previous value, if any: a repeated
+    data point is better than a false "0%" that would open an alert on its own.
     """
     prev = _latest_values(db, instance_id, ("blks_hit", "blks_read", "cache_hit_ratio"))
     prev_hit = prev.get("blks_hit")
@@ -126,18 +126,18 @@ def _interval_cache_hit_ratio(
 
 def collect_and_store(db: Session, instance: DatabaseInstance) -> int:
     """
-    Coletar métricas base da instância e persistir na tabela metrics.
+    Collects base metrics for the instance and persists them into the metrics table.
 
-    Chamado pelo metrics_poller a cada 60s para instâncias RUNNING.
-    O timestamp 'collected_at' é gerado em Python para garantir que
-    todos os registros de um mesmo ciclo tenham exatamente o mesmo valor,
-    facilitando a query "métricas coletadas juntas no último ciclo".
+    Called by the metrics_poller every 60s for RUNNING instances.
+    The 'collected_at' timestamp is generated in Python to guarantee that
+    all records from the same cycle have exactly the same value,
+    making it easy to query "metrics collected together in the last cycle".
 
-    Retorna o número de métricas persistidas.
+    Returns the number of metrics persisted.
     """
-    # Uma única conexão coleta as métricas base E os percentis de latência
-    # (evita abrir duas conexões por ciclo). Os percentis vêm do
-    # pg_stat_statements e degradam para {} em instâncias sem a extensão.
+    # A single connection collects both the base metrics AND the latency percentiles
+    # (avoids opening two connections per cycle). The percentiles come from
+    # pg_stat_statements and degrade to {} on instances without the extension.
     with get_connection(instance) as conn:
         raw = collect_base_metrics(conn)
         percentiles = collect_latency_percentiles(conn)
@@ -145,8 +145,8 @@ def collect_and_store(db: Session, instance: DatabaseInstance) -> int:
     if not raw:
         return 0
 
-    # Precisa rodar ANTES do insert: a razão sai do delta contra a coleta anterior,
-    # que deixaria de ser "a anterior" assim que estas linhas entrassem.
+    # Must run BEFORE the insert: the ratio comes from the delta against the previous
+    # collection, which would stop being "the previous one" as soon as these rows go in.
     if "blks_hit" in raw and "blks_read" in raw:
         ratio = _interval_cache_hit_ratio(
             db, instance.id, raw["blks_hit"], raw["blks_read"]
@@ -186,13 +186,13 @@ def get_latest_metrics(
     instance_id: uuid.UUID,
 ) -> dict[str, float]:
     """
-    Retornar o valor mais recente de cada métrica para a instância.
+    Returns the most recent value of each metric for the instance.
 
-    Subquery encontra MAX(collected_at) por metric_name, depois join
-    busca os values correspondentes. O índice composto
-    (instance_id, metric_name, collected_at) garante index scan.
+    A subquery finds MAX(collected_at) per metric_name, then a join
+    fetches the corresponding values. The composite index
+    (instance_id, metric_name, collected_at) guarantees an index scan.
 
-    Retorna {} se nenhuma métrica foi coletada ainda.
+    Returns {} if no metric has been collected yet.
     """
     subq = (
         db.query(
@@ -218,17 +218,17 @@ def get_latest_metrics(
     return {name: value for name, value in rows}
 
 
-# Pontos devolvidos por get_metric_history. A série é reamostrada para este
-# teto: um sparkline de ~500px não representa mais que isso, e o gráfico fica
-# refém da cadência de coleta — que varia (60s normal, 5s durante a simulação
-# de uso). Com bucket fixo, a MESMA janela desenha a mesma forma sempre.
+# Points returned by get_metric_history. The series is resampled down to this
+# ceiling: a ~500px sparkline can't show more than that, and the chart would be
+# hostage to the collection cadence — which varies (60s normal, 5s during the usage
+# simulation). With a fixed bucket, the SAME window always draws the same shape.
 _HISTORY_MAX_POINTS = 120
 
 
-# Métricas "virtuais" que não são armazenadas cruas: são derivadas de um contador
-# cumulativo já coletado. queries_per_second vem da derivada de xact_commit — o
-# mesmo contador que alimenta o número do card (services.fleet_summary), agora
-# exposto como série para o gráfico.
+# "Virtual" metrics that aren't stored raw: they're derived from a cumulative
+# counter already collected. queries_per_second comes from the derivative of xact_commit —
+# the same counter that feeds the card's number (services.fleet_summary), now
+# exposed as a series for the chart.
 _DERIVED_RATE_SOURCE = {"queries_per_second": "xact_commit"}
 
 
@@ -239,8 +239,8 @@ def _bucketed_avg(
     since: datetime,
     bucket_seconds: int,
 ) -> list[tuple[datetime, float]]:
-    """Série de UMA métrica, reamostrada em baldes de `bucket_seconds` (média por balde)."""
-    # floor(epoch / bucket) * bucket → início do balde; média dentro dele.
+    """Series of ONE metric, resampled into buckets of `bucket_seconds` (average per bucket)."""
+    # floor(epoch / bucket) * bucket → start of the bucket; average within it.
     bucket_start = func.to_timestamp(
         func.floor(func.extract("epoch", Metric.collected_at) / bucket_seconds)
         * bucket_seconds
@@ -260,48 +260,48 @@ def _bucketed_avg(
     return [(row.bucket_start, float(row.value)) for row in rows]
 
 
-# Abaixo desta fração do valor "limpo", uma queda do contador é um RESET real
-# (restart do Postgres), não uma leitura stale do pg_stat_database. Mesma regra do
-# fleet_summary, para o gráfico e o número tratarem os mesmos dados igual.
+# Below this fraction of the "clean" value, a drop in the counter is a real RESET
+# (Postgres restart), not a stale reading from pg_stat_database. Same rule as
+# fleet_summary, so the chart and the number treat the same data the same way.
 _RATE_RESET_FRACTION = 0.5
 
 
 def _counter_rate(buckets: list[tuple[datetime, float]]) -> list[tuple[datetime, float]]:
     """
-    Deriva uma taxa (por segundo) de um contador cumulativo já bucketizado:
-    Δcontador / Δsegundos entre baldes consecutivos, datado no balde mais novo.
+    Derives a rate (per second) from an already-bucketed cumulative counter:
+    Δcounter / Δseconds between consecutive buckets, dated at the newest bucket.
 
-    O contador é NÃO-DECRESCENTE, mas o pg_stat_database às vezes devolve uma
-    leitura STALE (snapshot antigo) que faz um balde "mergulhar" de leve. Esse
-    ponto é PULADO (não emite 0 nem pico): mantemos o último valor limpo e o
-    próximo balde real mede o crescimento sobre o intervalo maior — a linha
-    interpola o buraco e fica suave, sem o dente-de-serra que o card mostrava. Uma
-    queda GRANDE (< _RATE_RESET_FRACTION) é um reset de verdade: reancora e segue.
+    The counter is NON-DECREASING, but pg_stat_database sometimes returns a
+    STALE reading (an old snapshot) that makes a bucket "dip" slightly. That
+    point is SKIPPED (it emits neither 0 nor a spike): we keep the last clean value and the
+    next real bucket measures growth over the larger interval — the line
+    interpolates over the gap and stays smooth, without the sawtooth the card used to show. A
+    LARGE drop (< _RATE_RESET_FRACTION) is a genuine reset: re-anchor and continue.
     """
     series: list[tuple[datetime, float]] = []
     if not buckets:
         return series
     prev_t, clean = buckets[0]
     for t_cur, v_cur in buckets[1:]:
-        if v_cur >= clean:  # crescimento real
+        if v_cur >= clean:  # real growth
             dt = (t_cur - prev_t).total_seconds()
             if dt > 0:
                 series.append((t_cur, round((v_cur - clean) / dt, 2)))
             prev_t, clean = t_cur, v_cur
-        elif v_cur < clean * _RATE_RESET_FRACTION:  # reset do contador: reancora
+        elif v_cur < clean * _RATE_RESET_FRACTION:  # counter reset: re-anchor
             prev_t, clean = t_cur, v_cur
-        # senão: leitura stale (mergulho pequeno) → pula o ponto, mantém clean/prev_t
+        # otherwise: stale reading (small dip) → skip the point, keep clean/prev_t
     return series
 
 
-# Uma taxa derivada de contador é intrinsecamente ruidosa em baldes curtos: uma
-# carga em rajadas medida em 15s salta muito de um balde para o outro (um balde
-# pega a rajada, o vizinho pega o vale). Apresentamos SEMPRE a média corrida da
-# última ~1 min, então cada ponto é a média dos baldes que cobrem 60s. A linha
-# ainda avança a cada balde (segue responsiva, sem virar 1 ponto/min) mas sem o
-# serrilhado. Em janelas onde o balde já é ≥ 60s isto vira no-op (janela de 1
-# ponto). Vale para o GRÁFICO e para o NÚMERO (services.fleet_summary tira a média
-# DESTA série), então os dois seguem contando a mesma história.
+# A rate derived from a counter is inherently noisy over short buckets: a
+# bursty load measured every 15s jumps a lot from one bucket to the next (one bucket
+# catches the burst, its neighbor catches the lull). We always present the trailing
+# average of the last ~1 min, so each point is the average of the buckets covering 60s. The line
+# still advances on every bucket (stays responsive, without turning into 1 point/min) but
+# without the jaggedness. In windows where the bucket is already ≥ 60s this becomes a
+# no-op (a 1-point window). Applies to both the CHART and the NUMBER (services.fleet_summary
+# averages THIS series), so both keep telling the same story.
 _RATE_SMOOTHING_SECONDS = 60
 
 
@@ -309,9 +309,9 @@ def _trailing_mean(
     series: list[tuple[datetime, float]], window: int
 ) -> list[tuple[datetime, float]]:
     """
-    Média móvel corrida de `window` pontos, datada no ponto mais novo de cada
-    janela. A janela encolhe no começo da série (o 1º ponto é ele mesmo), então
-    nenhum ponto é descartado — o sparkline mantém a mesma contagem de pontos.
+    Trailing moving average of `window` points, dated at the newest point of each
+    window. The window shrinks at the start of the series (the 1st point is itself), so
+    no point is dropped — the sparkline keeps the same point count.
     """
     if window <= 1 or len(series) < 2:
         return series
@@ -331,22 +331,22 @@ def get_metric_history(
     max_points: int = _HISTORY_MAX_POINTS,
 ) -> list[tuple[datetime, float]]:
     """
-    Retorna a série temporal de UMA métrica na janela [agora - minutes, agora],
-    reamostrada em até _HISTORY_MAX_POINTS baldes com a MÉDIA de cada um.
+    Returns the time series of ONE metric in the window [now - minutes, now],
+    resampled into up to _HISTORY_MAX_POINTS buckets with the AVERAGE of each.
 
-    Lê da tabela metrics (banco da plataforma) — não conecta ao banco monitorado.
-    A média por balde é o que dá a curva suave: sem ela, uma janela de 24h com
-    coleta de 5s traria ~17 mil pontos e o sparkline viraria uma serra (foi
-    exatamente o que aconteceu quando a simulação acelerou o poller). Agregar no
-    banco também evita trafegar milhares de pontos para desenhar 500 pixels.
+    Reads from the metrics table (platform database) — does not connect to the monitored database.
+    The per-bucket average is what gives the smooth curve: without it, a 24h window with
+    5s collection would bring back ~17 thousand points and the sparkline would turn into a
+    sawtooth (that's exactly what happened when the simulation sped up the poller). Aggregating in
+    the database also avoids transferring thousands of points to draw 500 pixels.
 
-    O balde é derivado da janela (24h ÷ 120 = 12 min), então a resolução é
-    estável independentemente de quantas amostras existirem dentro dele.
+    The bucket is derived from the window (24h ÷ 120 = 12 min), so the resolution is
+    stable regardless of how many samples exist within it.
 
-    `queries_per_second` é uma métrica DERIVADA: não é armazenada crua, então a
-    série sai da derivada do contador `xact_commit` (ver _DERIVED_RATE_SOURCE) e
-    passa por uma média móvel de ~1 min (ver _trailing_mean) — a taxa de uma carga
-    em rajadas é ruidosa demais em baldes de 15s.
+    `queries_per_second` is a DERIVED metric: it isn't stored raw, so its
+    series comes from the derivative of the `xact_commit` counter (see _DERIVED_RATE_SOURCE) and
+    goes through a ~1 min moving average (see _trailing_mean) — the rate of a bursty
+    load is too noisy in 15s buckets.
     """
     since = datetime.now(timezone.utc) - timedelta(minutes=minutes)
     bucket_seconds = max(1, (minutes * 60) // max(1, max_points))
@@ -362,11 +362,11 @@ def get_metric_history(
 
 def check_health(instance: DatabaseInstance) -> dict:
     """
-    Verificar conectividade e responsividade do banco com SELECT 1 cronometrado.
+    Checks the database's connectivity and responsiveness with a timed SELECT 1.
 
-    response_time_ms inclui: TCP handshake, autenticação PostgreSQL,
-    execução do SELECT 1 e retorno — latência end-to-end real.
-    Retorna 'unhealthy' em qualquer exceção, sem levantar 5xx.
+    response_time_ms includes: TCP handshake, PostgreSQL authentication,
+    executing SELECT 1, and the return trip — real end-to-end latency.
+    Returns 'unhealthy' on any exception, without raising a 5xx.
     """
     uri = decrypt_value(instance.connection_uri)
     start = time.monotonic()
@@ -383,7 +383,7 @@ def check_health(instance: DatabaseInstance) -> dict:
     except Exception as exc:
         response_time_ms = (time.monotonic() - start) * 1000
         logger.warning(
-            "Health check falhou para instância %s: %s", instance.id, exc
+            "Health check failed for instance %s: %s", instance.id, exc
         )
         return {
             "status": "unhealthy",
@@ -396,31 +396,31 @@ def get_slow_queries(
     instance: DatabaseInstance,
     limit: int = 20,
 ) -> list[dict[str, Any]]:
-    """Retornar queries lentas via pg_stat_statements."""
+    """Returns slow queries via pg_stat_statements."""
     with get_connection(instance) as conn:
         return collect_slow_queries(conn, limit=limit)
 
 
 def get_index_stats(instance: DatabaseInstance) -> list[dict[str, Any]]:
-    """Retornar estatísticas de índices via pg_stat_user_indexes."""
+    """Returns index statistics via pg_stat_user_indexes."""
     with get_connection(instance) as conn:
         return collect_index_stats(conn)
 
 
 def get_locks(instance: DatabaseInstance) -> list[dict[str, Any]]:
-    """Retornar locks ativos em tabelas via pg_locks."""
+    """Returns active locks on tables via pg_locks."""
     with get_connection(instance) as conn:
         return collect_locks(conn)
 
 
 def get_bloat(instance: DatabaseInstance) -> list[dict[str, Any]]:
-    """Retornar estimativa de bloat por tabela via pg_stat_user_tables."""
+    """Returns an estimate of bloat per table via pg_stat_user_tables."""
     with get_connection(instance) as conn:
         return collect_bloat(conn)
 
 
 def get_explain(instance: DatabaseInstance, query: str) -> list:
-    """Executar EXPLAIN ANALYZE para uma query SELECT."""
+    """Runs EXPLAIN ANALYZE for a SELECT query."""
     with get_connection(instance) as conn:
         return collect_explain(conn, query)
 
@@ -429,17 +429,17 @@ def get_active_connections(
     instance: DatabaseInstance,
     limit: int = 100,
 ) -> list[dict[str, Any]]:
-    """Listar conexões ativas via pg_stat_activity."""
+    """Lists active connections via pg_stat_activity."""
     with get_connection(instance) as conn:
         return collect_active_connections(conn, limit=limit)
 
 
 def get_schema(instance: DatabaseInstance) -> list[dict[str, Any]]:
     """
-    Retornar as tabelas agrupadas por schema (com estimativa de linhas).
+    Returns tables grouped by schema (with an estimated row count).
 
-    Agrupa as linhas planas do coletor em [{name, tables:[{table, estimated_rows}]}],
-    preservando a ordem (schema, tabela) já garantida pela query.
+    Groups the collector's flat rows into [{name, tables:[{table, estimated_rows}]}],
+    preserving the (schema, table) order already guaranteed by the query.
     """
     with get_connection(instance) as conn:
         rows = collect_schema(conn)

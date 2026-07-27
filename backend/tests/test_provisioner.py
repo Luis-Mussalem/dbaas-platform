@@ -1,12 +1,12 @@
 """
-Testes do DockerProvisioner (PHASE 3) sem Docker nem PostgreSQL reais.
+Tests for DockerProvisioner (PHASE 3) without real Docker or PostgreSQL.
 
-O docker.DockerClient é substituído por um dublê (FakeDockerClient) que devolve
-FakeContainers controlados. As esperas de readiness e o setup de role/banco
-(que conectam via psycopg) são neutralizados com monkeypatch. Validamos:
-- helpers puros de identificador/senha (sem cliente)
-- create: porta atribuída, ProvisionResult, e cleanup quando falta porta
-- start/stop/delete/get_status: leitura de porta, idempotência e tradução de
+docker.DockerClient is replaced by a stub (FakeDockerClient) that returns
+controlled FakeContainers. The readiness waits and the role/database setup
+(which connect via psycopg) are neutralized with monkeypatch. We validate:
+- pure identifier/password helpers (no client)
+- create: assigned port, ProvisionResult, and cleanup when the port is missing
+- start/stop/delete/get_status: port reading, idempotency, and translation of
   NotFound → RuntimeError / NOT_FOUND.
 """
 import uuid
@@ -20,7 +20,7 @@ from src.services.provisioning.types import ProvisionerStatus
 
 
 # --------------------------------------------------------------------------- #
-# Dublês de Docker
+# Docker stubs
 # --------------------------------------------------------------------------- #
 
 
@@ -53,7 +53,7 @@ class FakeContainer:
 
 class _Networks:
     def get(self, name):
-        return object()  # rede já existe → __init__ não tenta criar
+        return object()  # network already exists → __init__ doesn't try to create it
 
     def create(self, *a, **k):  # pragma: no cover
         return object()
@@ -90,22 +90,22 @@ def tmp_backup_dir(tmp_path, monkeypatch):
 
 def _provisioner(containers: _Containers, monkeypatch) -> DockerProvisioner:
     prov = DockerProvisioner(FakeDockerClient(containers))
-    # Neutraliza as etapas que falariam com PostgreSQL real.
+    # Neutralizes the steps that would talk to a real PostgreSQL.
     monkeypatch.setattr(prov, "_wait_until_database_ready", lambda *a, **k: None)
     monkeypatch.setattr(prov, "_setup_database_and_role", lambda *a, **k: None)
     return prov
 
 
 # --------------------------------------------------------------------------- #
-# Helpers puros
+# Pure helpers
 # --------------------------------------------------------------------------- #
 
 
 def test_safe_identifier_normalizes():
     assert dp._safe_identifier("My DB-Name!") == "my_db_name_"
-    assert dp._safe_identifier("9lives").startswith("db_")  # prefixo se começa com dígito
+    assert dp._safe_identifier("9lives").startswith("db_")  # prefixed if it starts with a digit
     assert dp._safe_identifier("") == "db_instance"
-    assert len(dp._safe_identifier("x" * 100)) == 63  # truncado em 63
+    assert len(dp._safe_identifier("x" * 100)) == 63  # truncated to 63
 
 
 def test_quote_ident_escapes_double_quotes():
@@ -118,7 +118,7 @@ def test_pg_literal_string_escapes_quotes_and_backslashes():
 
 
 def test_generate_password_is_alphanumeric_and_sized():
-    pw = DockerProvisioner.__dict__  # noqa: F841  (apenas para clareza)
+    pw = DockerProvisioner.__dict__  # noqa: F841  (just for clarity)
     prov = DockerProvisioner(FakeDockerClient(_Containers()))
     pwd = prov._generate_password(length=24)
     assert len(pwd) == 24
@@ -130,7 +130,7 @@ def test_container_name_is_deterministic():
     iid = uuid.UUID("12345678-1234-1234-1234-1234567890ab")
     name = prov._container_name(iid)
     assert name.startswith(dp._CONTAINER_PREFIX)
-    assert prov._container_name(iid) == name  # determinístico
+    assert prov._container_name(iid) == name  # deterministic
 
 
 # --------------------------------------------------------------------------- #
@@ -150,28 +150,28 @@ def test_create_returns_provision_result(monkeypatch):
     assert result.host == "127.0.0.1"
     assert result.db_user.startswith("inst_")
     assert result.db_name.startswith("db_")
-    # Limites de recurso propagados ao docker run.
+    # Resource limits propagated to docker run.
     assert containers.run_kwargs["mem_limit"] == "512m"
     assert containers.run_kwargs["nano_cpus"] == 2_000_000_000
-    # Política de restart aplicada para sobreviver a restart do Docker/host.
+    # Restart policy applied to survive a Docker/host restart.
     assert containers.run_kwargs["restart_policy"] == {"Name": "unless-stopped"}
 
 
 def test_create_without_port_cleans_up_and_raises(monkeypatch):
-    container = FakeContainer(ports={})  # Docker não atribuiu porta
+    container = FakeContainer(ports={})  # Docker did not assign a port
     prov = _provisioner(_Containers(run_result=container), monkeypatch)
 
-    with pytest.raises(RuntimeError, match="não atribuiu uma porta"):
+    with pytest.raises(RuntimeError, match="did not assign a port"):
         prov.create(uuid.uuid4(), engine_version="16")
-    assert container.removed is True  # cleanup acionado
+    assert container.removed is True  # cleanup triggered
 
 
 def test_create_makes_wal_dir_writable_by_container_postgres(tmp_backup_dir, monkeypatch):
     """
-    O archive_command roda como postgres (uid 70) dentro do container e escreve no
-    bind mount /archive. Sem escrita para "outros" ele falha com Permission denied,
-    o pg_wal cresce sem limite e o PITR fica sem base — regressão silenciosa, já que
-    a suíte não sobe container real.
+    archive_command runs as postgres (uid 70) inside the container and writes to the
+    /archive bind mount. Without write access for "others" it fails with Permission denied,
+    pg_wal grows without limit, and PITR is left without a base — a silent regression, since
+    the suite doesn't bring up a real container.
     """
     containers = _Containers(run_result=FakeContainer())
     prov = _provisioner(containers, monkeypatch)
@@ -181,8 +181,8 @@ def test_create_makes_wal_dir_writable_by_container_postgres(tmp_backup_dir, mon
 
     wal_dir = tmp_backup_dir / str(iid) / "wal"
     assert wal_dir.is_dir()
-    assert wal_dir.stat().st_mode & 0o007 == 0o007  # rwx para "outros"
-    # O diretório precisa chegar ao container montado em /archive.
+    assert wal_dir.stat().st_mode & 0o007 == 0o007  # rwx for "others"
+    # The directory needs to reach the container mounted at /archive.
     assert containers.run_kwargs["volumes"][str(wal_dir)] == {"bind": "/archive", "mode": "rw"}
 
 
@@ -208,7 +208,7 @@ def test_start_returns_published_port(monkeypatch):
 
 
 def test_start_upgrades_restart_policy_on_existing_container(monkeypatch):
-    # Containers criados antes da política recebem o upgrade ao religar.
+    # Containers created before the policy get the upgrade when restarted.
     container = FakeContainer(ports={"5432/tcp": [{"HostPort": "60000"}]})
     prov = _provisioner(_Containers(get_result=container), monkeypatch)
     prov.start(uuid.uuid4())
@@ -219,7 +219,7 @@ def test_start_missing_container_raises(monkeypatch):
     prov = _provisioner(
         _Containers(get_exc=docker.errors.NotFound("missing")), monkeypatch
     )
-    with pytest.raises(RuntimeError, match="não encontrado"):
+    with pytest.raises(RuntimeError, match="not found"):
         prov.start(uuid.uuid4())
 
 
@@ -234,16 +234,16 @@ def test_stop_missing_container_raises(monkeypatch):
     prov = _provisioner(
         _Containers(get_exc=docker.errors.NotFound("missing")), monkeypatch
     )
-    with pytest.raises(RuntimeError, match="não encontrado"):
+    with pytest.raises(RuntimeError, match="not found"):
         prov.stop(uuid.uuid4())
 
 
 def test_delete_is_idempotent_on_missing(monkeypatch):
-    # NotFound → delete não levanta (idempotente).
+    # NotFound → delete doesn't raise (idempotent).
     prov = _provisioner(
         _Containers(get_exc=docker.errors.NotFound("missing")), monkeypatch
     )
-    prov.delete(uuid.uuid4())  # sem exceção
+    prov.delete(uuid.uuid4())  # no exception
 
 
 def test_delete_removes_existing(monkeypatch):

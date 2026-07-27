@@ -1,16 +1,16 @@
-// Registro de regiões: mapeia códigos (estilo AWS) para flag + cidade + país.
-// Compartilhado por RegionTag (no card), RegionMap (painel) e o wizard de criação.
-// `lat`/`lon` são as coordenadas geográficas REAIS da cidade da região; o
-// RegionMap as projeta num mapa-múndi para posicionar os marcadores.
+// Region registry: maps codes (AWS-style) to flag + city + country.
+// Shared by RegionTag (in the card), RegionMap (dashboard), and the creation wizard.
+// `lat`/`lon` are the region's city's REAL geographic coordinates; the
+// RegionMap projects them onto a world map to position the markers.
 //
-// Fora do i18n de propósito: cidades e códigos de região são nomes próprios de
-// infraestrutura — a AWS não chama sa-east-1 de "Leste da América do Sul" em PT.
+// Deliberately left out of i18n: cities and region codes are infrastructure
+// proper nouns — AWS doesn't call sa-east-1 "South America East" in Portuguese.
 
 export interface RegionInfo {
   code: string;
   flag: string;
   city: string;
-  country: string; // sigla curta exibida (BR, US, IE…)
+  country: string; // short displayed code (BR, US, IE…)
   lat: number;
   lon: number;
 }
@@ -23,14 +23,14 @@ const REGIONS: Record<string, RegionInfo> = {
   "ap-southeast-1": { code: "ap-southeast-1", flag: "🇸🇬", city: "Singapore", country: "SG", lat: 1.35, lon: 103.8 },
 };
 
-// Todas as regiões conhecidas, na ordem de declaração — usado pelo wizard de
-// criação, que antes mantinha uma cópia própria (e desatualizada) desta lista.
+// All known regions, in declaration order — used by the creation wizard,
+// which used to keep its own (and outdated) copy of this list.
 export function listRegions(): RegionInfo[] {
   return Object.values(REGIONS);
 }
 
-// Busca robusta: código desconhecido vira um item neutro (sem flag, sigla "—"),
-// para a UI nunca quebrar com uma região que ainda não está no registro.
+// Robust lookup: an unknown code becomes a neutral item (no flag, "—" code),
+// so the UI never breaks on a region that isn't in the registry yet.
 export function regionInfo(code: string | null): RegionInfo | null {
   if (!code) return null;
   return (
@@ -45,10 +45,10 @@ export function regionInfo(code: string | null): RegionInfo | null {
   );
 }
 
-// Projeção equiretangular (Plate Carrée): converte lat/lon em coordenadas de um
-// mapa 2:1 com viewBox 360×180. É matemática linear pura — sem biblioteca de geo.
-//   x  ∈ [0, 360]  →  lon -180 (oeste)  ..  +180 (leste)
-//   y  ∈ [0, 180]  →  lat  +90 (norte)  ..   -90 (sul)
+// Equirectangular projection (Plate Carrée): converts lat/lon into coordinates of a
+// 2:1 map with a 360×180 viewBox. It's pure linear math — no geo library.
+//   x  ∈ [0, 360]  →  lon -180 (west)  ..  +180 (east)
+//   y  ∈ [0, 180]  →  lat  +90 (north)  ..   -90 (south)
 export function project(lat: number, lon: number): { x: number; y: number } {
   return { x: lon + 180, y: 90 - lat };
 }

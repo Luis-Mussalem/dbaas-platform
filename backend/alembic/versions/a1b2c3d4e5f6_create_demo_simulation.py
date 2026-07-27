@@ -20,9 +20,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Tabela singleton: guarda o estado do roteiro de demonstração (uma linha).
-    # create_type=False: o tipo é criado explicitamente logo abaixo. Sem isso o
-    # create_table tentaria criá-lo de novo e o upgrade falharia com
+    # Singleton table: holds the state of the demo script (a single row).
+    # create_type=False: the type is created explicitly right below. Without this
+    # create_table would try to create it again and upgrade would fail with
     # DuplicateObject.
     simulation_phase = postgresql.ENUM(
         'IDLE', 'BACKFILL', 'WARMUP', 'ALERT', 'BACKUP', 'MAINTENANCE',

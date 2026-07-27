@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
 import { Sparkline } from "@/components/Sparkline";
 
-// Card de KPI — rótulo + número grande + linha de apoio (sub) + sparkline opcional.
-// O `accent` colore a linha de apoio (verde/amarelo/vermelho) conforme o estado.
-// `chart` (opcional) desenha um sparkline no rodapé, no estilo dos cards do design.
+// KPI card — label + large number + support line (sub) + optional sparkline.
+// `accent` colors the support line (green/yellow/red) according to the state.
+// `chart` (optional) draws a sparkline in the footer, in the design's card style.
 export function StatCard({
   label,
   value,

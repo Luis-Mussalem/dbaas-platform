@@ -1,9 +1,9 @@
 """
-Testes de autorização a nível de objeto em /users/{id}.
+Object-level authorization tests on /users/{id}.
 
-Travam o fix de segurança: um usuário só pode ler/alterar o PRÓPRIO registro;
-o superuser pode ler qualquer um. Sem isso, qualquer usuário autenticado
-acessaria os dados de outro pelo UUID (IDOR).
+Lock down the security fix: a user can only read/change their OWN record;
+the superuser can read anyone's. Without this, any authenticated user
+could access another's data via UUID (IDOR).
 """
 from datetime import datetime, timedelta, timezone
 
@@ -26,7 +26,7 @@ def test_get_own_user_ok(client, auth_headers):
 
 
 def test_get_other_user_forbidden(client, auth_headers, make_user):
-    # Regressão do IDOR: usuário comum NÃO pode ler outro usuário.
+    # IDOR regression: a regular user CANNOT read another user.
     headers, _ = auth_headers(email="attacker@example.com")
     victim = make_user(email="victim@example.com")
     resp = client.get(f"{API}/{victim.id}", headers=headers)
@@ -48,14 +48,14 @@ def test_get_user_requires_auth(client, make_user):
 
 
 # --------------------------------------------------------------------------- #
-# GET /users — last_activity (agregado de audit_logs)
+# GET /users — last_activity (aggregated from audit_logs)
 # --------------------------------------------------------------------------- #
 
 
 def test_list_users_includes_last_activity(client, auth_headers, make_user, db):
     headers, _ = auth_headers(email="su@example.com", is_superuser=True)
     active = make_user(email="active@example.com")
-    make_user(email="quiet@example.com")  # sem entradas de auditoria
+    make_user(email="quiet@example.com")  # no audit entries
 
     ts = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
     db.add_all([
@@ -65,7 +65,7 @@ def test_list_users_includes_last_activity(client, auth_headers, make_user, db):
         ),
         AuditLog(
             user_id=active.id, action="instance_created", resource_type="instance",
-            timestamp=ts,  # atividade mais recente
+            timestamp=ts,  # most recent activity
         ),
     ])
     db.commit()
@@ -73,7 +73,7 @@ def test_list_users_includes_last_activity(client, auth_headers, make_user, db):
     resp = client.get(API, headers=headers)
     assert resp.status_code == 200
     by_email = {u["email"]: u for u in resp.json()}
-    # MAX(timestamp) por usuário; usuário sem auditoria → None.
+    # MAX(timestamp) per user; a user with no audit entries → None.
     assert by_email["active@example.com"]["last_activity"].startswith("2026-06-01T12:00")
     assert by_email["quiet@example.com"]["last_activity"] is None
 
@@ -95,7 +95,7 @@ def test_patch_own_email_ok(client, auth_headers):
 
 
 def test_patch_own_email_to_taken_email_rejected(client, auth_headers, make_user):
-    # Regressão: email em uso estourava IntegrityError no commit → 500.
+    # Regression: an email already in use used to raise IntegrityError on commit → 500.
     make_user(email="taken@example.com")
     headers, user = auth_headers(email="dupe@example.com")
     resp = client.patch(
@@ -129,7 +129,7 @@ def test_patch_weak_password_rejected(client, auth_headers):
 
 
 def test_patch_new_password_works_for_login(client, auth_headers):
-    # Trocar a senha pelo PATCH deve permitir login com a nova senha.
+    # Changing the password via PATCH should allow logging in with the new password.
     headers, user = auth_headers(email="pwchange@example.com")
     new_password = "BrandNewPass456!"
     patch = client.patch(
@@ -144,7 +144,7 @@ def test_patch_new_password_works_for_login(client, auth_headers):
         data={"username": "pwchange@example.com", "password": new_password},
     )
     assert login.status_code == 200
-    # E a senha antiga não funciona mais
+    # And the old password no longer works
     old = client.post(
         "/api/v1/auth/login",
         data={"username": "pwchange@example.com", "password": TEST_PASSWORD},

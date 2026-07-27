@@ -14,14 +14,14 @@ import {
   Sparkles,
 } from "lucide-react";
 
-// Página estática "Sobre esta demo": a divulgação completa de que a frota é
-// gerada de propósito para a plataforma poder ser explorada por inteiro, além de
-// um guia de exploração e a stack — serve de porta de entrada para recrutadores.
-// Não faz chamadas de API nem tem controles; é documentação na tela. A faixa do
-// topo (DemoNotice) aponta para cá.
+// Static "About this demo" page: the full disclosure that the fleet is
+// generated on purpose so the platform can be fully explored, plus
+// an exploration guide and the stack — serves as an entry point for recruiters.
+// Makes no API calls and has no controls; it's on-screen documentation. The banner
+// at the top (DemoNotice) links here.
 
-// Nomes de tecnologia são substantivos próprios, não strings de UI — ficam fora
-// do i18n de propósito.
+// Technology names are proper nouns, not UI strings — they're deliberately left
+// out of i18n.
 const STACK = [
   "FastAPI",
   "SQLAlchemy",

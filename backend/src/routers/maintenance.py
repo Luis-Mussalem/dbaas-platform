@@ -19,7 +19,7 @@ router = APIRouter(prefix="/instances", tags=["Maintenance"])
 
 
 # ---------------------------------------------------------------------------
-# Helpers internos
+# Internal helpers
 # ---------------------------------------------------------------------------
 
 def _require_schedule(
@@ -27,7 +27,7 @@ def _require_schedule(
     instance_id: uuid.UUID,
     db: Session,
 ) -> MaintenanceSchedule:
-    """Retorna o schedule ou 404."""
+    """Returns the schedule or 404."""
     schedule = (
         db.query(MaintenanceSchedule)
         .filter(
@@ -52,7 +52,7 @@ def _require_schedule(
     "/{instance_id}/maintenance/run",
     response_model=MaintenanceTaskRead,
     status_code=status.HTTP_202_ACCEPTED,
-    summary="Executar tarefa de manutenção manual",
+    summary="Run a manual maintenance task",
 )
 def run_maintenance(
     instance_id: uuid.UUID,
@@ -61,13 +61,13 @@ def run_maintenance(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Executar uma tarefa de manutenção imediatamente na instância.
+    Runs a maintenance task immediately on the instance.
 
-    - **VACUUM** / **ANALYZE** / **REINDEX**: opcionalmente em uma tabela específica
-    - **VACUUM_FULL**: `target_table` é obrigatório (lock exclusivo — nunca no banco inteiro)
-    - **KILL_IDLE** / **KILL_LONG**: `target_table` é ignorado (operam sobre conexões)
+    - **VACUUM** / **ANALYZE** / **REINDEX**: optionally on a specific table
+    - **VACUUM_FULL**: `target_table` is required (exclusive lock — never on the whole database)
+    - **KILL_IDLE** / **KILL_LONG**: `target_table` is ignored (they operate on connections)
 
-    Requer que a instância esteja `RUNNING`.
+    Requires the instance to be `RUNNING`.
     """
     instance = get_instance_if_running(instance_id, db, current_user)
     try:
@@ -82,7 +82,7 @@ def run_maintenance(
 @router.get(
     "/{instance_id}/maintenance",
     response_model=list[MaintenanceTaskRead],
-    summary="Histórico de tarefas de manutenção",
+    summary="Maintenance task history",
 )
 def list_maintenance_history(
     instance_id: uuid.UUID,
@@ -91,8 +91,8 @@ def list_maintenance_history(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Retornar histórico das últimas tarefas de manutenção da instância.
-    Ordenado por `scheduled_at` decrescente.
+    Returns the history of the instance's most recent maintenance tasks.
+    Ordered by `scheduled_at` descending.
     """
     get_instance_or_404(instance_id, db, current_user)
     return svc.get_task_history(db, instance_id, limit=limit)
@@ -102,7 +102,7 @@ def list_maintenance_history(
     "/{instance_id}/maintenance/schedules",
     response_model=MaintenanceScheduleRead,
     status_code=status.HTTP_201_CREATED,
-    summary="Criar agendamento de manutenção",
+    summary="Create a maintenance schedule",
 )
 def create_schedule(
     instance_id: uuid.UUID,
@@ -111,14 +111,14 @@ def create_schedule(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Criar um agendamento recorrente de manutenção com expressão cron.
+    Creates a recurring maintenance schedule with a cron expression.
 
-    Exemplo de `cron_expression`:
-    - `"0 3 * * 0"` — toda segunda-feira às 3:00 UTC
-    - `"30 1 * * *"` — todo dia às 01:30 UTC
+    `cron_expression` example:
+    - `"0 3 * * 0"` — every Monday at 3:00 UTC
+    - `"30 1 * * *"` — every day at 01:30 UTC
 
-    `VACUUM_FULL` não pode ser agendado automaticamente (usa lock exclusivo).
-    Execute-o manualmente via `POST /maintenance/run`.
+    `VACUUM_FULL` cannot be scheduled automatically (it uses an exclusive lock).
+    Run it manually via `POST /maintenance/run`.
     """
     get_instance_or_404(instance_id, db, current_user)
     return svc.create_schedule(db, instance_id, data)
@@ -127,14 +127,14 @@ def create_schedule(
 @router.get(
     "/{instance_id}/maintenance/schedules",
     response_model=list[MaintenanceScheduleRead],
-    summary="Listar agendamentos de manutenção",
+    summary="List maintenance schedules",
 )
 def list_schedules(
     instance_id: uuid.UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Retornar todos os agendamentos de manutenção da instância."""
+    """Returns all of the instance's maintenance schedules."""
     get_instance_or_404(instance_id, db, current_user)
     return svc.list_schedules(db, instance_id)
 
@@ -142,7 +142,7 @@ def list_schedules(
 @router.delete(
     "/{instance_id}/maintenance/schedules/{schedule_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Remover agendamento de manutenção",
+    summary="Delete a maintenance schedule",
 )
 def delete_schedule(
     instance_id: uuid.UUID,
@@ -150,7 +150,7 @@ def delete_schedule(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Remover permanentemente um agendamento de manutenção."""
+    """Permanently deletes a maintenance schedule."""
     get_instance_or_404(instance_id, db, current_user)
     schedule = _require_schedule(schedule_id, instance_id, db)
     svc.delete_schedule(db, schedule)
@@ -159,7 +159,7 @@ def delete_schedule(
 @router.get(
     "/{instance_id}/config-recommendations",
     response_model=ConfigRecommendationsResponse,
-    summary="Recomendações de configuração PostgreSQL",
+    summary="PostgreSQL configuration recommendations",
 )
 def get_config_recommendations(
     instance_id: uuid.UUID,
@@ -167,13 +167,13 @@ def get_config_recommendations(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Retornar recomendações de parâmetros PostgreSQL baseadas nos recursos da instância.
+    Returns PostgreSQL parameter recommendations based on the instance's resources.
 
-    Calculado offline — não requer conexão com o banco.
-    Funciona mesmo quando a instância está `STOPPED`.
+    Computed offline — doesn't require a connection to the database.
+    Works even when the instance is `STOPPED`.
 
-    As fórmulas seguem as recomendações do [wiki.postgresql.org](https://wiki.postgresql.org/wiki/Tuning_Your_PostgreSQL_Server)
-    e do pgTune para cargas OLTP.
+    The formulas follow the recommendations from [wiki.postgresql.org](https://wiki.postgresql.org/wiki/Tuning_Your_PostgreSQL_Server)
+    and from pgTune for OLTP workloads.
     """
     instance = get_instance_or_404(instance_id, db, current_user)
     return svc.get_config_recommendations(instance)

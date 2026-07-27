@@ -10,11 +10,11 @@ _EVALUATOR_INTERVAL_SECONDS = 60
 
 def evaluate_once() -> None:
     """
-    Executa um ciclo completo de avaliação de alertas.
+    Runs one full alert evaluation cycle.
 
-    Função síncrona chamada via asyncio.to_thread para não bloquear o event loop.
-    Abre e fecha a sessão de banco explicitamente no finally — garante que a
-    conexão retorne ao pool mesmo em caso de exceção dentro de evaluate_all_rules.
+    Synchronous function called via asyncio.to_thread so it doesn't block the event loop.
+    Opens and closes the database session explicitly in the finally — ensures the
+    connection returns to the pool even if an exception occurs inside evaluate_all_rules.
     """
     from src.services.alert import evaluate_all_rules
 
@@ -22,28 +22,28 @@ def evaluate_once() -> None:
     try:
         evaluate_all_rules(db)
     except Exception as exc:
-        logger.error("Erro no ciclo de avaliação de alertas: %s", exc)
+        logger.error("Error in alert evaluation cycle: %s", exc)
     finally:
         db.close()
 
 
 async def alert_evaluation_loop(stop_event: asyncio.Event) -> None:
     """
-    Loop assíncrono do avaliador de alertas.
+    Async loop for the alert evaluator.
 
-    Segue o padrão dos outros pollers do projeto (metrics_poller, backup_scheduler,
-    maintenance_scheduler):
-    - asyncio.to_thread para operações bloqueantes (SQL + psycopg)
-    - asyncio.wait_for com timeout de segurança para não travar indefinidamente
-    - stop_event para shutdown gracioso (vem do lifespan do FastAPI)
-    - intervalo de 60s alinhado ao metrics_poller — alertas avaliam os mesmos
-      dados coletados no ciclo anterior de métricas
+    Follows the same pattern as the project's other pollers (metrics_poller,
+    backup_scheduler, maintenance_scheduler):
+    - asyncio.to_thread for blocking operations (SQL + psycopg)
+    - asyncio.wait_for with a safety timeout so it never hangs indefinitely
+    - stop_event for graceful shutdown (comes from FastAPI's lifespan)
+    - 60s interval aligned with metrics_poller — alerts evaluate the same
+      data collected in the previous metrics cycle
 
-    Timeout de 120s: o ciclo inclui conexões ao vivo a instâncias (long_query_seconds).
-    120s dá margem para connect_timeout=3s por instância em redes lentas, sem
-    que um ciclo travado bloqueie todos os subsequentes indefinidamente.
+    120s timeout: the cycle includes live connections to instances (long_query_seconds).
+    120s gives enough margin for a 3s connect_timeout per instance on slow networks,
+    without a stuck cycle blocking all subsequent ones indefinitely.
     """
-    logger.info("Alert evaluation loop iniciado")
+    logger.info("Alert evaluation loop started")
     while not stop_event.is_set():
         try:
             await asyncio.wait_for(
@@ -52,14 +52,14 @@ async def alert_evaluation_loop(stop_event: asyncio.Event) -> None:
             )
         except asyncio.TimeoutError:
             logger.warning(
-                "Ciclo de avaliação de alertas excedeu 120s de timeout"
+                "Alert evaluation cycle exceeded the 120s timeout"
             )
         except Exception as exc:
-            logger.error("Exceção inesperada no alert evaluation loop: %s", exc)
+            logger.error("Unexpected exception in alert evaluation loop: %s", exc)
 
         try:
             await asyncio.wait_for(stop_event.wait(), timeout=_EVALUATOR_INTERVAL_SECONDS)
         except asyncio.TimeoutError:
             continue
 
-    logger.info("Alert evaluation loop encerrado")
+    logger.info("Alert evaluation loop stopped")

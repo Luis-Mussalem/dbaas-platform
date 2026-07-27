@@ -1,13 +1,13 @@
 """
-Testes do serviço de manutenção (PHASE 6) sem rodar VACUUM/REINDEX num Postgres real.
+Tests for the maintenance service (PHASE 6) without running VACUUM/REINDEX on a real Postgres.
 
-_get_conn é substituído por um context manager que entrega um FakeConn — ele
-grava os SQLs executados e devolve linhas controladas. Assim validamos:
-- transições de status da task (RUNNING → COMPLETED/FAILED)
-- o SQL correto por tipo de tarefa (VACUUM ANALYZE, ANALYZE, REINDEX, kill_*)
-- o dispatcher run_task (incluindo a regra de VACUUM_FULL exigir target_table)
+_get_conn is replaced by a context manager that hands out a FakeConn — it
+records the executed SQL and returns controlled rows. This lets us validate:
+- the task's status transitions (RUNNING → COMPLETED/FAILED)
+- the correct SQL per task type (VACUUM ANALYZE, ANALYZE, REINDEX, kill_*)
+- the run_task dispatcher (including the rule that VACUUM_FULL requires target_table)
 
-get_config_recommendations é função pura (não conecta) — testada diretamente.
+get_config_recommendations is a pure function (doesn't connect) — tested directly.
 """
 from contextlib import contextmanager
 
@@ -21,7 +21,7 @@ from src.services import maintenance as maint
 
 
 # --------------------------------------------------------------------------- #
-# Dublês de conexão
+# Connection stubs
 # --------------------------------------------------------------------------- #
 
 
@@ -38,7 +38,7 @@ class FakeCursor:
         return False
 
     def execute(self, query, params=None):
-        # psql.SQL/Composed têm __str__ legível; guardamos a representação.
+        # psql.SQL/Composed have a readable __str__; we store the representation.
         self.executed.append(str(query))
 
     def fetchone(self):
@@ -89,7 +89,7 @@ def _patch_conn_raises(monkeypatch, exc: Exception):
 
 
 # --------------------------------------------------------------------------- #
-# Executores: caminho feliz
+# Runners: happy path
 # --------------------------------------------------------------------------- #
 
 
@@ -120,7 +120,7 @@ def test_run_analyze(db, instance, monkeypatch):
 
 
 def test_run_reindex_database_uses_current_database(db, instance, monkeypatch):
-    # REINDEX sem tabela → faz SELECT current_database() e usa o nome retornado.
+    # REINDEX with no table → does SELECT current_database() and uses the returned name.
     cur = FakeCursor(fetchone=("appdb",))
     _patch_conn(monkeypatch, cur)
     task = maint.run_reindex(db, instance)
@@ -137,7 +137,7 @@ def test_run_vacuum_full_requires_table(db, instance, monkeypatch):
 
 
 def test_kill_idle_counts_terminated(db, instance, monkeypatch):
-    # pg_terminate_backend retorna bool por linha; truthy conta como encerrado.
+    # pg_terminate_backend returns a bool per row; truthy counts as terminated.
     cur = FakeCursor(fetchall=[(True,), (False,), (True,)])
     _patch_conn(monkeypatch, cur)
     task = maint.kill_idle_connections(db, instance, idle_minutes=15)
@@ -154,7 +154,7 @@ def test_kill_long_counts_terminated(db, instance, monkeypatch):
 
 
 # --------------------------------------------------------------------------- #
-# Executores: falha marca a task como FAILED
+# Runners: failure marks the task as FAILED
 # --------------------------------------------------------------------------- #
 
 
@@ -197,7 +197,7 @@ def test_run_task_kill_idle_ignores_target_table(db, instance, monkeypatch):
 
 
 # --------------------------------------------------------------------------- #
-# Histórico + schedules
+# History + schedules
 # --------------------------------------------------------------------------- #
 
 
@@ -223,14 +223,14 @@ def test_schedule_create_list_advance_delete(db, instance):
     assert [s.id for s in listed] == [sched.id]
 
     maint.advance_schedule(db, sched)
-    assert sched.next_run_at is not None  # recalculado a partir de agora
+    assert sched.next_run_at is not None  # recomputed starting from now
 
     maint.delete_schedule(db, sched)
     assert maint.list_schedules(db, instance.id) == []
 
 
 # --------------------------------------------------------------------------- #
-# Recomendações de configuração (puro, sem conexão)
+# Configuration recommendations (pure, no connection)
 # --------------------------------------------------------------------------- #
 
 
@@ -242,13 +242,13 @@ def test_config_recommendations_with_memory_and_cpu(db):
     resp = maint.get_config_recommendations(inst)
     params = {r.parameter: r.recommended_value for r in resp.recommendations}
 
-    assert params["shared_buffers"] == "512MB"        # 25% de 2048
-    assert params["effective_cache_size"] == "1536MB"  # 75% de 2048
-    assert params["maintenance_work_mem"] == "102MB"   # 5% de 2048, cap 2048
+    assert params["shared_buffers"] == "512MB"        # 25% of 2048
+    assert params["effective_cache_size"] == "1536MB"  # 75% of 2048
+    assert params["maintenance_work_mem"] == "102MB"   # 5% of 2048, cap 2048
     assert params["work_mem"] == "10MB"                # 2048 // 200
     assert params["max_parallel_workers"] == "4"
     assert params["max_parallel_workers_per_gather"] == "2"
-    # Fixos sempre presentes
+    # Fixed ones always present
     assert params["wal_buffers"] == "16MB"
     assert params["checkpoint_completion_target"] == "0.9"
 
@@ -260,7 +260,7 @@ def test_config_recommendations_without_resources_has_only_fixed(db):
     db.refresh(inst)
     resp = maint.get_config_recommendations(inst)
     params = {r.parameter for r in resp.recommendations}
-    # Sem memory_mb/cpu, só as duas recomendações fixas aparecem.
+    # Without memory_mb/cpu, only the two fixed recommendations show up.
     assert params == {"wal_buffers", "checkpoint_completion_target"}
 
 
@@ -270,8 +270,8 @@ def test_config_recommendations_without_resources_has_only_fixed(db):
 
 
 def test_config_recommendations_endpoint_ok(client, auth_headers, make_company, db):
-    # Regressão: o router chamava get_instance_or_404 sem current_user,
-    # o que fazia todo request a este endpoint retornar 500.
+    # Regression: the router used to call get_instance_or_404 without current_user,
+    # which made every request to this endpoint return 500.
     company = make_company(name="Cfg Co")
     headers, _ = auth_headers(email="cfg@example.com", company_id=company.id)
     inst = DatabaseInstance(

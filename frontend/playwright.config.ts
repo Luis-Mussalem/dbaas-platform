@@ -1,9 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
 
-// Testes E2E de fumaça sobre o caminho crítico (login → painel → navegação →
-// command palette → detalhe da instância). Rodam contra o stack em execução
-// (docker compose up), então NÃO há webServer aqui — eles precisam do backend
-// real para autenticar. Ajuste E2E_BASE_URL para apontar para outra origem.
+// Smoke E2E tests over the critical path (login → dashboard → navigation →
+// command palette → instance detail). Run against the already-running stack
+// (docker compose up), so there is NO webServer here — they need the real
+// backend to authenticate. Set E2E_BASE_URL to point at a different origin.
 const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 
 export default defineConfig({
@@ -18,9 +18,9 @@ export default defineConfig({
     screenshot: "only-on-failure",
   },
   projects: [
-    // 1) Faz login uma vez e salva a sessão (cookies HttpOnly) em disco.
+    // 1) Logs in once and saves the session (HttpOnly cookies) to disk.
     { name: "setup", testMatch: /auth\.setup\.ts/ },
-    // 2) Testes autenticados reusam essa sessão.
+    // 2) Authenticated tests reuse that session.
     {
       name: "chromium",
       use: {

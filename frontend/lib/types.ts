@@ -33,7 +33,7 @@ export type AlertMetricType =
 export type AlertCondition = "gt" | "gte" | "lt" | "lte" | "eq";
 export type AlertSeverity = "info" | "warning" | "critical";
 
-// Ambiente lógico da instância (espelha o enum Environment do backend).
+// Logical environment of the instance (mirrors the backend's Environment enum).
 export type Environment = "production" | "staging" | "development";
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
@@ -53,8 +53,8 @@ export interface TokenResponse {
 
 export type UserRole = "admin" | "member";
 
-// Empresa (tenant). Multi-tenant: um usuário comum pertence a uma empresa;
-// o superuser não tem empresa única (company = null) e enxerga todas.
+// Company (tenant). Multi-tenant: a regular user belongs to one company;
+// the superuser has no single company (company = null) and sees all of them.
 export interface Company {
   id: string;
   name: string;
@@ -71,7 +71,7 @@ export interface User {
   company: Company | null;
   created_at: string;
   updated_at: string;
-  // Populado só pela listagem admin (GET /users) — MAX(timestamp) em audit_logs.
+  // Only populated by the admin listing (GET /users) — MAX(timestamp) in audit_logs.
   last_activity?: string | null;
 }
 
@@ -113,9 +113,9 @@ export interface Instance {
   deleted_at: string | null;
 }
 
-// Estado agregado por instância, para os cards da frota. Todo campo é opcional:
-// instância nova ou parada ainda não tem coleta/alerta/backup, e o card mostra
-// "—" em vez de zero (que seria uma afirmação falsa).
+// Aggregated per-instance state, for the fleet cards. Every field is optional:
+// a new or stopped instance doesn't yet have collection/alerts/backup, and the card shows
+// "—" instead of zero (which would be a false statement).
 export interface InstanceSummary {
   instance_id: string;
   connections_active: number | null;
@@ -268,9 +268,9 @@ export interface LocksResponse {
 
 // ─── SQL Console ───────────────────────────────────────────────────────────────
 
-// Resultado de um SELECT read-only (POST /instances/{id}/query).
-// As células chegam como string | null: o backend converte todo valor para texto
-// (None preservado) para evitar arapucas de serialização — um console exibe texto.
+// Result of a read-only SELECT (POST /instances/{id}/query).
+// Cells arrive as string | null: the backend converts every value to text
+// (None preserved) to avoid serialization pitfalls — a console displays text anyway.
 export interface QueryResult {
   instance_id: string;
   columns: string[];
@@ -279,8 +279,8 @@ export interface QueryResult {
   truncated: boolean;
 }
 
-// Plano de execução (POST /instances/{id}/explain). `plan` é o JSON cru do
-// EXPLAIN (FORMAT JSON); exibimos formatado, sem tipá-lo nó a nó.
+// Execution plan (POST /instances/{id}/explain). `plan` is the raw JSON from
+// EXPLAIN (FORMAT JSON); we display it formatted, without typing it node by node.
 export interface ExplainResponse {
   instance_id: string;
   plan: unknown[];
@@ -356,8 +356,8 @@ export interface DashboardSummary {
   backups_last_24h: number;
   failed_backups_last_24h: number;
   pending_maintenance_tasks: number;
-  // KPIs de performance da frota (derivados de dados reais; p95/uptime podem ser
-  // null enquanto ainda não há amostras — a UI exibe "—").
+  // Fleet performance KPIs (derived from real data; p95/uptime can be
+  // null while there aren't samples yet — the UI shows "—").
   queries_per_second: number;
   p95_latency_ms: number | null;
   fleet_uptime_pct: number | null;
@@ -374,7 +374,7 @@ export type ReplicationState =
   | "promoted"
   | "failed";
 
-// Resumo do standby embutido no Replica (nome/status/porta na frota).
+// Summary of the standby embedded in the Replica (name/status/port in the fleet).
 export interface ReplicaInstanceInfo {
   id: string;
   name: string;

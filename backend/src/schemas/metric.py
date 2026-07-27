@@ -17,7 +17,7 @@ class MetricHistoryPoint(BaseModel):
 
 
 class MetricHistoryResponse(BaseModel):
-    """Série temporal de uma única métrica, para sparklines e gráficos."""
+    """Time series of a single metric, for sparklines and charts."""
 
     instance_id: uuid.UUID
     metric_name: str
@@ -52,7 +52,7 @@ class SchemaTable(BaseModel):
 
 
 class SchemaGroup(BaseModel):
-    name: str  # nome do schema (ex.: public)
+    name: str  # schema name (e.g. public)
     tables: list[SchemaTable]
 
 

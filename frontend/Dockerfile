@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # =============================================================================
-# Stage 1 — deps: instala as dependências com o lockfile (cache estável).
+# Stage 1 — deps: installs dependencies using the lockfile (stable cache).
 # =============================================================================
 FROM node:20-slim AS deps
 WORKDIR /app
@@ -10,10 +10,10 @@ RUN npm ci
 
 
 # =============================================================================
-# Stage 2 — builder: compila o Next em modo standalone.
-# NEXT_PUBLIC_* é baked no bundle do cliente em build time — por isso são ARGs.
-# NEXT_PUBLIC_API_URL: o navegador (no host) fala com o backend em localhost:8001.
-# NEXT_PUBLIC_DEMO_MODE: liga a faixa "Sobre esta demo" (default: portfólio = on).
+# Stage 2 — builder: compiles Next in standalone mode.
+# NEXT_PUBLIC_* is baked into the client bundle at build time — hence the ARGs.
+# NEXT_PUBLIC_API_URL: the browser (on the host) talks to the backend at localhost:8001.
+# NEXT_PUBLIC_DEMO_MODE: turns on the "About this demo" banner (default: portfolio = on).
 # =============================================================================
 FROM node:20-slim AS builder
 WORKDIR /app
@@ -28,7 +28,7 @@ RUN npm run build
 
 
 # =============================================================================
-# Stage 3 — runner: imagem final mínima que roda o server standalone.
+# Stage 3 — runner: minimal final image that runs the standalone server.
 # =============================================================================
 FROM node:20-slim AS runner
 WORKDIR /app
@@ -37,11 +37,11 @@ ENV NODE_ENV=production \
     PORT=3000 \
     HOSTNAME=0.0.0.0
 
-# Usuário não-root (defesa em profundidade).
+# Non-root user (defense in depth).
 RUN useradd --create-home --uid 10001 nextjs
 
-# O output standalone traz server.js + só as deps traçadas; estáticos e /public
-# são copiados à parte (o standalone não os inclui).
+# The standalone output brings server.js + only the traced deps; static assets and /public
+# are copied separately (the standalone output doesn't include them).
 COPY --from=builder --chown=nextjs:nextjs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nextjs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nextjs /app/public ./public

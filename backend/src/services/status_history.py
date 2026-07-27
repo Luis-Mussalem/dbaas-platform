@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from src.models.database_instance import DatabaseInstance, InstanceStatus
 from src.models.instance_status_history import InstanceStatusHistory
 
-# Janela de referência para o cálculo de uptime.
+# Reference window for the uptime calculation.
 _UPTIME_WINDOW = timedelta(days=30)
 
 
@@ -14,15 +14,15 @@ def record_status_change(
     db: Session, instance: DatabaseInstance, new_status: InstanceStatus
 ) -> None:
     """
-    Aplicar a mudança de status na instância E registrar a transição no histórico.
+    Applies the status change to the instance AND records the transition in the history.
 
-    NÃO faz commit de propósito: todo call site já commita logo em seguida, então
-    a linha de histórico entra na mesma transação da mudança de status — se der
-    rollback, as duas somem juntas (atomicidade).
+    Does NOT commit on purpose: every call site already commits right after, so
+    the history row goes into the same transaction as the status change — if it
+    rolls back, both disappear together (atomicity).
 
-    Só deve ser chamada quando o status realmente muda; os call sites já garantem
-    isso (transições válidas ou guardas `if status != X`), então não filtramos
-    aqui — evita esconder um no-op que sinalizaria um bug no chamador.
+    Should only be called when the status actually changes; the call sites already
+    ensure this (valid transitions or `if status != X` guards), so we don't filter
+    here — that would hide a no-op that would signal a bug in the caller.
     """
     instance.status = new_status
     db.add(InstanceStatusHistory(instance_id=instance.id, status=new_status))
@@ -34,14 +34,14 @@ def _uptime_from_rows(
     now: datetime,
 ) -> float | None:
     """
-    Calcular a % de tempo em RUNNING na janela [max(now - 30d, created_at), now].
+    Computes the % of time spent RUNNING in the window [max(now - 30d, created_at), now].
 
-    `rows`: histórico de UMA instância ordenado por changed_at ASC. Vazio → None
-    (instância anterior ao rastreamento — melhor exibir "—" que fabricar 0/100%).
+    `rows`: history of ONE instance ordered by changed_at ASC. Empty → None
+    (instance predates tracking — better to show "—" than fabricate 0/100%).
 
-    O status vigente no início da janela é o do último registro com
-    changed_at <= window_start (carry-in), permitindo janelas que começam no meio
-    de um período RUNNING para instâncias com mais de 30 dias.
+    The status in effect at the start of the window is that of the last record with
+    changed_at <= window_start (carry-in), allowing windows that begin in the middle
+    of a RUNNING period for instances older than 30 days.
     """
     if not rows:
         return None
@@ -51,7 +51,7 @@ def _uptime_from_rows(
     if total <= 0:
         return None
 
-    # Carry-in: status ativo em window_start.
+    # Carry-in: status active at window_start.
     current = rows[0].status
     for row in rows:
         if row.changed_at <= window_start:
@@ -71,7 +71,7 @@ def _uptime_from_rows(
         cursor = row.changed_at
         current = row.status
 
-    # Segmento final: do último boundary até agora.
+    # Final segment: from the last boundary to now.
     if current == InstanceStatus.RUNNING:
         running_seconds += (now - cursor).total_seconds()
 
@@ -81,7 +81,7 @@ def _uptime_from_rows(
 def get_instance_uptime_pct(
     db: Session, instance: DatabaseInstance
 ) -> float | None:
-    """Uptime (% em RUNNING nos últimos 30 dias) de uma única instância."""
+    """Uptime (% RUNNING over the last 30 days) of a single instance."""
     rows = (
         db.query(InstanceStatusHistory)
         .filter(InstanceStatusHistory.instance_id == instance.id)
@@ -95,12 +95,12 @@ def get_uptime_pct_by_instance(
     db: Session, instances: list[DatabaseInstance]
 ) -> dict[uuid.UUID, float]:
     """
-    Uptime de 30 dias de várias instâncias de uma vez.
+    30-day uptime for several instances at once.
 
-    Uma única query traz o histórico de todas; o agrupamento e o cálculo por
-    instância acontecem em Python (escala de portfólio — poucas instâncias; sem
-    necessidade de view/cache). Instância sem histórico fica FORA do dict, para
-    o chamador exibir "—" em vez de fabricar 0/100%.
+    A single query brings back the history of all of them; grouping and the
+    per-instance calculation happen in Python (portfolio scale — few instances; no
+    need for a view/cache). An instance with no history is left OUT of the dict, so
+    the caller shows "—" instead of fabricating 0/100%.
     """
     if not instances:
         return {}
@@ -131,8 +131,8 @@ def get_fleet_uptime_pct(
     db: Session, company_id: uuid.UUID | None = None
 ) -> float | None:
     """
-    Uptime médio da frota: média simples do uptime por instância (não deletada),
-    escopada por empresa. None se nenhuma instância tem histórico ainda.
+    Fleet-wide average uptime: simple average of per-instance uptime (not deleted),
+    scoped by company. None if no instance has history yet.
     """
     inst_q = db.query(DatabaseInstance).filter(DatabaseInstance.deleted_at.is_(None))
     if company_id is not None:

@@ -7,15 +7,15 @@ import { useAuth } from "@/context/AuthContext";
 import { listCompanies } from "@/lib/api";
 import type { Company } from "@/lib/types";
 
-// Chave que lembra qual empresa o superuser deixou ativa. O api.ts envia este id
-// no header X-Company-Id e o backend filtra os dados por ela (Stage B). Ausente
-// (chave removida) = "Todas as empresas" → o superuser vê tudo.
+// Key that remembers which company the superuser left active. api.ts sends this id
+// in the X-Company-Id header and the backend filters the data by it (Stage B). Absent
+// (key removed) = "All companies" → the superuser sees everything.
 const ACTIVE_KEY = "active_company_id";
 
-// O Workspace muda conforme o PAPEL do usuário (espelha o get_current_superuser
-// do backend, que é quem libera a lista de empresas):
-//   • superuser  → switcher: dropdown com todas as empresas, troca a ativa.
-//   • comum      → rótulo fixo com a empresa dele (user.company), sem troca.
+// The Workspace changes according to the user's ROLE (mirrors the backend's
+// get_current_superuser, which is what unlocks the company list):
+//   • superuser  → switcher: dropdown with all companies, switches the active one.
+//   • regular    → fixed label with their own company (user.company), no switching.
 export function WorkspaceSwitcher() {
   const { user } = useAuth();
   const t = useTranslations("WorkspaceSwitcher");
@@ -29,7 +29,7 @@ export function WorkspaceSwitcher() {
   );
 }
 
-// ── Usuário comum: apenas exibe a empresa dele, sem interação ──
+// ── Regular user: just shows their own company, no interaction ──
 function FixedWorkspace({ name }: { name: string }) {
   const t = useTranslations("WorkspaceSwitcher");
   return (
@@ -43,22 +43,22 @@ function FixedWorkspace({ name }: { name: string }) {
   );
 }
 
-// ── Superuser: dropdown de troca de empresa ──
+// ── Superuser: company-switching dropdown ──
 function SuperuserSwitcher() {
   const t = useTranslations("WorkspaceSwitcher");
   const [companies, setCompanies] = useState<Company[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
 
-  // Busca as empresas (rota restrita a superuser). Padrão das outras hooks:
-  // fetch inline no effect, com guard `active` para descartar se desmontar.
+  // Fetches the companies (a route restricted to superuser). Same pattern as the other hooks:
+  // an inline fetch in the effect, with an `active` guard to discard if unmounted.
   useEffect(() => {
     let active = true;
     listCompanies()
       .then((data) => {
         if (!active) return;
         setCompanies(data);
-        // Restaura a seleção salva; se inválida/ausente, default = "Todas" (null).
+        // Restores the saved selection; if invalid/absent, default = "All" (null).
         const saved = localStorage.getItem(ACTIVE_KEY);
         const valid = data.find((c) => c.id === saved);
         setActiveId(valid?.id ?? null);
@@ -72,11 +72,11 @@ function SuperuserSwitcher() {
   }, []);
 
   function select(id: string | null) {
-    // null = "Todas as empresas" → remove a chave (sem header → backend mostra tudo).
+    // null = "All companies" → removes the key (no header → the backend shows everything).
     if (id === null) localStorage.removeItem(ACTIVE_KEY);
     else localStorage.setItem(ACTIVE_KEY, id);
     setOpen(false);
-    // Recarrega para que todas as telas/hooks re-busquem com o novo X-Company-Id.
+    // Reloads so every screen/hook re-fetches with the new X-Company-Id.
     window.location.reload();
   }
 
@@ -100,10 +100,10 @@ function SuperuserSwitcher() {
 
       {open && (
         <>
-          {/* Camada invisível: um clique fora fecha o dropdown. */}
+          {/* Invisible layer: a click outside closes the dropdown. */}
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
           <ul className="absolute left-0 right-0 z-20 mt-1 max-h-64 overflow-auto rounded-md border border-border bg-surface py-1 shadow-lg">
-            {/* Visão global: sem filtro de empresa (vê todas). */}
+            {/* Global view: no company filter (sees all). */}
             <li>
               <button
                 onClick={() => select(null)}

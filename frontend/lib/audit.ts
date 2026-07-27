@@ -1,7 +1,7 @@
-// Ações auditadas — espelha a tabela _AUDIT_ACTIONS do middleware
-// (backend/src/core/audit_middleware.py). O TEXTO vive nas mensagens
-// (Actions.phrase.* para a frase verbal do feed, Actions.label.* para o rótulo
-// da tabela de auditoria); aqui fica só o que é dado de apresentação.
+// Audited actions — mirrors the middleware's _AUDIT_ACTIONS table
+// (backend/src/core/audit_middleware.py). The TEXT lives in the messages
+// (Actions.phrase.* for the feed's verbal phrase, Actions.label.* for the
+// audit table's label); here it's only what's presentation data.
 
 export type Tone = "ok" | "info" | "warn" | "danger" | "muted";
 
@@ -21,9 +21,9 @@ export const AUDIT_ACTIONS = [
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
-// Fonte única do tom. Antes o ActivityFeed derivava a cor por substring
-// (`action.includes("created")`) e a tela de Auditoria tinha um mapa explícito:
-// as duas discordavam — `login` saía verde no feed e cinza na auditoria.
+// Single source of the tone. The ActivityFeed used to derive the color by substring
+// (`action.includes("created")`) and the Audit screen had an explicit map:
+// the two disagreed — `login` came out green in the feed and gray in the audit screen.
 const ACTION_TONES: Record<AuditAction, Tone> = {
   register: "info",
   login: "muted",
@@ -42,7 +42,7 @@ export function isAuditAction(action: string): action is AuditAction {
   return (AUDIT_ACTIONS as readonly string[]).includes(action);
 }
 
-// Ação desconhecida (backend novo, frontend antigo) → neutro, nunca quebra.
+// Unknown action (new backend, old frontend) → neutral, never breaks.
 export function toneFor(action: string): Tone {
   return isAuditAction(action) ? ACTION_TONES[action] : "muted";
 }
@@ -62,12 +62,12 @@ export function isResourceType(value: string): value is ResourceType {
   return (RESOURCE_TYPES as readonly string[]).includes(value);
 }
 
-// Rótulo curto do ator a partir do email, no formato `nome@empresa`:
-//   ana@jupiter.example  -> ana@jupiter   (local + 1ª parte do domínio)
-//   admin@local.dev      -> admin@dev     (contas internas: domínio vira "dev",
-//   dev-test@local.dev   -> test@dev       e o prefixo "dev-" do nome some)
-// Retorna null quando não há email (ação de sistema ou usuário já deletado) —
-// o chamador cai no rótulo genérico.
+// Short actor label built from the email, in `name@company` format:
+//   ana@jupiter.example  -> ana@jupiter   (local part + 1st part of the domain)
+//   admin@local.dev      -> admin@dev     (internal accounts: domain becomes "dev",
+//   dev-test@local.dev   -> test@dev       and the "dev-" prefix on the name is dropped)
+// Returns null when there's no email (a system action, or an already-deleted user) —
+// the caller falls back to the generic label.
 export function actorLabel(email: string | null | undefined): string | null {
   if (!email) return null;
   const [local, domain] = email.split("@");

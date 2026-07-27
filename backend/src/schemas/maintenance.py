@@ -13,8 +13,8 @@ class MaintenanceTaskCreate(BaseModel):
         default=None,
         max_length=255,
         description=(
-            "Tabela alvo. None = banco inteiro. "
-            "Obrigatório para VACUUM_FULL — nunca rodar VACUUM FULL no banco inteiro."
+            "Target table. None = whole database. "
+            "Required for VACUUM_FULL — never run VACUUM FULL on the whole database."
         ),
     )
 

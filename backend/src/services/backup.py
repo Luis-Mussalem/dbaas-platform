@@ -25,8 +25,8 @@ logger = logging.getLogger(__name__)
 
 def _backup_root() -> Path:
     """
-    Retorna o diretório raiz de backups como Path absoluto.
-    Cria o diretório se não existir.
+    Returns the backup root directory as an absolute Path.
+    Creates the directory if it doesn't exist.
     """
     root = Path(settings.BACKUP_DIR).resolve()
     root.mkdir(parents=True, exist_ok=True)
@@ -34,7 +34,7 @@ def _backup_root() -> Path:
 
 
 def _instance_dir(instance_id: uuid.UUID) -> Path:
-    """Diretório dedicado a uma instância específica dentro de BACKUP_DIR."""
+    """Directory dedicated to a specific instance inside BACKUP_DIR."""
     d = _backup_root() / str(instance_id)
     d.mkdir(parents=True, exist_ok=True)
     return d
@@ -59,11 +59,11 @@ def _physical_dir(instance_id: uuid.UUID) -> Path:
 
 def _parse_connection(instance: DatabaseInstance) -> dict:
     """
-    Desencripta e parseia a connection_uri da instância.
+    Decrypts and parses the instance's connection_uri.
 
-    Retorna um dict com host, port, user, password, dbname.
-    O decrypt_value() usa Fernet — a URI decriptada existe apenas em memória
-    durante a execução desta função e nunca é logada.
+    Returns a dict with host, port, user, password, dbname.
+    decrypt_value() uses Fernet — the decrypted URI exists only in memory
+    during this function's execution and is never logged.
     """
     uri = decrypt_value(instance.connection_uri)
     parsed = urlparse(uri)
@@ -87,9 +87,9 @@ def _parse_connection(instance: DatabaseInstance) -> dict:
 
 def _make_env(password: str) -> dict:
     """
-    Cria um environment dict para subprocessos PostgreSQL.
-    PGPASSWORD é a forma segura de passar a senha — não aparece em 'ps aux'
-    nem em logs de processo, ao contrário de incluir na connection string.
+    Creates an environment dict for PostgreSQL subprocesses.
+    PGPASSWORD is the safe way to pass the password — it doesn't show up in 'ps aux'
+    or in process logs, unlike including it in the connection string.
     """
     env = os.environ.copy()
     env["PGPASSWORD"] = password
@@ -97,7 +97,7 @@ def _make_env(password: str) -> dict:
 
 
 def _get_dir_size(path: Path) -> int:
-    """Calcula o tamanho total de um diretório em bytes."""
+    """Computes the total size of a directory in bytes."""
     total = 0
     for p in path.rglob("*"):
         if p.is_file():
@@ -117,31 +117,31 @@ def create_logical_backup(
     retention_days: int | None = None,
 ) -> Backup:
     """
-    Cria um backup lógico usando pg_dump no formato custom (.dump).
+    Creates a logical backup using pg_dump in custom format (.dump).
 
-    Por que formato custom?
-    O formato custom (flag -Fc) é binário, comprimido, e permite restore seletivo
-    (tabelas específicas, sem dados, etc.) via pg_restore. É o melhor formato
-    para backups de aplicação.
+    Why the custom format?
+    The custom format (-Fc flag) is binary, compressed, and allows selective restore
+    (specific tables, no data, etc.) via pg_restore. It's the best format
+    for application backups.
 
-    Por que subprocess com PGPASSWORD em vez de connection URI direto?
-    Se passarmos a URI diretamente no comando (pg_dump postgresql://...), a senha
-    aparece em 'ps aux' e em logs do sistema. PGPASSWORD como env var é invisível.
+    Why subprocess with PGPASSWORD instead of a direct connection URI?
+    If we pass the URI directly in the command (pg_dump postgresql://...), the password
+    shows up in 'ps aux' and in system logs. PGPASSWORD as an env var is invisible.
 
-    Requer: postgresql-client-16 instalado no host WSL2.
-    Instalar com: sudo apt install -y postgresql-client-16
+    Requires: postgresql-client-16 installed on the WSL2 host.
+    Install with: sudo apt install -y postgresql-client-16
     """
     conn = _parse_connection(instance)
     output_dir = _logical_dir(instance.id)
     backup_id = uuid.uuid4()
     output_file = output_dir / f"{backup_id}.dump"
 
-    # Calcular expires_at se retention_days foi fornecido
+    # Compute expires_at if retention_days was provided
     expires_at = None
     if retention_days is not None:
         expires_at = datetime.now(timezone.utc) + timedelta(days=retention_days)
 
-    # Criar o registro Backup em status PENDING antes de executar
+    # Create the Backup record with PENDING status before executing
     backup = Backup(
         id=backup_id,
         instance_id=instance.id,
@@ -154,7 +154,7 @@ def create_logical_backup(
     db.commit()
     db.refresh(backup)
 
-    # Atualizar para RUNNING
+    # Update to RUNNING
     backup.status = BackupStatus.RUNNING
     backup.started_at = datetime.now(timezone.utc)
     db.commit()
@@ -177,13 +177,13 @@ def create_logical_backup(
             env=env,
             capture_output=True,
             text=True,
-            timeout=3600,  # 1 hora de timeout
+            timeout=3600,  # 1 hour timeout
         )
 
         if result.returncode != 0:
             raise RuntimeError(result.stderr.strip() or "pg_dump exited non-zero")
 
-        # Registrar tamanho do arquivo e marcar como COMPLETED
+        # Record the file size and mark as COMPLETED
         size_bytes = output_file.stat().st_size if output_file.exists() else None
         backup.status = BackupStatus.COMPLETED
         backup.file_path = str(output_file)
@@ -227,18 +227,18 @@ def restore_logical_backup(
     instance: DatabaseInstance,
 ) -> None:
     """
-    Restaura um backup lógico usando pg_restore.
+    Restores a logical backup using pg_restore.
 
-    Por que --clean --if-exists?
-    --clean faz DROP dos objetos antes de recriar, garantindo um restore limpo
-    mesmo que existam tabelas com dados. --if-exists evita erros se um objeto
-    não existia antes.
+    Why --clean --if-exists?
+    --clean drops objects before recreating them, ensuring a clean restore
+    even if tables with data already exist. --if-exists avoids errors if an object
+    didn't exist before.
 
-    Por que --no-owner --no-privileges?
-    O backup pode ter sido feito de um role diferente. Estas flags ignoram
-    ownership e privileges, deixando o objeto ser criado pelo role atual.
+    Why --no-owner --no-privileges?
+    The backup may have been made from a different role. These flags ignore
+    ownership and privileges, letting the object be created by the current role.
 
-    ATENÇÃO: restore apaga e recria todos os dados do banco. Operação destrutiva.
+    WARNING: restore deletes and recreates all of the database's data. Destructive operation.
     """
     if backup.status != BackupStatus.COMPLETED:
         raise ValueError(f"Cannot restore backup with status '{backup.status}'")
@@ -283,7 +283,7 @@ def restore_logical_backup(
     except OSError as exc:
         raise RuntimeError(f"Failed to run pg_restore: {exc}") from exc
 
-    # pg_restore retorna 1 para warnings não-fatais — aceito
+    # pg_restore returns 1 for non-fatal warnings — accepted
     if result.returncode not in (0, 1):
         raise RuntimeError(
             f"pg_restore failed (exit {result.returncode}): {result.stderr.strip()}"
@@ -311,28 +311,28 @@ def create_physical_backup(
     retention_days: int | None = None,
 ) -> Backup:
     """
-    Cria um backup físico usando pg_basebackup.
+    Creates a physical backup using pg_basebackup.
 
-    Por que pg_basebackup?
-    Captura uma cópia exata dos arquivos de dados do PostgreSQL (o data directory
-    completo). É a base necessária para PITR: recovery_target_time + WAL replay.
-    Backup lógico (pg_dump) não permite PITR — apenas backups físicos permitem
-    restaurar para um ponto arbitrário no tempo.
+    Why pg_basebackup?
+    Captures an exact copy of PostgreSQL's data files (the full data directory).
+    It's the base required for PITR: recovery_target_time + WAL replay.
+    A logical backup (pg_dump) doesn't allow PITR — only physical backups allow
+    restoring to an arbitrary point in time.
 
-    Por que --wal-method=fetch?
-    Inclui todos os WAL gerados durante o backup no próprio backup. Mais simples
-    que --wal-method=stream (que requer uma conexão de replicação adicional).
-    Para PITR, o WAL archive separado complementa a base.
+    Why --wal-method=fetch?
+    Includes all WAL generated during the backup in the backup itself. Simpler
+    than --wal-method=stream (which requires an additional replication connection).
+    For PITR, the separate WAL archive complements the base.
 
-    Por que --format=tar --gzip?
-    Comprime o backup em tar.gz — tipicamente 50-80% de redução de tamanho
-    vs. o diretório raw. A desvantagem é que é necessário descompactar para
-    restaurar — mas para um backup físico, isso é sempre necessário de qualquer forma.
+    Why --format=tar --gzip?
+    Compresses the backup into tar.gz — typically a 50-80% size reduction
+    vs. the raw directory. The downside is that you need to decompress to
+    restore — but for a physical backup, that's always necessary anyway.
 
-    Requer:
-    - db_user com privilégio REPLICATION (concedido pelo DockerProvisioner atualizado)
-    - wal_level=replica no PostgreSQL da instância (configurado no container)
-    - postgresql-client-16 no host WSL2
+    Requires:
+    - db_user with REPLICATION privilege (granted by the updated DockerProvisioner)
+    - wal_level=replica on the instance's PostgreSQL (configured in the container)
+    - postgresql-client-16 on the WSL2 host
     """
     conn = _parse_connection(instance)
     output_dir = _physical_dir(instance.id) / str(uuid.uuid4())
@@ -377,7 +377,7 @@ def create_physical_backup(
             env=env,
             capture_output=True,
             text=True,
-            timeout=7200,  # 2 horas de timeout para bancos grandes
+            timeout=7200,  # 2 hour timeout for large databases
         )
 
         if result.returncode != 0:
@@ -400,7 +400,7 @@ def create_physical_backup(
         return backup
 
     except Exception as exc:
-        # Limpar o diretório incompleto
+        # Clean up the incomplete directory
         shutil.rmtree(output_dir, ignore_errors=True)
 
         backup.status = BackupStatus.FAILED
@@ -425,14 +425,14 @@ def create_physical_backup(
 
 def apply_retention(db: Session, instance_id: uuid.UUID) -> int:
     """
-    Remove backups expirados: apaga o arquivo/diretório físico e marca o
-    registro como DELETED (mantemos o audit trail no banco).
+    Removes expired backups: deletes the physical file/directory and marks the
+    record as DELETED (we keep the audit trail in the database).
 
-    Retorna o número de backups removidos.
+    Returns the number of backups removed.
 
-    Por que não DELETE da tabela?
-    Manter o registro como DELETED preserva histórico: sabemos que houve backups,
-    quando foram criados e quando expiraram. Útil para auditoria.
+    Why not DELETE from the table?
+    Keeping the record as DELETED preserves history: we know backups existed,
+    when they were created, and when they expired. Useful for auditing.
     """
     now = datetime.now(timezone.utc)
     expired_backups = (
@@ -473,8 +473,8 @@ def apply_retention(db: Session, instance_id: uuid.UUID) -> int:
 
 def list_backups(db: Session, instance_id: uuid.UUID) -> list[Backup]:
     """
-    Lista todos os backups de uma instância, excluindo os DELETED,
-    ordenados por created_at decrescente (mais recente primeiro).
+    Lists all backups of an instance, excluding DELETED ones,
+    ordered by created_at descending (most recent first).
     """
     return (
         db.query(Backup)
@@ -493,8 +493,8 @@ def get_backup_by_id(db: Session, backup_id: uuid.UUID) -> Backup | None:
 
 def delete_backup_record(db: Session, backup: Backup) -> None:
     """
-    Remove manualmente um backup: apaga o arquivo físico e marca como DELETED.
-    Equivalente à retenção automática mas disparado pelo operador.
+    Manually removes a backup: deletes the physical file and marks it as DELETED.
+    Equivalent to automatic retention but triggered by the operator.
     """
     if backup.file_path:
         file_path = Path(backup.file_path)
@@ -515,11 +515,11 @@ def delete_backup_record(db: Session, backup: Backup) -> None:
 
 def _compute_next_run(cron_expression: str) -> datetime:
     """
-    Calcula o próximo tempo de execução de uma cron expression.
-    Retorna um datetime timezone-aware (UTC).
+    Computes the next run time of a cron expression.
+    Returns a timezone-aware (UTC) datetime.
 
-    croniter.get_next() retorna um datetime sem timezone por padrão.
-    Adicionamos UTC explicitamente para consistência com o banco.
+    croniter.get_next() returns a naive datetime by default.
+    We add UTC explicitly for consistency with the database.
     """
     from croniter import croniter  # noqa: PLC0415
 
@@ -536,8 +536,8 @@ def create_schedule(
     data: BackupScheduleCreate,
 ) -> BackupSchedule:
     """
-    Cria um novo BackupSchedule para uma instância.
-    Calcula next_run_at imediatamente para que o poller possa agendá-lo.
+    Creates a new BackupSchedule for an instance.
+    Computes next_run_at immediately so the poller can schedule it.
     """
     schedule = BackupSchedule(
         instance_id=instance_id,
@@ -560,7 +560,7 @@ def update_schedule(
 ) -> BackupSchedule:
     if data.cron_expression is not None:
         schedule.cron_expression = data.cron_expression
-        # Recalcular next_run_at se cron mudou
+        # Recompute next_run_at if the cron changed
         if schedule.is_active:
             schedule.next_run_at = _compute_next_run(schedule.cron_expression)
 
@@ -599,8 +599,8 @@ def delete_schedule(db: Session, schedule: BackupSchedule) -> None:
 
 def advance_schedule(db: Session, schedule: BackupSchedule) -> None:
     """
-    Chamado após executar um backup agendado.
-    Atualiza last_run_at e recalcula next_run_at para a próxima execução.
+    Called after running a scheduled backup.
+    Updates last_run_at and recomputes next_run_at for the next run.
     """
     schedule.last_run_at = datetime.now(timezone.utc)
     schedule.next_run_at = _compute_next_run(schedule.cron_expression)

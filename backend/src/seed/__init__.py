@@ -1,1 +1,1 @@
-"""Seed da frota de demonstração multi-tenant (empresas, usuários e instâncias)."""
+"""Seed for the multi-tenant demo fleet (companies, users, and instances)."""

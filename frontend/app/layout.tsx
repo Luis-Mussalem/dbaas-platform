@@ -18,7 +18,7 @@ const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
 });
 
-// Dinâmico (não `const metadata`) para que o <title> siga o locale do cookie.
+// Dynamic (not `const metadata`) so the <title> follows the cookie's locale.
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("Metadata");
   return { title: t("title"), description: t("description") };
@@ -29,22 +29,22 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Locale do cookie (i18n/request.ts). Sem cookie → "en".
+  // Locale from the cookie (i18n/request.ts). No cookie → "en".
   const locale = await getLocale();
 
   return (
     <html
       lang={locale}
-      // "dark" é o tema inicial renderizado no servidor; o ThemeProvider
-      // reconcilia com o localStorage no cliente. suppressHydrationWarning
-      // silencia o aviso do React quando essa classe difere entre os dois.
+      // "dark" is the initial theme rendered on the server; ThemeProvider
+      // reconciles it with localStorage on the client. suppressHydrationWarning
+      // silences React's warning when this class differs between the two.
       suppressHydrationWarning
       className={`${inter.variable} ${jetbrainsMono.variable} dark h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
-        {/* Mais externo: os demais providers têm texto próprio e precisam de
-            useTranslations. Sem props — herda locale/messages/formats/now do
-            getRequestConfig por ser renderizado de um Server Component. */}
+        {/* Outermost: the other providers have their own text and need
+            useTranslations. No props — inherits locale/messages/formats/now from
+            getRequestConfig since it's rendered from a Server Component. */}
         <NextIntlClientProvider>
           <ThemeProvider>
             <AuthProvider>

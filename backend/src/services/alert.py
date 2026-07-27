@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# CRUD de regras
+# Rule CRUD
 # ──────────────────────────────────────────────────────────────────────────────
 
 def create_rule(
@@ -67,7 +67,7 @@ def delete_rule(db: Session, rule: AlertRule) -> None:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# CRUD de eventos
+# Event CRUD
 # ──────────────────────────────────────────────────────────────────────────────
 
 def list_events(
@@ -79,9 +79,9 @@ def list_events(
     q = db.query(AlertEvent)
     if instance_id:
         q = q.filter(AlertEvent.instance_id == instance_id)
-    # Scoping da lista global: junta à instância dona e filtra pela empresa.
-    # None = superuser (sem filtro). Endpoints por-instância já escoparam via
-    # get_instance_or_404, então só a lista global passa company_id.
+    # Scoping for the global list: joins the owning instance and filters by company.
+    # None = superuser (no filter). Per-instance endpoints already scoped via
+    # get_instance_or_404, so only the global list passes company_id.
     if company_id is not None:
         q = q.join(
             DatabaseInstance, AlertEvent.instance_id == DatabaseInstance.id
@@ -103,7 +103,7 @@ def resolve_event(db: Session, event: AlertEvent) -> AlertEvent:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Regras padrão
+# Default rules
 # ──────────────────────────────────────────────────────────────────────────────
 
 _DEFAULT_RULES: list[dict] = [
@@ -147,9 +147,9 @@ _DEFAULT_RULES: list[dict] = [
 
 def seed_default_rules(db: Session, instance_id: uuid.UUID) -> list[AlertRule]:
     """
-    Cria as 5 regras padrão para a instância, pulando tipos já existentes.
+    Creates the 5 default rules for the instance, skipping types that already exist.
 
-    Idempotente: chamar duas vezes não duplica regras.
+    Idempotent: calling it twice does not duplicate rules.
     """
     existing_types = {
         row[0]
@@ -175,13 +175,13 @@ def seed_default_rules(db: Session, instance_id: uuid.UUID) -> list[AlertRule]:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Helpers de avaliação
+# Evaluation helpers
 # ──────────────────────────────────────────────────────────────────────────────
 
 def _get_latest_metric(
     db: Session, instance_id: uuid.UUID, metric_name: str
 ) -> Optional[float]:
-    """Retorna o valor mais recente de uma métrica armazenada."""
+    """Returns the most recent value of a stored metric."""
     row = (
         db.query(Metric.value)
         .filter(Metric.instance_id == instance_id, Metric.metric_name == metric_name)
@@ -193,17 +193,17 @@ def _get_latest_metric(
 
 def _get_long_query_seconds(instance: DatabaseInstance) -> Optional[float]:
     """
-    Consulta pg_stat_activity ao vivo na instância para encontrar a query mais longa.
+    Queries pg_stat_activity live on the instance to find the longest-running query.
 
-    Por que ao vivo e não da tabela metrics?
-    Queries longas podem surgir e desaparecer entre ciclos de 60s. Usar o valor
-    armazenado seria uma foto antiga — o avaliador perderia eventos de curta duração.
-    Ao conectar diretamente, capturamos o estado real no momento da avaliação.
+    Why live and not from the metrics table?
+    Long queries can appear and disappear between 60s cycles. Using the stored
+    value would be a stale snapshot — the evaluator would miss short-lived events.
+    By connecting directly, we capture the real state at evaluation time.
 
-    Filtra a própria query de monitoramento (ILIKE '%pg_stat_activity%') para
-    não criar um falso-positivo de "long query" na query do avaliador.
+    Filters out the monitoring query itself (ILIKE '%pg_stat_activity%') so it
+    doesn't create a false positive "long query" from the evaluator's own query.
 
-    Retorna 0.0 se não há queries ativas (sem alertar desnecessariamente).
+    Returns 0.0 if there are no active queries (avoids alerting unnecessarily).
     """
     try:
         uri = decrypt_value(instance.connection_uri)
@@ -222,17 +222,17 @@ def _get_long_query_seconds(instance: DatabaseInstance) -> Optional[float]:
                 return row["duration_seconds"] if row else 0.0
     except Exception as exc:
         logger.warning(
-            "Falha ao consultar long queries na instância %s: %s", instance.id, exc
+            "Failed to query long queries on instance %s: %s", instance.id, exc
         )
         return None
 
 
 def _get_backup_age_hours(db: Session, instance_id: uuid.UUID) -> float:
     """
-    Retorna horas desde o último backup COMPLETED.
+    Returns hours since the last COMPLETED backup.
 
-    999.0 quando nunca houve backup bem-sucedido — valor propositalmente alto
-    para garantir que uma regra "backup_age_hours > 24" dispare imediatamente.
+    999.0 when there was never a successful backup — a value intentionally high
+    to ensure a "backup_age_hours > 24" rule fires immediately.
     """
     row = (
         db.query(Backup.completed_at)
@@ -255,10 +255,10 @@ def _compute_current_value(
     instance: DatabaseInstance,
 ) -> Optional[float]:
     """
-    Calcula o valor atual da métrica monitorada pela regra.
+    Computes the current value of the metric monitored by the rule.
 
-    Retorna None quando os dados necessários não estão disponíveis —
-    o avaliador pula a regra neste ciclo em vez de disparar falso-positivo.
+    Returns None when the required data isn't available —
+    the evaluator skips the rule this cycle instead of firing a false positive.
     """
     mt = rule.metric_type
 
@@ -285,7 +285,7 @@ def _compute_current_value(
     if mt == AlertMetricType.BACKUP_AGE_HOURS.value:
         return _get_backup_age_hours(db, instance.id)
 
-    logger.warning("metric_type desconhecido na regra %s: '%s'", rule.id, mt)
+    logger.warning("Unknown metric_type in rule %s: '%s'", rule.id, mt)
     return None
 
 
@@ -332,19 +332,19 @@ def _build_message(rule: AlertRule, current_value: float) -> str:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Notificação
+# Notification
 # ──────────────────────────────────────────────────────────────────────────────
 
 def _notify(rule: AlertRule, event: AlertEvent, *, fired: bool) -> None:
     """
-    Emite log e, se ALERT_WEBHOOK_URL estiver configurado, envia webhook HTTP POST.
+    Logs and, if ALERT_WEBHOOK_URL is configured, sends an HTTP POST webhook.
 
-    Usa httpx síncrono porque esta função é chamada dentro de asyncio.to_thread —
-    o contexto é uma thread comum sem event loop ativo. Tentar usar httpx.AsyncClient
-    aqui exigiria criar um novo event loop manualmente, o que é frágil.
+    Uses synchronous httpx because this function is called inside asyncio.to_thread —
+    the context is a plain thread with no active event loop. Trying to use
+    httpx.AsyncClient here would require manually creating a new event loop, which is fragile.
 
-    Webhook é fire-and-forget: falhas são logadas mas não propagadas para não
-    interromper o ciclo de avaliação dos alertas restantes.
+    Webhook is fire-and-forget: failures are logged but not propagated, so as not to
+    interrupt the evaluation cycle for the remaining alerts.
     """
     if not settings.ALERT_WEBHOOK_URL:
         return
@@ -367,11 +367,11 @@ def _notify(rule: AlertRule, event: AlertEvent, *, fired: bool) -> None:
     try:
         httpx.post(settings.ALERT_WEBHOOK_URL, json=payload, timeout=10.0)
     except Exception as exc:
-        logger.warning("Falha na entrega do webhook de alerta: %s", exc)
+        logger.warning("Failed to deliver alert webhook: %s", exc)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Disparo e resolução
+# Firing and resolution
 # ──────────────────────────────────────────────────────────────────────────────
 
 def _fire_event(
@@ -408,25 +408,25 @@ def _auto_resolve_event(
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Ponto de entrada do evaluator
+# Evaluator entry point
 # ──────────────────────────────────────────────────────────────────────────────
 
 def evaluate_all_rules(db: Session) -> None:
     """
-    Avalia todas as regras ativas de todas as instâncias RUNNING.
+    Evaluates all active rules of all RUNNING instances.
 
-    Chamado pelo alert_evaluator a cada 60 segundos.
+    Called by the alert_evaluator every 60 seconds.
 
-    Fluxo por regra:
-    1. Calcula o valor atual da métrica.
-    2. Se None (dados indisponíveis) → pula sem disparar falso-positivo.
-    3. Avalia a condição (current_value <op> threshold).
-    4. Se disparou e não há evento aberto → cria AlertEvent.
-    5. Se não disparou e há evento aberto → resolve automaticamente.
+    Flow per rule:
+    1. Computes the metric's current value.
+    2. If None (data unavailable) → skips without firing a false positive.
+    3. Evaluates the condition (current_value <op> threshold).
+    4. If it fired and there's no open event → creates an AlertEvent.
+    5. If it didn't fire and there's an open event → auto-resolves it.
 
-    Por que buscar instâncias via JOIN na query de regras?
-    Evita N+1: uma única query traz as regras já filtradas por instâncias RUNNING,
-    em vez de buscar todas as regras e depois filtrar a instância em Python.
+    Why fetch instances via JOIN in the rules query?
+    Avoids N+1: a single query brings back rules already filtered by RUNNING instances,
+    instead of fetching all rules and then filtering the instance in Python.
     """
     active_rules = (
         db.query(AlertRule)
@@ -452,7 +452,7 @@ def evaluate_all_rules(db: Session) -> None:
             current_value = _compute_current_value(db, rule, instance)
         except Exception as exc:
             logger.warning(
-                "Erro ao computar valor para regra %s (metric=%s): %s",
+                "Error computing value for rule %s (metric=%s): %s",
                 rule.id,
                 rule.metric_type,
                 exc,

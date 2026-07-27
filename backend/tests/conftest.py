@@ -1,27 +1,27 @@
 """
-Configuração compartilhada dos testes (pytest).
+Shared test configuration (pytest).
 
-Conceitos novos aqui:
-- conftest.py: o pytest carrega este arquivo automaticamente. Tudo definido
-  como fixture fica disponível para todos os testes sem import explícito.
-- fixture: função que prepara um recurso (banco, cliente HTTP, usuário) e o
-  entrega ao teste. É o equivalente em testes ao Depends() do FastAPI.
-- Banco de teste isolado: usamos um banco PostgreSQL separado (dbaas_test) para
-  nunca tocar nos dados de desenvolvimento.
+New concepts here:
+- conftest.py: pytest loads this file automatically. Anything defined
+  as a fixture becomes available to every test with no explicit import.
+- fixture: a function that prepares a resource (database, HTTP client, user) and
+  hands it to the test. It's the testing equivalent of FastAPI's Depends().
+- Isolated test database: we use a separate PostgreSQL database (dbaas_test) to
+  never touch development data.
 
-Por que definir as variáveis de ambiente ANTES de importar src.*?
-src.core.config.Settings() é instanciado no momento do import, e
-src.core.database cria o engine/SessionLocal ligados a essa configuração.
-Definindo as envs aqui no topo — antes de qualquer import de src — toda a
-aplicação (inclusive o AuditMiddleware, que abre seu próprio SessionLocal)
-passa a apontar para o banco de teste automaticamente. Sem monkeypatch.
+Why set the environment variables BEFORE importing src.*?
+src.core.config.Settings() is instantiated at import time, and
+src.core.database creates the engine/SessionLocal tied to that configuration.
+Setting the envs here at the top — before any import from src — makes the
+entire application (including AuditMiddleware, which opens its own SessionLocal)
+point to the test database automatically. No monkeypatch needed.
 """
 import os
 import uuid
 
 from cryptography.fernet import Fernet
 
-# --- Ambiente de teste: DEFINIDO ANTES de qualquer import de src.* ---
+# --- Test environment: SET BEFORE any import from src.* ---
 os.environ["POSTGRES_DB"] = "dbaas_test"
 os.environ["JWT_SECRET_KEY"] = "test-secret-key-do-not-use-in-production"
 os.environ["FERNET_KEY"] = Fernet.generate_key().decode()
@@ -37,26 +37,26 @@ from src.core.config import settings  # noqa: E402
 from src.core.database import Base, SessionLocal, engine  # noqa: E402
 from src.core.rate_limit import limiter  # noqa: E402
 from src.core.security import create_access_token, hash_password  # noqa: E402
-from src.main import app  # noqa: E402  (importa app → registra todos os models no metadata)
+from src.main import app  # noqa: E402  (imports app → registers all models on the metadata)
 from src.models.company import Company  # noqa: E402
 from src.models.user import User, UserRole  # noqa: E402
 
-# Senha forte reutilizada nos testes (atende à política: 12+ chars, maiúscula,
-# minúscula, dígito e símbolo). Centralizada para não repetir literais.
+# Strong password reused across tests (meets the policy: 12+ chars, uppercase,
+# lowercase, digit, and symbol). Centralized to avoid repeating literals.
 TEST_PASSWORD = "ValidPass123!"
 
-# Desliga o rate limiting nos testes. Sem isto, logins/registros repetidos entre
-# testes estourariam os limites (5/min, 3/min) e gerariam 429 falsos.
+# Turns off rate limiting in tests. Without this, repeated logins/registrations across
+# tests would hit the limits (5/min, 3/min) and produce false 429s.
 limiter.enabled = False
 
 
 def _ensure_test_database() -> None:
     """
-    Cria o banco dbaas_test se ainda não existir.
+    Creates the dbaas_test database if it doesn't already exist.
 
-    CREATE DATABASE não roda dentro de uma transação, por isso conectamos ao
-    banco de manutenção 'postgres' com autocommit. As credenciais (user/senha/
-    host/porta) vêm do .env — só o nome do banco foi sobrescrito para dbaas_test.
+    CREATE DATABASE doesn't run inside a transaction, so we connect to the
+    'postgres' maintenance database with autocommit. The credentials (user/password/
+    host/port) come from .env — only the database name was overridden to dbaas_test.
     """
     admin_conn = psycopg.connect(
         host=settings.POSTGRES_HOST,
@@ -73,7 +73,7 @@ def _ensure_test_database() -> None:
                 (settings.POSTGRES_DB,),
             )
             if cur.fetchone() is None:
-                # Nome controlado por nós (constante), não há injeção aqui.
+                # Name controlled by us (a constant), no injection risk here.
                 cur.execute(f'CREATE DATABASE "{settings.POSTGRES_DB}"')
     finally:
         admin_conn.close()
@@ -82,11 +82,11 @@ def _ensure_test_database() -> None:
 @pytest.fixture(scope="session", autouse=True)
 def _setup_database():
     """
-    Cria o banco e o schema uma vez por sessão de teste.
+    Creates the database and schema once per test session.
 
-    Usamos Base.metadata.create_all (não Alembic): o schema de teste espelha os
-    models. Rápido e suficiente para testes de comportamento. As migrações
-    continuam sendo validadas ao rodar a aplicação de verdade.
+    We use Base.metadata.create_all (not Alembic): the test schema mirrors the
+    models. Fast and sufficient for behavior tests. The migrations
+    are still validated when running the real application.
     """
     _ensure_test_database()
     Base.metadata.create_all(engine)
@@ -97,11 +97,11 @@ def _setup_database():
 @pytest.fixture(autouse=True)
 def _clean_tables():
     """
-    Limpa todas as tabelas DEPOIS de cada teste, garantindo independência.
+    Clears all tables AFTER each test, guaranteeing independence.
 
-    TRUNCATE ... RESTART IDENTITY CASCADE zera as tabelas e respeita as FKs.
-    Roda em conexão própria (engine.begin), pegando inclusive o que o app
-    commitou via SessionLocal durante o request.
+    TRUNCATE ... RESTART IDENTITY CASCADE zeroes out the tables and respects the FKs.
+    Runs on its own connection (engine.begin), picking up even what the app
+    committed via SessionLocal during the request.
     """
     yield
     tables = ", ".join(
@@ -114,7 +114,7 @@ def _clean_tables():
 
 @pytest.fixture
 def db() -> Session:
-    """Sessão SQLAlchemy direta — para montar dados de teste (arrange)."""
+    """Direct SQLAlchemy session — for setting up test data (arrange)."""
     session = SessionLocal()
     try:
         yield session
@@ -125,10 +125,10 @@ def db() -> Session:
 @pytest.fixture
 def client() -> TestClient:
     """
-    Cliente HTTP de teste.
+    Test HTTP client.
 
-    Instanciado SEM 'with': o lifespan não roda, então não há conexão com o
-    Docker nem inicialização dos pollers de background. Ideal para testar rotas.
+    Instantiated WITHOUT 'with': the lifespan doesn't run, so there's no connection to
+    Docker nor initialization of the background pollers. Ideal for testing routes.
     """
     return TestClient(app)
 
@@ -136,11 +136,11 @@ def client() -> TestClient:
 @pytest.fixture
 def make_user(db):
     """
-    Fábrica de usuários persistidos no banco de teste.
+    Factory for users persisted to the test database.
 
-    Retorna uma função para o teste criar quantos usuários precisar, com
-    e-mail/papel customizáveis. Commita para que o request (que usa outra
-    sessão, mas o mesmo banco) enxergue o usuário.
+    Returns a function for the test to create as many users as needed, with
+    customizable email/role. Commits so the request (which uses a different
+    session, but the same database) can see the user.
     """
     created = []
 
@@ -172,10 +172,10 @@ def make_user(db):
 @pytest.fixture
 def auth_headers(make_user):
     """
-    Cria um usuário e devolve (headers, user) com um access token válido.
+    Creates a user and returns (headers, user) with a valid access token.
 
-    O token é gerado direto via create_access_token — desacopla os testes de
-    rotas do fluxo de login (que tem testes próprios em test_auth.py).
+    The token is generated directly via create_access_token — decouples route
+    tests from the login flow (which has its own tests in test_auth.py).
     """
     def _build(
         email: str = "user@example.com",
@@ -194,7 +194,7 @@ def auth_headers(make_user):
 
 @pytest.fixture
 def make_company(db):
-    """Fábrica de empresas persistidas no banco de teste (multi-tenant)."""
+    """Factory for companies persisted to the test database (multi-tenant)."""
     def _make(name: str = "Acme Inc") -> Company:
         company = Company(name=name)
         db.add(company)

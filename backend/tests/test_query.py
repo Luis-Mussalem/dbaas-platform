@@ -1,10 +1,10 @@
 """
-Testes do Console SQL (FRONTEND F7) — endpoint POST /instances/{id}/query.
+Tests for the SQL Console (FRONTEND F7) — endpoint POST /instances/{id}/query.
 
-O guard SELECT-only em si já é coberto por tests/test_explain_guard.py (mesmo
-sql_guard.assert_read_only_select). Aqui focamos no nível de router/serviço:
-rejeição 422, scoping multi-tenant, status 409, erro do Postgres 400, e o caminho
-feliz com conexão dublada (monkeypatch) — sem depender de um Postgres real.
+The SELECT-only guard itself is already covered by tests/test_explain_guard.py (the same
+sql_guard.assert_read_only_select). Here we focus on the router/service level:
+422 rejection, multi-tenant scoping, 409 status, 400 Postgres error, and the happy
+path with a stubbed connection (monkeypatch) — without depending on a real Postgres.
 """
 from contextlib import contextmanager
 
@@ -19,7 +19,7 @@ API = "/api/v1/instances"
 
 
 # --------------------------------------------------------------------------- #
-# Helpers / dublês
+# Helpers / stubs
 # --------------------------------------------------------------------------- #
 
 
@@ -37,7 +37,7 @@ def _seed_instance(db, company_id=None, name="qdb", status=InstanceStatus.RUNNIN
 
 
 class _Col:
-    """Mínimo do que o serviço lê de cursor.description: o atributo .name."""
+    """The minimum the service reads from cursor.description: the .name attribute."""
 
     def __init__(self, name: str):
         self.name = name
@@ -76,7 +76,7 @@ class _FakeConn:
 
 
 def _patch_connection(monkeypatch, *, description, rows, error=None):
-    """Substitui get_connection por um context manager que devolve um cursor dublê."""
+    """Replaces get_connection with a context manager that returns a stub cursor."""
     cursor = _FakeCursor(description, rows, error)
 
     @contextmanager
@@ -87,7 +87,7 @@ def _patch_connection(monkeypatch, *, description, rows, error=None):
 
 
 # --------------------------------------------------------------------------- #
-# Guard SELECT-only → 422 (a conexão nunca é aberta)
+# SELECT-only guard → 422 (the connection is never opened)
 # --------------------------------------------------------------------------- #
 
 
@@ -110,7 +110,7 @@ def test_non_select_rejected_with_422(client, auth_headers, db, query):
 
 
 # --------------------------------------------------------------------------- #
-# Caminho feliz + truncamento
+# Happy path + truncation
 # --------------------------------------------------------------------------- #
 
 
@@ -131,7 +131,7 @@ def test_valid_select_returns_rows(client, auth_headers, db, monkeypatch):
     assert resp.status_code == 200
     body = resp.json()
     assert body["columns"] == ["id", "name"]
-    assert body["rows"] == [["1", "alice"], ["2", None]]  # células viram str; None preservado
+    assert body["rows"] == [["1", "alice"], ["2", None]]  # cells become str; None preserved
     assert body["row_count"] == 2
     assert body["truncated"] is False
 
@@ -152,7 +152,7 @@ def test_result_truncated_at_max_rows(client, auth_headers, db, monkeypatch):
 
 
 # --------------------------------------------------------------------------- #
-# Erro de execução do Postgres → 400
+# Postgres execution error → 400
 # --------------------------------------------------------------------------- #
 
 
@@ -175,7 +175,7 @@ def test_postgres_error_returns_400(client, auth_headers, db, monkeypatch):
 
 
 # --------------------------------------------------------------------------- #
-# Scoping multi-tenant e estado da instância
+# Multi-tenant scoping and instance state
 # --------------------------------------------------------------------------- #
 
 

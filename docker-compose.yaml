@@ -32,15 +32,15 @@ services:
       postgres:
         condition: service_healthy
 
-  # API FastAPI. Roda em network_mode: host de propósito — o provisionador cria
-  # containers-irmãos (via o socket Docker montado) e publica cada banco em
-  # 127.0.0.1 do HOST; com host networking o backend enxerga tanto o Postgres da
-  # plataforma (localhost:5432) quanto as instâncias gerenciadas nesse loopback,
-  # como quando rodado via uvicorn no host.
+  # FastAPI API. Runs with network_mode: host on purpose — the provisioner creates
+  # sibling containers (via the mounted Docker socket) and publishes each database on
+  # the HOST's 127.0.0.1; with host networking the backend sees both the platform's
+  # Postgres (localhost:5432) and the managed instances on that same loopback,
+  # just like when run via uvicorn on the host.
   #
-  # ${PWD} monta o data/ do repo no MESMO caminho absoluto dentro do container:
-  # os bind mounts de WAL/backup que o provisionador passa ao daemon precisam
-  # existir de forma idêntica no host e no container. Rode o compose da raiz do repo.
+  # ${PWD} mounts the repo's data/ at the SAME absolute path inside the container:
+  # the WAL/backup bind mounts the provisioner passes to the daemon need to
+  # exist identically on the host and in the container. Run compose from the repo root.
   backend:
     build:
       context: ./backend
@@ -51,13 +51,13 @@ services:
       POSTGRES_HOST: localhost
       BACKUP_DIR: ${PWD}/data/backups
     network_mode: host
-    # Roda com o UID/GID do usuário do host (dono do ./data montado abaixo), para
-    # que o provisionador consiga criar as subpastas de backup/WAL. HOST_UID/HOST_GID
-    # vêm do .env (`id -u` / `id -g`); default 1000:1000 cobre o caso single-user.
+    # Runs with the host user's UID/GID (owner of the ./data mounted below), so
+    # the provisioner can create the backup/WAL subfolders. HOST_UID/HOST_GID
+    # come from .env (`id -u` / `id -g`); default 1000:1000 covers the single-user case.
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
-    # group_add dá acesso ao socket do Docker (necessário para provisionar
-    # containers-irmãos). DOCKER_GID = gid do grupo `docker` no host
-    # (`getent group docker`); varia por máquina, então fica no .env.
+    # group_add grants access to the Docker socket (needed to provision
+    # sibling containers). DOCKER_GID = gid of the `docker` group on the host
+    # (`getent group docker`); varies by machine, so it lives in .env.
     group_add:
       - "${DOCKER_GID:-999}"
     volumes:
@@ -66,19 +66,19 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    # Após as migrations, semeia a frota de demonstração (3 empresas × prod/staging)
-    # em background — provisiona containers reais quando há Docker, senão cai para
-    # dados-apenas. Também grava o lastro de storage e semeia o histórico (frota
-    # viva no 1º login). É idempotente, então religar o stack não recria nada. A
-    # API sobe imediatamente; a frota, já populada, aparece no dashboard em ~2-4
-    # min no primeiro boot (depois é instantâneo).
+    # After migrations, seeds the demo fleet (3 companies × prod/staging)
+    # in the background — provisions real containers when Docker is available, otherwise
+    # falls back to data-only. Also writes the storage ballast and seeds the history (fleet
+    # alive on 1st login). It's idempotent, so restarting the stack recreates nothing. The
+    # API comes up immediately; the fleet, already populated, appears on the dashboard in ~2-4
+    # min on first boot (instant after that).
     command: >
       sh -c "alembic upgrade head &&
              { (python -m src.seed.demo || true) &
                uvicorn src.main:app --host 0.0.0.0 --port 8001; }"
 
-  # Dashboard Next.js (build standalone). NEXT_PUBLIC_API_URL é baked no build —
-  # o navegador (no host) fala com o backend em localhost:8001.
+  # Next.js dashboard (standalone build). NEXT_PUBLIC_API_URL is baked into the build —
+  # the browser (on the host) talks to the backend at localhost:8001.
   frontend:
     build:
       context: ./frontend

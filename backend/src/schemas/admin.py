@@ -27,8 +27,8 @@ class DashboardResponse(BaseModel):
     backups_last_24h: int
     failed_backups_last_24h: int
     pending_maintenance_tasks: int
-    # KPIs de performance da frota (derivados de dados reais; None quando ainda
-    # não há amostras suficientes — o frontend exibe "—", nunca um zero falso).
+    # Fleet performance KPIs (derived from real data; None when there
+    # aren't enough samples yet — the frontend shows "—", never a false zero).
     queries_per_second: float
     p95_latency_ms: float | None = None
     fleet_uptime_pct: float | None = None

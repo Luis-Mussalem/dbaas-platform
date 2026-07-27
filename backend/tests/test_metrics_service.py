@@ -1,12 +1,12 @@
 """
-Testes do serviço de métricas (PHASE 4) sem um Postgres-alvo vivo.
+Tests for the metrics service (PHASE 4) without a live target Postgres.
 
-- get_latest_metrics: lógica pura de SQL sobre a tabela metrics (último valor
-  por metric_name) — testada com linhas reais inseridas no banco de teste.
-- collect_and_store: get_connection e collect_base_metrics são substituídos por
-  dublês; validamos persistência e o caso "sem dados → 0 métricas".
-- check_health: psycopg.connect é substituído para simular banco saudável
-  (SELECT 1 ok) e indisponível (exceção → 'unhealthy', sem propagar 5xx).
+- get_latest_metrics: pure SQL logic over the metrics table (latest value
+  per metric_name) — tested with real rows inserted into the test database.
+- collect_and_store: get_connection and collect_base_metrics are replaced by
+  stubs; we validate persistence and the "no data → 0 metrics" case.
+- check_health: psycopg.connect is replaced to simulate a healthy database
+  (SELECT 1 ok) and an unavailable one (exception → 'unhealthy', without propagating a 5xx).
 """
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
@@ -42,7 +42,7 @@ def test_get_latest_metrics_returns_most_recent_per_name(db, instance):
     db.add_all([
         Metric(instance_id=instance.id, metric_name="cache_hit_ratio", value=90.0, collected_at=base),
         Metric(instance_id=instance.id, metric_name="cache_hit_ratio", value=98.5,
-               collected_at=base + timedelta(minutes=1)),  # mais recente
+               collected_at=base + timedelta(minutes=1)),  # more recent
         Metric(instance_id=instance.id, metric_name="db_size_bytes", value=1234.0, collected_at=base),
     ])
     db.commit()
@@ -63,7 +63,7 @@ def test_get_latest_metrics_empty(db, instance):
 def test_collect_and_store_persists_metrics(db, instance, monkeypatch):
     @contextmanager
     def fake_conn(inst):
-        yield object()  # conexão nunca é usada de verdade
+        yield object()  # connection is never actually used
 
     monkeypatch.setattr(metrics_service, "get_connection", fake_conn)
     monkeypatch.setattr(
@@ -99,7 +99,7 @@ def test_collect_and_store_persists_latency_percentiles(db, instance, monkeypatc
         metrics_service, "collect_base_metrics",
         lambda conn: {"connections_active": 1.0},
     )
-    # Instância com pg_stat_statements → os três percentis viram métricas extras.
+    # Instance with pg_stat_statements → the three percentiles become extra metrics.
     monkeypatch.setattr(
         metrics_service, "collect_latency_percentiles",
         lambda conn: {
@@ -121,7 +121,7 @@ def test_collect_and_store_persists_latency_percentiles(db, instance, monkeypatc
 
 
 def test_collect_and_store_without_pg_stat_statements(db, instance, monkeypatch):
-    """Sem a extensão, os percentis somem — as métricas base continuam."""
+    """Without the extension, the percentiles disappear — the base metrics remain."""
     @contextmanager
     def fake_conn(inst):
         yield object()
@@ -137,12 +137,12 @@ def test_collect_and_store_without_pg_stat_statements(db, instance, monkeypatch)
 
 
 # --------------------------------------------------------------------------- #
-# cache_hit_ratio derivado do intervalo
+# cache_hit_ratio derived from the interval
 # --------------------------------------------------------------------------- #
 
 
 def _collect_with_counters(monkeypatch, db, instance, blks_hit, blks_read):
-    """Roda um ciclo de coleta com os contadores de cache dados."""
+    """Runs a collection cycle with the given cache counters."""
     @contextmanager
     def fake_conn(inst):
         yield object()
@@ -158,16 +158,16 @@ def _collect_with_counters(monkeypatch, db, instance, blks_hit, blks_read):
 
 
 def test_cache_hit_ratio_omitted_on_first_collection(db, instance, monkeypatch):
-    """Sem coleta anterior não há intervalo — melhor não reportar que chutar."""
+    """With no previous collection there's no interval — better to not report than to guess."""
     assert _collect_with_counters(monkeypatch, db, instance, 100.0, 900.0) is None
 
 
 def test_cache_hit_ratio_uses_interval_not_lifetime(db, instance, monkeypatch):
     """
-    Acumulado ruim, intervalo bom: a métrica tem de seguir o intervalo.
+    Bad cumulative total, good interval: the metric has to follow the interval.
 
-    Vitalício = 100/(100+900) = 10%. No intervalo entram 900 hits e 100 reads,
-    ou seja 90% — é este o número que responde "está lendo do cache agora?".
+    Lifetime = 100/(100+900) = 10%. Within the interval, 900 hits and 100 reads
+    come in, i.e. 90% — that's the number that answers "is it reading from cache right now?".
     """
     _collect_with_counters(monkeypatch, db, instance, 100.0, 900.0)
     ratio = _collect_with_counters(monkeypatch, db, instance, 1000.0, 1000.0)
@@ -176,19 +176,19 @@ def test_cache_hit_ratio_uses_interval_not_lifetime(db, instance, monkeypatch):
 
 def test_cache_hit_ratio_carries_forward_on_counter_reset(db, instance, monkeypatch):
     """
-    Restart do servidor zera pg_stat_database — o delta viraria negativo.
+    A server restart resets pg_stat_database — the delta would come out negative.
 
-    Sem isto, todo restart derrubava a métrica para perto de 0% e abria alerta
-    de cache baixo numa frota saudável.
+    Without this, every restart would drop the metric to near 0% and open a
+    low-cache alert on a healthy fleet.
     """
     _collect_with_counters(monkeypatch, db, instance, 100.0, 900.0)
     assert _collect_with_counters(monkeypatch, db, instance, 1000.0, 1000.0) == 90.0
-    # Contadores andam para trás: mantém o último valor conhecido.
+    # Counters go backwards: keeps the last known value.
     assert _collect_with_counters(monkeypatch, db, instance, 5.0, 40.0) == 90.0
 
 
 def test_cache_hit_ratio_carries_forward_when_idle(db, instance, monkeypatch):
-    """Banco ocioso: nenhum bloco lido no intervalo, razão indefinida."""
+    """Idle database: no block read in the interval, undefined ratio."""
     _collect_with_counters(monkeypatch, db, instance, 100.0, 900.0)
     assert _collect_with_counters(monkeypatch, db, instance, 1000.0, 1000.0) == 90.0
     assert _collect_with_counters(monkeypatch, db, instance, 1000.0, 1000.0) == 90.0

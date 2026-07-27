@@ -9,12 +9,12 @@ test("sidebar navigates to Instances", async ({ page }) => {
 test("command palette opens with Ctrl+K and navigates", async ({ page }) => {
   await page.goto("/");
 
-  // Abre o palette pelo atalho global.
+  // Opens the palette via the global shortcut.
   await page.keyboard.press("Control+K");
   const search = page.getByPlaceholder(/command or search/i);
   await expect(search).toBeVisible();
 
-  // Busca uma página e navega com Enter.
+  // Searches for a page and navigates with Enter.
   await search.fill("SQL");
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/sql$/);

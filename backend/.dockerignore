@@ -1,5 +1,5 @@
-# Mantém o contexto de build pequeno e evita copiar segredos/artefatos.
-# Tudo aqui é excluído do que o Docker envia ao daemon na hora do build.
+# Keeps the build context small and avoids copying secrets/artifacts.
+# Everything here is excluded from what Docker sends to the daemon at build time.
 
 # Python
 __pycache__/
@@ -8,7 +8,7 @@ __pycache__/
 .venv/
 venv/
 
-# Testes e cobertura — não vão para a imagem de runtime
+# Tests and coverage — don't go into the runtime image
 tests/
 .pytest_cache/
 .ruff_cache/
@@ -16,11 +16,11 @@ tests/
 htmlcov/
 requirements-dev.txt
 
-# Segredos e ambiente local (nunca entram na imagem)
+# Secrets and local environment (never go into the image)
 .env
 *.env
 
-# Ferramentas
+# Tools
 .git/
 .gitignore
 Dockerfile

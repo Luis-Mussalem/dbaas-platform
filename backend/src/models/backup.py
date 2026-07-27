@@ -30,21 +30,21 @@ class BackupStatus(str, PyEnum):
 
 class Backup(Base):
     """
-    Representa uma operação de backup — manual ou agendada.
+    Represents a backup operation — manual or scheduled.
 
-    Por que separar backup_type de strategy?
-    - backup_type: QUEM iniciou (operador manualmente via API ou scheduler automático)
-    - strategy: COMO foi feito (pg_dump lógico ou pg_basebackup físico)
-    Essas são dimensões independentes: um backup lógico pode ser manual ou agendado.
+    Why separate backup_type from strategy?
+    - backup_type: WHO started it (operator manually via the API, or the automatic scheduler)
+    - strategy: HOW it was done (logical pg_dump or physical pg_basebackup)
+    These are independent dimensions: a logical backup can be manual or scheduled.
 
-    Por que expires_at?
-    A política de retenção define por quantos dias manter um backup. O poller de
-    agendamento calcula expires_at = created_at + retention_days ao criar cada backup.
-    O job de retenção filtra por expires_at <= now() para limpar arquivos antigos.
+    Why expires_at?
+    The retention policy defines how many days to keep a backup. The scheduling
+    poller computes expires_at = created_at + retention_days when creating each backup.
+    The retention job filters by expires_at <= now() to clean up old files.
 
-    Por que status DELETED em vez de deletar o registro?
-    Mantemos um audit trail: sabemos que houve um backup, quando foi criado e quando
-    foi apagado. Apenas o arquivo físico é removido.
+    Why a DELETED status instead of deleting the record?
+    We keep an audit trail: we know a backup existed, when it was created, and when
+    it was deleted. Only the physical file is removed.
     """
 
     __tablename__ = "backups"
@@ -119,17 +119,17 @@ class Backup(Base):
 
 class BackupSchedule(Base):
     """
-    Configura backups automáticos para uma instância.
+    Configures automatic backups for an instance.
 
-    Por que cron_expression?
-    Cron é a forma universal de expressar schedules periódicos — toda equipe
-    de engenharia entende "0 2 * * *" como "2 AM todo dia". Usamos a biblioteca
-    `croniter` para validar e calcular o próximo tempo de execução.
+    Why cron_expression?
+    Cron is the universal way to express periodic schedules — every engineering
+    team understands "0 2 * * *" as "2 AM every day". We use the
+    `croniter` library to validate and compute the next run time.
 
-    Como funciona o scheduler?
-    O backup_scheduler.py verifica a cada 60s quais schedules têm
-    next_run_at <= now(). Para cada um, dispara um backup da strategy configurada,
-    atualiza last_run_at, recalcula next_run_at e aplica retenção.
+    How does the scheduler work?
+    backup_scheduler.py checks every 60s which schedules have
+    next_run_at <= now(). For each one, it triggers a backup with the configured
+    strategy, updates last_run_at, recomputes next_run_at, and applies retention.
     """
 
     __tablename__ = "backup_schedules"

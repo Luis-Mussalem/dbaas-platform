@@ -1,37 +1,37 @@
-// Cor de IDENTIDADE da instância — determinística, agrupada por PAÍS da região.
+// Instance IDENTITY color — deterministic, grouped by the region's COUNTRY.
 //
-// A MATIZ vem do país (cor da bandeira): Brasil = verde, EUA = azul, Irlanda =
-// laranja, Alemanha = dourado, Singapura = vermelho. O AMBIENTE escolhe o TOM: a
-// produção usa a cor cheia da bandeira; homologação e desenvolvimento usam tons
-// mais claros (misturados em direção à superfície do tema). Instâncias do mesmo
-// país compartilham a família e o ambiente as diferencia.
+// The HUE comes from the country (flag color): Brazil = green, US = blue, Ireland =
+// orange, Germany = gold, Singapore = red. The ENVIRONMENT picks the TONE: production
+// uses the flag's full color; staging and development use lighter tones
+// (mixed toward the theme's surface). Instances of the same country share the
+// family and the environment tells them apart.
 //
-// Por que por país, e não por empresa (hash do nome): ao criar uma empresa nova o
-// hash antigo podia colidir/confundir cores. Ancorar no país torna a cor
-// PREVISÍVEL — segue a região escolhida, não o nome. A mesma cor alimenta o avatar,
-// a linha do sparkline (card) e os marcadores do mapa de regiões.
+// Why by country, and not by company (a hash of the name): when creating a new company the
+// old hash could collide/confuse colors. Anchoring on the country makes the color
+// PREDICTABLE — it follows the chosen region, not the name. The same color feeds the avatar,
+// the sparkline's line (card), and the region-map markers.
 //
-// Cores mid-tone escolhidas para funcionar nos temas claro E escuro sem trocar de
-// matiz. Segue o guia de dataviz: paleta categórica fixa por entidade (país), com
-// reforço secundário pela bandeira + sigla do país (nunca só a cor).
+// Mid-tone colors chosen to work on both light AND dark themes without changing
+// hue. Follows the dataviz guide: a fixed categorical palette per entity (country), with
+// secondary reinforcement via the flag + country code (never color alone).
 
 import type { Environment } from "@/lib/types";
 import { regionInfo } from "@/lib/regions";
 
-// País (sigla) → { fill: cor base = tom preciso da bandeira (produção);
-//                  ink: cor do texto sobre essa cor }.
+// Country (code) → { fill: base color = the flag's precise tone (production);
+//                     ink: text color over that color }.
 const COUNTRY_COLORS: Record<string, { fill: string; ink: string }> = {
-  BR: { fill: "#007a33", ink: "#ffffff" }, // verde bandeira fechado — distinto do
-                                           // verde-tema esmeralda (#10b981), ΔE ~19
-  US: { fill: "#2563eb", ink: "#ffffff" }, // azul visível
-  IE: { fill: "#ff8200", ink: "#ffffff" }, // laranja (Pantone 151)
-  DE: { fill: "#f5c518", ink: "#1a1a1a" }, // amarelo-dourado — puxado para o amarelo
-                                           // p/ separar do laranja da Irlanda; texto escuro
-  SG: { fill: "#ee2536", ink: "#ffffff" }, // vermelho (Pantone 032)
+  BR: { fill: "#007a33", ink: "#ffffff" }, // closed flag green — distinct from the
+                                           // theme's emerald green (#10b981), ΔE ~19
+  US: { fill: "#2563eb", ink: "#ffffff" }, // visible blue
+  IE: { fill: "#ff8200", ink: "#ffffff" }, // orange (Pantone 151)
+  DE: { fill: "#f5c518", ink: "#1a1a1a" }, // golden-yellow — pulled toward yellow
+                                           // to separate it from Ireland's orange; dark text
+  SG: { fill: "#ee2536", ink: "#ffffff" }, // red (Pantone 032)
 };
 
-// País desconhecido → cor da marca (mesmo espírito do fallback de regionInfo, que
-// nunca quebra a UI). Como é um token, não entra no color-mix dos tons.
+// Unknown country → brand color (same spirit as regionInfo's fallback, which
+// never breaks the UI). Since it's a token, it doesn't enter the tones' color-mix.
 const FALLBACK = { fill: "var(--brand)", ink: "var(--brand-fg)" };
 
 function colorFor(region: string | null): { fill: string; ink: string } {
@@ -40,41 +40,41 @@ function colorFor(region: string | null): { fill: string; ink: string } {
   return COUNTRY_COLORS[info.country] ?? FALLBACK;
 }
 
-// Ambiente → tom: produção = cor cheia; homologação/indef = leve clareamento;
-// desenvolvimento = mais claro. A mistura é feita com CSS color-mix contra a
-// superfície do tema vigente, então clareia no claro e escurece no escuro —
-// legível nos dois sem trocar de matiz. Tokens de marca não são misturados.
+// Environment → tone: production = full color; staging/undefined = slight lightening;
+// development = lighter still. The mix is done with CSS color-mix against the
+// current theme's surface, so it lightens in light mode and darkens in dark mode —
+// legible in both without changing hue. Brand tokens are not mixed.
 function envTone(fill: string, env: Environment | null): string {
   if (fill.startsWith("var(") || env === "production") return fill;
-  const surfaceMix = env === "development" ? 34 : 18; // % de superfície
+  const surfaceMix = env === "development" ? 34 : 18; // % of surface
   return `color-mix(in oklch, ${fill} ${100 - surfaceMix}%, var(--surface))`;
 }
 
-// Gradiente do avatar: do tom do ambiente para uma versão levemente mais escura
-// (profundidade). O texto usa a `ink` do país (branco, ou escuro sobre o dourado).
+// Avatar gradient: from the environment's tone to a slightly darker version
+// (depth). The text uses the country's `ink` (white, or dark over the gold).
 export function instanceGradient(region: string | null, env: Environment | null): string {
   const tone = envTone(colorFor(region).fill, env);
   if (tone.startsWith("var(")) return `linear-gradient(135deg, ${tone}, ${tone})`;
   return `linear-gradient(135deg, ${tone}, color-mix(in oklch, ${tone}, black 14%))`;
 }
 
-// Cor sólida da linha do sparkline — mesmo tom do avatar.
+// Solid color of the sparkline's line — same tone as the avatar.
 export function instanceLineColor(region: string | null, env: Environment | null): string {
   return envTone(colorFor(region).fill, env);
 }
 
-// Cor do texto das iniciais sobre o avatar (branco na maioria; escuro no dourado).
+// Color of the initials' text over the avatar (white in most cases; dark over the gold).
 export function instanceInk(region: string | null): string {
   return colorFor(region).ink;
 }
 
-// Cor sólida do país (tom de produção) — usada pelos marcadores do mapa de regiões.
+// Country's solid color (production tone) — used by the region-map markers.
 export function countryColor(region: string | null): string {
   return colorFor(region).fill;
 }
 
-// Até 2 iniciais a partir do nome (ex.: "checkout-prod" → "CP", "analytics" → "AN").
-// O nome continua definindo as INICIAIS; só a COR passou a vir do país.
+// Up to 2 initials from the name (e.g.: "checkout-prod" → "CP", "analytics" → "AN").
+// The name still defines the INITIALS; only the COLOR now comes from the country.
 export function instanceInitials(name: string): string {
   const parts = name.replace(/[^a-zA-Z0-9]+/g, " ").trim().split(" ").filter(Boolean);
   const letters =

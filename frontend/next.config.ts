@@ -2,10 +2,10 @@ import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
 
 const nextConfig: NextConfig = {
-  // Build "standalone": empacota só o necessário (server.js + deps traçadas) numa
-  // imagem Docker mínima, sem copiar node_modules inteiro. Ver frontend/Dockerfile.
+  // "standalone" build: bundles only what's needed (server.js + traced deps) into a
+  // minimal Docker image, without copying all of node_modules. See frontend/Dockerfile.
   output: "standalone",
 };
 
-// Aponta o Next para i18n/request.ts (locale por cookie, sem i18n routing).
+// Points Next at i18n/request.ts (cookie-based locale, no i18n routing).
 export default createNextIntlPlugin()(nextConfig);

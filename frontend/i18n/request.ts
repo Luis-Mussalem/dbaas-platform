@@ -4,29 +4,29 @@ import { getRequestConfig } from "next-intl/server";
 import { DEFAULT_LOCALE, LOCALE_COOKIE, LOCALES } from "./config";
 import { formatsFor } from "./formats";
 
-// Config de i18n por request. Ler o cookie aqui torna toda rota dinâmica — é
-// esperado: não há middleware, a auth já é client-side e todos os dados vêm de
-// useEffect, então nenhuma página tinha conteúdo estático a perder.
+// Per-request i18n config. Reading the cookie here makes every route dynamic — that's
+// expected: there's no middleware, auth is already client-side, and all data comes from
+// useEffect, so no page had static content to lose.
 export default getRequestConfig(async () => {
   const store = await cookies();
   const cookieLocale = store.get(LOCALE_COOKIE)?.value;
-  // Cookie ausente (primeira visita) ou adulterado → inglês.
+  // Missing cookie (first visit) or tampered → English.
   const locale = hasLocale(LOCALES, cookieLocale) ? cookieLocale : DEFAULT_LOCALE;
 
   return {
     locale,
-    // O template literal faz o bundler embutir os dois JSONs no bundle do
-    // servidor. Não trocar por fs.readFile: quebraria o build standalone do
-    // Docker em runtime (ENOENT), e só apareceria em produção.
+    // The template literal makes the bundler inline both JSONs into the
+    // server bundle. Don't swap for fs.readFile: it would break the Docker
+    // standalone build at runtime (ENOENT), and only show up in production.
     messages: (await import(`../messages/${locale}.json`)).default,
     formats: formatsFor(locale),
-    // `now` fixado no servidor e herdado por useNow(): sem ele, relativeTime
-    // diverge entre servidor e cliente na hidratação.
+    // `now` pinned on the server and inherited by useNow(): without it, relativeTime
+    // would diverge between server and client during hydration.
     now: new Date(),
-    // timeZone deliberadamente indefinido: nenhuma data é renderizada no
-    // servidor (todas vêm de useEffect). Atenção: omitir NÃO significa "usa o
-    // fuso do usuário" — o next-intl cai no fuso do runtime do servidor (UTC no
-    // container). Quem injeta o fuso do navegador é hooks/use-formatters.ts,
-    // por onde passa toda data exibida.
+    // timeZone deliberately left undefined: no date is rendered on the
+    // server (they all come from useEffect). Careful: omitting it does NOT mean "use the
+    // user's timezone" — next-intl falls back to the server runtime's timezone (UTC in the
+    // container). What injects the browser's timezone is hooks/use-formatters.ts,
+    // which every displayed date goes through.
   };
 });

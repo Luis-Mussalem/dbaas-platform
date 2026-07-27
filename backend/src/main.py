@@ -22,25 +22,25 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    Gerencia o ciclo de vida da aplicação (startup e shutdown).
+    Manages the application's lifecycle (startup and shutdown).
 
-    Por que substituir @app.on_event?
-    O decorador @app.on_event("startup/shutdown") foi depreciado no FastAPI 0.93+.
-    O padrão atual é um único context manager assíncrono que usa 'yield' para
-    separar o código de inicialização (antes do yield) do de encerramento (após).
-    Isso garante que o shutdown sempre executa, mesmo em caso de erro no startup.
+    Why replace @app.on_event?
+    The @app.on_event("startup/shutdown") decorator was deprecated in FastAPI 0.93+.
+    The current pattern is a single async context manager that uses 'yield' to
+    separate the startup code (before the yield) from the shutdown code (after).
+    This guarantees shutdown always runs, even if there's an error at startup.
 
-    O que acontece no startup:
-    1. get_provisioner() — abre conexão com o daemon Docker via socket Unix.
-       Se o Docker não estiver rodando, a aplicação falha imediatamente com
-       mensagem clara (fail fast), em vez de falhar silenciosamente no primeiro
-       request de provisionamento.
-    2. status_polling_loop — inicia a task de background que monitora containers.
+    What happens at startup:
+    1. get_provisioner() — opens a connection to the Docker daemon via a Unix socket.
+       If Docker isn't running, the application fails immediately with a
+       clear message (fail fast), instead of failing silently on the first
+       provisioning request.
+    2. status_polling_loop — starts the background task that monitors containers.
 
-    O que acontece no shutdown:
-    1. stop_event.set() — sinaliza ao poller para sair do loop graciosamente.
-    2. await poller_task — aguarda a task terminar antes de encerrar.
-       Isso garante que nenhum commit de banco fica no meio ao fechar.
+    What happens at shutdown:
+    1. stop_event.set() — signals the poller to exit its loop gracefully.
+    2. await poller_task — waits for the task to finish before shutting down.
+       This guarantees no database commit is left half-done when closing.
     """
     # --- STARTUP ---
     from src.services.provisioning import get_provisioner
@@ -48,64 +48,64 @@ async def lifespan(app: FastAPI):
     from src.services.metrics_poller import metrics_polling_loop
     from src.services.replication_poller import replication_polling_loop
 
-    logger.info("Conectando ao daemon Docker...")
+    logger.info("Connecting to the Docker daemon...")
     try:
-        get_provisioner()  # Inicializa via lru_cache — falha rápido se Docker indisponível
-        logger.info("Docker disponível. Provisioner pronto.")
+        get_provisioner()  # Initializes via lru_cache — fails fast if Docker is unavailable
+        logger.info("Docker available. Provisioner ready.")
     except Exception as exc:
         raise RuntimeError(
-            f"Não foi possível conectar ao Docker. "
-            f"Certifique-se de que o Docker Engine está rodando. Erro: {exc}"
+            f"Could not connect to Docker. "
+            f"Make sure the Docker Engine is running. Error: {exc}"
         ) from exc
 
     stop_event = asyncio.Event()
     poller_task = asyncio.create_task(status_polling_loop(stop_event))
-    logger.info("Status poller iniciado.")
+    logger.info("Status poller started.")
 
     metrics_stop_event = asyncio.Event()
     metrics_poller_task = asyncio.create_task(
         metrics_polling_loop(metrics_stop_event)
     )
-    logger.info("Metrics poller iniciado.")
+    logger.info("Metrics poller started.")
 
     backup_stop_event = asyncio.Event()
     backup_scheduler_task = asyncio.create_task(
         backup_scheduling_loop(backup_stop_event)
     )
-    logger.info("Backup scheduler iniciado.")
+    logger.info("Backup scheduler started.")
 
     maintenance_stop_event = asyncio.Event()
     maintenance_scheduler_task = asyncio.create_task(
         maintenance_scheduling_loop(maintenance_stop_event)
     )
-    logger.info("Maintenance scheduler iniciado.")
+    logger.info("Maintenance scheduler started.")
 
     alert_stop_event = asyncio.Event()
     alert_evaluator_task = asyncio.create_task(
         alert_evaluation_loop(alert_stop_event)
     )
-    logger.info("Alert evaluator iniciado.")
+    logger.info("Alert evaluator started.")
 
     replication_stop_event = asyncio.Event()
     replication_poller_task = asyncio.create_task(
         replication_polling_loop(replication_stop_event)
     )
-    logger.info("Replication poller iniciado.")
+    logger.info("Replication poller started.")
 
-    # Modo demo: o gerador de carga-base, que mantém a frota de demonstração viva
-    # (tráfego leve e contínuo) para o dashboard não parecer morto no boot.
+    # Demo mode: the baseline-load generator, which keeps the demo fleet alive
+    # (light, continuous traffic) so the dashboard doesn't look dead on boot.
     demo_stop_event = asyncio.Event()
     demo_tasks: list[asyncio.Task] = []
     if settings.DEMO_MODE:
         from src.services.workload_simulator import workload_loop
 
         demo_tasks = [asyncio.create_task(workload_loop(demo_stop_event))]
-        logger.info("Demo mode ativo: gerador de carga-base pronto.")
+        logger.info("Demo mode active: baseline-load generator ready.")
 
-    yield  # Aplicação em execução — processando requests
+    yield  # Application running — processing requests
 
     # --- SHUTDOWN ---
-    logger.info("Encerrando pollers...")
+    logger.info("Stopping pollers...")
     stop_event.set()
     metrics_stop_event.set()
     backup_stop_event.set()
@@ -121,11 +121,11 @@ async def lifespan(app: FastAPI):
     await replication_poller_task
     for task in demo_tasks:
         await task
-    logger.info("Encerramento concluído.")
+    logger.info("Shutdown complete.")
 
 
-# Descrição exibida no topo do /docs (Swagger UI) e /redoc.
-# Mantida genérica e reutilizável — sem credenciais, clientes ou dados reais.
+# Description shown at the top of /docs (Swagger UI) and /redoc.
+# Kept generic and reusable — no credentials, clients, or real data.
 API_DESCRIPTION = """
 PostgreSQL database management platform — provisioning, monitoring, automation
 and data protection (DBA-as-a-Service).
@@ -137,8 +137,8 @@ infrastructure probes and load balancers.
 Most endpoints require Bearer JWT authentication (`POST /api/v1/auth/login`).
 """
 
-# Ordem e descrição das tags no /docs. O FastAPI renderiza os grupos na ordem
-# desta lista — do fluxo de acesso (auth) ao painel administrativo.
+# Order and description of the tags in /docs. FastAPI renders the groups in the
+# order of this list — from the access flow (auth) to the admin panel.
 openapi_tags = [
     {"name": "Health", "description": "API liveness/readiness and connectivity to the platform database."},
     {"name": "Authentication", "description": "Register, login, refresh and logout. Issues and revokes JWT tokens."},
@@ -174,9 +174,9 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type", "X-Company-Id"],
 )
 
-# AuditMiddleware adicionado por último = mais interno na cadeia.
-# Executa depois que o handler já processou o request e a resposta está pronta.
-# Assim, só grava ações que o handler confirmou como bem-sucedidas (2xx).
+# AuditMiddleware added last = innermost in the chain.
+# Runs after the handler has already processed the request and the response is ready.
+# This way, it only records actions the handler confirmed as successful (2xx).
 app.add_middleware(AuditMiddleware)
 
 
@@ -205,9 +205,9 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 
 app.include_router(health.router)
 
-# Todas as rotas de domínio ficam sob /api/v1/.
-# health.router permanece na raiz — load balancers e probes de infra
-# fazem GET /health diretamente, sem conhecer a versão da API.
+# All domain routes live under /api/v1/.
+# health.router stays at the root — load balancers and infra probes
+# do GET /health directly, without knowing the API version.
 api_v1 = APIRouter(prefix="/api/v1")
 api_v1.include_router(auth.router)
 api_v1.include_router(users.router)

@@ -11,8 +11,8 @@ interface AuthContextValue {
   isLoading: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
-  // Re-busca /auth/me e atualiza o `user` global. Chamado após editar o perfil
-  // para que a Sidebar (e quem mais lê o contexto) reflita o novo email na hora.
+  // Re-fetches /auth/me and updates the global `user`. Called after editing the profile
+  // so the Sidebar (and whoever else reads the context) reflects the new email right away.
   refreshUser: () => Promise<void>;
 }
 
@@ -27,17 +27,17 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
-  // A sessão vive em cookies HttpOnly — JS não enxerga token nenhum. A única
-  // fonte de verdade do "estou logado?" é o próprio backend, via /auth/me.
+  // The session lives in HttpOnly cookies — JS can't see any token. The only
+  // source of truth for "am I logged in?" is the backend itself, via /auth/me.
   const [user, setUser] = useState<User | null>(null);
-  // Na /login não há sessão para hidratar — já inicia sem loading (o inicializador
-  // lazy evita o setState síncrono no effect que o lint react-hooks proíbe).
+  // On /login there's no session to hydrate — it starts without loading right away (the lazy
+  // initializer avoids the synchronous setState in the effect that the react-hooks lint forbids).
   const [isLoading, setIsLoading] = useState(
     () => typeof window === "undefined" || window.location.pathname !== "/login"
   );
 
   useEffect(() => {
-    // Na /login não há sessão para hidratar — evita um /me + refresh inúteis.
+    // On /login there's no session to hydrate — avoids a useless /me + refresh.
     if (window.location.pathname === "/login") return;
 
     let active = true;
@@ -57,8 +57,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   async function login(username: string, password: string): Promise<void> {
-    // O backend grava os cookies HttpOnly na resposta do login; em seguida
-    // buscamos o usuário já autenticado por eles.
+    // The backend writes the HttpOnly cookies in the login response; we then
+    // fetch the now-authenticated user via them.
     await apiLogin(username, password);
     const u = await getCurrentUser();
     setUser(u);
@@ -70,9 +70,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }
 
   function logout(): void {
-    // O backend blacklista os tokens e limpa os cookies na resposta; só então
-    // navegamos, para o proxy já ver a sessão encerrada. Se a chamada falhar
-    // (rede), navegamos mesmo assim — o usuário pediu para sair.
+    // The backend blacklists the tokens and clears the cookies in the response; only then
+    // do we navigate, so the proxy already sees the session ended. If the call fails
+    // (network), we navigate anyway — the user asked to log out.
     apiLogout()
       .catch(() => undefined)
       .finally(() => {

@@ -5,14 +5,14 @@ import { useTranslations } from "next-intl";
 import { getConnections } from "@/lib/api";
 import type { ActiveConnection, Instance } from "@/lib/types";
 
-// Cor do estado da conexão (espelha o vocabulário do pg_stat_activity).
+// Connection state color (mirrors pg_stat_activity's vocabulary).
 function stateTone(state: string | null): string {
   if (state === "active") return "text-ok border-ok/25 bg-ok/10";
   if (state === "idle in transaction") return "text-warn border-warn/25 bg-warn/10";
-  return "text-fg-3 border-border bg-bg-2"; // idle e outros
+  return "text-fg-3 border-border bg-bg-2"; // idle and others
 }
 
-// Duração em segundos → "12 ms" / "3.2 s".
+// Duration in seconds → "12 ms" / "3.2 s".
 function dur(seconds: number | null): string {
   if (seconds == null) return "—";
   if (seconds < 1) return `${Math.round(seconds * 1000)} ms`;
@@ -25,8 +25,8 @@ export function ConnectionsTable({ instance }: { instance: Instance }) {
   const [rows, setRows] = useState<ActiveConnection[] | null>(null);
   const [failed, setFailed] = useState(false);
 
-  // Endpoint live: só faz sentido com a instância RUNNING. O estado "parada" é
-  // derivado no render (não em effect); o effect só dispara o fetch.
+  // Live endpoint: only makes sense with a RUNNING instance. The "stopped" state is
+  // derived at render time (not in an effect); the effect only triggers the fetch.
   useEffect(() => {
     if (instance.status !== "running") return;
     let active = true;

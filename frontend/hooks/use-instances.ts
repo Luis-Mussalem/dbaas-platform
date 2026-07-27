@@ -22,7 +22,7 @@ interface UseInstancesResult {
 
 // ─── Hook ──────────────────────────────────────────────────────────────────────
 
-// `pollMs` (DASHBOARD_POLL_MS) mantém a lista fresca; sem ele, a busca é só no mount.
+// `pollMs` (DASHBOARD_POLL_MS) keeps the list fresh; without it, the fetch only happens on mount.
 export function useInstances(pollMs?: number, version?: number): UseInstancesResult {
   const t = useTranslations("Instances");
   const fetcher = useCallback(() => listInstances(), []);

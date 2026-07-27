@@ -4,9 +4,9 @@ import { useTranslations } from "next-intl";
 import type { Environment } from "@/lib/types";
 import { environmentTone } from "@/lib/environment";
 
-// Tag de ambiente: rótulo traduzido + cor semântica, derivada da fonte única
-// lib/environment. Só as classes Tailwind do tom moram aqui (o resto é
-// compartilhado). Ambiente nulo → não renderiza.
+// Environment tag: translated label + semantic color, derived from the single
+// source lib/environment. Only the tone's Tailwind classes live here (the rest is
+// shared). Null environment → renders nothing.
 const TONE_CLS: Record<"ok" | "warn" | "info", string> = {
   ok: "text-ok border-ok/25 bg-ok/10",
   warn: "text-warn border-warn/25 bg-warn/10",

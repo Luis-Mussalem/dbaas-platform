@@ -44,7 +44,7 @@ export default function LoginPage() {
       />
 
       <div className="relative w-full max-w-sm">
-        {/* Marca — mesma identidade da sidebar */}
+        {/* Brand — same identity as the sidebar */}
         <div className="mb-6 flex items-center justify-center gap-2 text-[17px] font-semibold">
           <div className="flex h-7 w-7 items-center justify-center rounded-[8px] bg-primary text-[15px] font-bold text-primary-foreground">
             D

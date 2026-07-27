@@ -4,14 +4,14 @@ from enum import Enum as PyEnum
 
 class ProvisionerStatus(str, PyEnum):
     """
-    Infra-level estados que o provisionador reporta sobre um container.
+    Infra-level states the provisioner reports about a container.
 
-    Separado do InstanceStatus (domínio da aplicação) intencionalmente:
-    o InstanceStatus representa o que o USUÁRIO vê (running, stopped, failed…);
-    o ProvisionerStatus representa o que o DOCKER reporta.
+    Deliberately separate from InstanceStatus (the application's domain):
+    InstanceStatus represents what the USER sees (running, stopped, failed…);
+    ProvisionerStatus represents what DOCKER reports.
 
-    O status_poller faz a ponte: se o InstanceStatus é RUNNING mas o
-    ProvisionerStatus é NOT_FOUND ou ERROR, o poller marca a instância como FAILED.
+    The status_poller bridges the two: if InstanceStatus is RUNNING but
+    ProvisionerStatus is NOT_FOUND or ERROR, the poller marks the instance as FAILED.
     """
 
     RUNNING = "running"
@@ -23,25 +23,25 @@ class ProvisionerStatus(str, PyEnum):
 @dataclass
 class ProvisionResult:
     """
-    Objeto retornado pelo ProvisionerBase.create() após o container estar pronto.
+    Object returned by ProvisionerBase.create() once the container is ready.
 
-    É transiente — existe apenas na memória durante a operação de criação.
-    O campo db_password é plaintext aqui e NUNCA é armazenado diretamente.
+    It's transient — exists only in memory during the creation operation.
+    The db_password field is plaintext here and is NEVER stored directly.
 
-    Fluxo de vida do db_password:
-        provisioner.create() → ProvisionResult.db_password (memória)
-        → constrói connection_uri como string
-        → encrypt_value(connection_uri) → string cifrada (Fernet)
-        → armazenada em DatabaseInstance.connection_uri (banco)
-        → ProvisionResult descartado pelo garbage collector
+    db_password's lifecycle:
+        provisioner.create() → ProvisionResult.db_password (memory)
+        → builds connection_uri as a string
+        → encrypt_value(connection_uri) → encrypted string (Fernet)
+        → stored in DatabaseInstance.connection_uri (database)
+        → ProvisionResult discarded by the garbage collector
 
-    O password nunca aparece em logs, respostas HTTP, ou no banco em texto claro.
+    The password never appears in logs, HTTP responses, or in the database in plaintext.
     """
 
-    container_id: str       # Hash hexadecimal curto do container Docker
-    host: str               # IP do host para conectar (127.0.0.1 no WSL2)
-    port: int               # Porta do host atribuída dinamicamente pelo Docker
-    db_name: str            # Nome do banco criado dentro do container
-    db_user: str            # Role dedicada com privilégios mínimos
-    db_password: str        # Senha em plaintext — usada uma vez, depois descartada
-    container_name: str     # Nome human-readable do container Docker
+    container_id: str       # Short hexadecimal hash of the Docker container
+    host: str               # Host IP to connect to (127.0.0.1 on WSL2)
+    port: int               # Host port dynamically assigned by Docker
+    db_name: str            # Name of the database created inside the container
+    db_user: str            # Dedicated role with minimal privileges
+    db_password: str        # Plaintext password — used once, then discarded
+    container_name: str     # Human-readable name of the Docker container

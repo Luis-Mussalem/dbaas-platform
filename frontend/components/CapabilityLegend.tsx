@@ -3,17 +3,17 @@
 import { useTranslations } from "next-intl";
 import { Check, Minus, ShieldCheck } from "lucide-react";
 
-// Matriz de capacidades por papel — estática, refletindo as regras REAIS de
-// autorização do backend (core/scoping.py: is_company_admin / assert_can_manage_target;
+// Capability matrix by role — static, reflecting the backend's REAL
+// authorization rules (core/scoping.py: is_company_admin / assert_can_manage_target;
 // services/user.py: create_user_admin / update_user_admin; dependencies.py).
-// Não há permissão fina por recurso: os eixos reais são is_superuser × role.
+// There's no fine-grained per-resource permission: the real axes are is_superuser × role.
 //
-// Os papéis NÃO se traduzem: são os nomes do modelo de autorização, os mesmos
-// exibidos na coluna Role da tabela e usados no backend.
+// The roles are NOT translated: they're the authorization model's names, the same
+// ones shown in the table's Role column and used in the backend.
 const ROLES = ["Member", "Company Admin", "Superuser"] as const;
 
-// `key` indexa Capabilities.rows.*; a união literal (em vez de string) é o que
-// permite ao tsc validar a chave. A ordem é a de leitura da matriz.
+// `key` indexes Capabilities.rows.*; the literal union (instead of string) is what
+// lets tsc validate the key. The order is the matrix's reading order.
 type CapabilityKey =
   | "ownProfile"
   | "otherUsers"

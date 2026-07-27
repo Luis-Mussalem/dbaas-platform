@@ -4,12 +4,12 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { Info } from "lucide-react";
 
-// Faixa honesta, sempre visível: deixa claro que a frota (empresas, tráfego e
-// histórico) é gerada de propósito para a plataforma poder ser explorada por
-// inteiro — a base do produto é gerir instâncias que, sem isso, estariam vazias.
+// Honest, always-visible banner: makes it clear the fleet (companies, traffic,
+// and history) is generated on purpose so the platform can be fully explored —
+// the product's core is managing instances that, without this, would be empty.
 //
-// Modo demo é baked no build (`NEXT_PUBLIC_DEMO_MODE`, default "true"), como a
-// URL da API. Numa instalação real (DEMO_MODE=false) a faixa não aparece.
+// Demo mode is baked into the build (`NEXT_PUBLIC_DEMO_MODE`, default "true"), like the
+// API URL. On a real installation (DEMO_MODE=false) the banner doesn't appear.
 const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE !== "false";
 
 export function DemoNotice() {

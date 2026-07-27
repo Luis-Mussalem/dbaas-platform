@@ -57,10 +57,10 @@ class UserRead(UserBase):
 
 
 class UserListItem(UserRead):
-    # Só o endpoint de listagem (admin) popula last_activity — daí ser um schema
-    # dedicado, para não vazar um campo sempre-nulo em /auth/me, register, etc.
-    # Valor derivado do MAX(timestamp) em audit_logs (atributo transiente na
-    # instância ORM), não uma coluna da tabela users.
+    # Only the (admin) listing endpoint populates last_activity — hence a
+    # dedicated schema, so as not to leak an always-null field in /auth/me, register, etc.
+    # Value derived from MAX(timestamp) in audit_logs (a transient attribute on the
+    # ORM instance), not a column of the users table.
     last_activity: Optional[datetime] = None
 
 

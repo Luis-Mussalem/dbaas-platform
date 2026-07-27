@@ -1,19 +1,19 @@
 """
-Agregado por instância para os cards da frota.
+Per-instance aggregate for the fleet cards.
 
-Os cards mostravam só o que o poller guarda como último valor bruto (conexões,
-cache hit, tamanho). Numa frota pequena o cache hit é sempre ~100% e a barra de
-storage sempre 0%, então três gauges ficavam constantes e o card não dizia nada
-sobre o estado da instância.
+The cards used to show only what the poller keeps as the last raw value (connections,
+cache hit, size). In a small fleet, cache hit is always ~100% and the storage bar
+is always 0%, so three gauges stayed constant and the card said nothing
+about the instance's actual state.
 
-Este módulo devolve, numa única resposta, o que já existe espalhado por
-alerts/backups/metrics/status_history: throughput, latência, crescimento de
-disco, alertas abertos, último backup e uptime. É um agregado de LEITURA — o
-custo de N+1 requests (um card = 5 endpoints × 6 cards) é o que ele evita.
+This module returns, in a single response, what's already scattered across
+alerts/backups/metrics/status_history: throughput, latency, disk growth,
+open alerts, last backup, and uptime. It's a READ aggregate — the
+cost of N+1 requests (one card = 5 endpoints × 6 cards) is what it avoids.
 
-Os helpers por instância (`queries_per_second_by_instance`,
-`latest_metric_by_instance`) também alimentam os KPIs de frota em
-`services/admin.py`, que antes tinham a mesma janela SQL duplicada.
+The per-instance helpers (`queries_per_second_by_instance`,
+`latest_metric_by_instance`) also feed the fleet KPIs in
+`services/admin.py`, which used to have the same SQL window duplicated.
 """
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -29,17 +29,17 @@ from src.schemas.instance import InstanceSummary
 from src.services import metrics as metrics_service
 from src.services import status_history
 
-# O NÚMERO de queries/s do card é a MÉDIA da mesma série que o sparkline desenha —
-# não um cálculo à parte. O card pede get_metric_history("queries_per_second",
-# "15m", 60 baldes) (InstanceCard.tsx); derivamos a MESMA série aqui e tiramos a
-# média dos pontos. Assim o número é, por construção, a média da linha: ela oscila
-# em torno dele e gráfico e número contam uma história só. A robustez a leituras
-# stale e a resets do contador vive no _counter_rate (services.metrics), que os
-# dois caminhos compartilham. Estes dois valores TÊM de casar com os do card.
+# The card's queries/s NUMBER is the AVERAGE of the same series the sparkline draws —
+# not a separate calculation. The card requests get_metric_history("queries_per_second",
+# "15m", 60 buckets) (InstanceCard.tsx); we derive the SAME series here and take the
+# average of the points. This way the number is, by construction, the average of the line: it oscillates
+# around it and the chart and the number tell a single story. Robustness against stale
+# readings and counter resets lives in _counter_rate (services.metrics), which the
+# two paths share. These two values MUST match the card's.
 _QPS_SERIES_MINUTES = 15
 _QPS_SERIES_POINTS = 60
 
-# Ordem de gravidade, para o card destacar o pior alerta aberto.
+# Severity order, so the card can highlight the worst open alert.
 _SEVERITY_RANK = {
     AlertSeverity.INFO: 0,
     AlertSeverity.WARNING: 1,
@@ -52,7 +52,7 @@ def _now() -> datetime:
 
 
 # --------------------------------------------------------------------------- #
-# Métricas (janela sobre a tabela metrics)
+# Metrics (window over the metrics table)
 # --------------------------------------------------------------------------- #
 def _latest_samples(
     db: Session,
@@ -61,9 +61,9 @@ def _latest_samples(
     limit: int,
 ) -> dict[uuid.UUID, list[tuple[float, datetime]]]:
     """
-    Os `limit` pontos mais recentes de uma métrica, por instância (mais novo
-    primeiro). Uma window function em vez de N queries: a frota inteira sai
-    numa ida ao banco.
+    The `limit` most recent points of a metric, per instance (newest
+    first). A window function instead of N queries: the whole fleet comes back
+    in a single trip to the database.
     """
     if not instance_ids:
         return {}
@@ -96,7 +96,7 @@ def _latest_samples(
 def latest_metric_by_instance(
     db: Session, instance_ids: list[uuid.UUID], metric_name: str
 ) -> dict[uuid.UUID, float]:
-    """Último valor de uma métrica por instância (ausente = sem coleta ainda)."""
+    """Latest value of a metric per instance (missing = no collection yet)."""
     return {
         instance_id: samples[0][0]
         for instance_id, samples in _latest_samples(db, instance_ids, metric_name, 1).items()
@@ -107,19 +107,19 @@ def queries_per_second_by_instance(
     db: Session, instance_ids: list[uuid.UUID]
 ) -> dict[uuid.UUID, float]:
     """
-    Taxa de commits por instância = MÉDIA da série de queries/s que o card desenha
-    no sparkline. Deriva a MESMA série que o gráfico (get_metric_history sobre o
-    contador xact_commit, mesma janela e baldes) e devolve a média dos pontos.
+    Commit rate per instance = AVERAGE of the queries/s series the card draws
+    in its sparkline. Derives the SAME series as the chart (get_metric_history over the
+    xact_commit counter, same window and buckets) and returns the average of the points.
 
-    Por que a média da série, e não um cálculo próprio: o número e o gráfico têm
-    de bater. Enquanto o número saía de uma janela/derivação diferente (era a média
-    das últimas ~5 amostras cruas), ele nunca coincidia com a linha ao lado. Sendo
-    a média EXATA da série desenhada, a linha oscila em torno do número e os dois
-    contam uma história só.
+    Why the average of the series, rather than a separate calculation: the number and the chart have
+    to match. While the number came from a different window/derivation (it was the average
+    of the last ~5 raw samples), it never lined up with the line next to it. Being
+    the EXACT average of the drawn series, the line oscillates around the number and the two
+    tell a single story.
 
-    Ausente (série vazia) quando não há dado para uma taxa — o card mostra "—" em
-    vez de um zero inventado. A robustez a leituras stale e a resets do contador
-    está no _counter_rate (services.metrics), que produz a série.
+    Missing (empty series) when there's no data for a rate — the card shows "—" instead
+    of a made-up zero. Robustness against stale readings and counter resets
+    is in _counter_rate (services.metrics), which produces the series.
     """
     result: dict[uuid.UUID, float] = {}
     for instance_id in instance_ids:
@@ -140,9 +140,9 @@ def _size_delta_24h(
     db: Session, instance_ids: list[uuid.UUID], latest_size: dict[uuid.UUID, float]
 ) -> dict[uuid.UUID, float]:
     """
-    Crescimento do banco nas últimas 24h: tamanho atual menos o mais antigo
-    dentro da janela. É o número que mostra que a carga simulada escreve de
-    verdade — a barra de storage sozinha mal se move em 24h.
+    Database growth over the last 24h: current size minus the oldest one
+    within the window. It's the number that shows the simulated load actually
+    writes — the storage bar alone barely moves in 24h.
     """
     if not instance_ids:
         return {}
@@ -175,15 +175,15 @@ def _size_delta_24h(
 
 
 # --------------------------------------------------------------------------- #
-# Alertas, backups e uptime
+# Alerts, backups, and uptime
 # --------------------------------------------------------------------------- #
 def _open_alerts(
     db: Session, instance_ids: list[uuid.UUID]
 ) -> dict[uuid.UUID, tuple[int, AlertSeverity]]:
     """
-    Alertas abertos (resolved_at NULL) por instância: quantidade e pior severidade.
+    Open alerts (resolved_at NULL) per instance: count and worst severity.
 
-    A severidade é atributo da REGRA, não do evento — daí o join.
+    Severity is an attribute of the RULE, not of the event — hence the join.
     """
     if not instance_ids:
         return {}
@@ -212,8 +212,8 @@ def _last_backup(
     db: Session, instance_ids: list[uuid.UUID]
 ) -> dict[uuid.UUID, tuple[datetime, BackupStatus]]:
     """
-    Último backup não-deletado por instância (data + status). Inclui os que
-    falharam de propósito: um card que esconde a falha é pior que nenhum card.
+    Last non-deleted backup per instance (date + status). Includes ones that
+    failed on purpose: a card that hides the failure is worse than no card.
     """
     if not instance_ids:
         return {}
@@ -241,12 +241,12 @@ def _last_backup(
 
 
 # --------------------------------------------------------------------------- #
-# Agregado
+# Aggregate
 # --------------------------------------------------------------------------- #
 def get_fleet_summary(
     db: Session, instances: list[DatabaseInstance]
 ) -> list[InstanceSummary]:
-    """Um resumo por instância recebida (já filtrada por escopo pelo router)."""
+    """A summary per instance received (already filtered by scope by the router)."""
     instance_ids = [inst.id for inst in instances]
 
     qps = queries_per_second_by_instance(db, instance_ids)

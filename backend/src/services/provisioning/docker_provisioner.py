@@ -14,37 +14,37 @@ from src.core.config import settings
 from src.services.provisioning.base import ProvisionerBase
 from src.services.provisioning.types import ProvisionResult, ProvisionerStatus
 
-# Prefixo para todos os containers provisionados pela plataforma
+# Prefix for all containers provisioned by the platform
 _CONTAINER_PREFIX = "dbaas-inst-"
 
-# Nome da rede Docker isolada para as instâncias gerenciadas
+# Name of the isolated Docker network for the managed instances
 _NETWORK_NAME = "dbaas-network"
 
-# Quantos segundos esperar o PostgreSQL aceitar conexões antes de desistir
+# How many seconds to wait for PostgreSQL to accept connections before giving up
 _READY_TIMEOUT_SECONDS = 90
 
-# Intervalo entre tentativas de conexão no polling de readiness
+# Interval between connection attempts in the readiness polling
 _READY_POLL_INTERVAL = 2.0
 
-# Política de restart dos containers de instância. "unless-stopped" faz o Docker
-# religar o container automaticamente quando o daemon/host reinicia (ex: reboot,
-# wsl --shutdown, update do Docker) — sem isto, as instâncias ficam paradas após
-# qualquer restart do Docker e o operador precisa religar manualmente.
-# "unless-stopped" (e não "always") respeita um stop intencional do operador.
+# Restart policy for instance containers. "unless-stopped" makes Docker
+# restart the container automatically when the daemon/host restarts (e.g. reboot,
+# wsl --shutdown, Docker update) — without this, instances stay stopped after
+# any Docker restart and the operator has to restart them manually.
+# "unless-stopped" (and not "always") respects an intentional stop by the operator.
 _RESTART_POLICY = {"Name": "unless-stopped"}
 
 
 # ---------------------------------------------------------------------------
-# Helpers de SQL seguro
+# Safe SQL helpers
 # ---------------------------------------------------------------------------
 
 
 def _safe_identifier(name: str) -> str:
     """
-    Normalizar um nome para um identificador PostgreSQL seguro.
+    Normalizes a name into a safe PostgreSQL identifier.
 
-    Lowercase, substitui não-alfanuméricos por underscores, prefixo se começar
-    com dígito, trunca em 63 chars (limite do PostgreSQL para identificadores).
+    Lowercase, replaces non-alphanumerics with underscores, prefixes if it starts
+    with a digit, truncates to 63 chars (PostgreSQL's limit for identifiers).
     """
     safe = re.sub(r"[^a-z0-9_]", "_", name.lower())
     if safe and safe[0].isdigit():
@@ -54,26 +54,26 @@ def _safe_identifier(name: str) -> str:
 
 def _quote_ident(ident: str) -> str:
     """
-    Envolver um identificador PostgreSQL em aspas duplas, escapando aspas internas.
+    Wraps a PostgreSQL identifier in double quotes, escaping internal quotes.
 
-    Usado para nomes de role e banco em instruções DDL.
-    Exemplo: 'my"role' → '"my""role"'
+    Used for role and database names in DDL statements.
+    Example: 'my"role' → '"my""role"'
     """
     return '"' + ident.replace('"', '""') + '"'
 
 
 def _pg_literal_string(value: str) -> str:
     """
-    Construir um literal de string PostgreSQL para uso em DDL.
+    Builds a PostgreSQL string literal for use in DDL.
 
-    CRÍTICO: PostgreSQL NÃO suporta parâmetros bind ($1) na cláusula PASSWORD
-    de CREATE ROLE / ALTER ROLE. Usar text() do psycopg com :param geraria $1,
-    causando SyntaxError no banco. Esta função constrói o literal de forma segura:
-      - Aspas simples são duplicadas (padrão SQL: '' representa uma aspas)
-      - Barras invertidas são duplicadas para compatibilidade com
-        standard_conforming_strings=off (modo legado)
+    CRITICAL: PostgreSQL does NOT support bind parameters ($1) in the PASSWORD
+    clause of CREATE ROLE / ALTER ROLE. Using psycopg's text() with :param would generate $1,
+    causing a SyntaxError on the database. This function builds the literal safely:
+      - Single quotes are doubled (SQL standard: '' represents one quote)
+      - Backslashes are doubled for compatibility with
+        standard_conforming_strings=off (legacy mode)
 
-    Exemplo: "pass'word" → "'pass''word'"
+    Example: "pass'word" → "'pass''word'"
     """
     escaped = value.replace("\\", "\\\\").replace("'", "''")
     return f"'{escaped}'"
@@ -86,22 +86,22 @@ def _pg_literal_string(value: str) -> str:
 
 class DockerProvisioner(ProvisionerBase):
     """
-    Provisiona bancos PostgreSQL como containers Docker isolados.
+    Provisions PostgreSQL databases as isolated Docker containers.
 
-    Para cada DatabaseInstance criada, este provisionador:
-    1. Inicia um container postgres:<version>-alpine com nome único
-    2. Aguarda o PostgreSQL aceitar conexões (polling)
-    3. Conecta como superuser e cria:
-       - Uma role dedicada (db_user) com LOGIN e senha aleatória
-       - Um banco dedicado (db_name) de propriedade dessa role
-       - Privilégios mínimos no schema public
-    4. Retorna ProvisionResult com todas as informações de conexão
+    For each DatabaseInstance created, this provisioner:
+    1. Starts a postgres:<version>-alpine container with a unique name
+    2. Waits for PostgreSQL to accept connections (polling)
+    3. Connects as superuser and creates:
+       - A dedicated role (db_user) with LOGIN and a random password
+       - A dedicated database (db_name) owned by that role
+       - Minimal privileges on the public schema
+    4. Returns a ProvisionResult with all the connection information
 
-    Segurança:
-    - PROVISIONER_SUPERUSER_PASSWORD usado apenas no setup, nunca armazenado
-    - A role da instância tem apenas CONNECT + CRUD no próprio banco
-    - Containers publicam porta apenas em 127.0.0.1 (localhost WSL2)
-    - Todos os containers ficam na rede Docker isolada dbaas-network
+    Security:
+    - PROVISIONER_SUPERUSER_PASSWORD used only during setup, never stored
+    - The instance's role has only CONNECT + CRUD on its own database
+    - Containers publish their port only on 127.0.0.1 (localhost WSL2)
+    - All containers live on the isolated dbaas-network
     """
 
     def __init__(self, client: docker.DockerClient) -> None:
@@ -109,7 +109,7 @@ class DockerProvisioner(ProvisionerBase):
         self._ensure_network()
 
     def _ensure_network(self) -> None:
-        """Criar a rede Docker dbaas-network se ainda não existir."""
+        """Creates the dbaas-network Docker network if it doesn't already exist."""
         try:
             self._client.networks.get(_NETWORK_NAME)
         except docker.errors.NotFound:
@@ -120,15 +120,15 @@ class DockerProvisioner(ProvisionerBase):
             )
 
     def _container_name(self, instance_id: uuid.UUID) -> str:
-        """Gerar nome de container determinístico a partir do UUID da instância."""
+        """Generates a deterministic container name from the instance's UUID."""
         return f"{_CONTAINER_PREFIX}{str(instance_id).replace('-', '')[:12]}"
 
     def _generate_password(self, length: int = 32) -> str:
         """
-        Gerar uma senha criptograficamente segura usando secrets (CSPRNG).
+        Generates a cryptographically secure password using secrets (CSPRNG).
 
-        Usa apenas alfanuméricos para evitar qualquer problema de escaping SQL,
-        mantendo alta entropia: 62^32 ≈ 2^190 bits.
+        Uses only alphanumerics to avoid any SQL-escaping issue,
+        while keeping high entropy: 62^32 ≈ 2^190 bits.
         """
         alphabet = string.ascii_letters + string.digits
         return "".join(secrets.choice(alphabet) for _ in range(length))
@@ -143,13 +143,13 @@ class DockerProvisioner(ProvisionerBase):
         timeout: int = _READY_TIMEOUT_SECONDS,
     ) -> None:
         """
-        Fazer polling até o PostgreSQL aceitar conexões ou o timeout ser atingido.
+        Polls until PostgreSQL accepts connections or the timeout is reached.
 
-        Por que polling e não sleep fixo?
-        O container inicia em milissegundos, mas o PostgreSQL dentro dele precisa
-        de alguns segundos para: inicializar o data directory, recuperar o WAL
-        (se necessário), e começar a aceitar conexões. Um sleep fixo seria
-        não confiável — muito curto em máquina carregada, desperdício em máquina rápida.
+        Why polling instead of a fixed sleep?
+        The container starts in milliseconds, but the PostgreSQL inside it needs
+        a few seconds to: initialize the data directory, recover the WAL
+        (if needed), and start accepting connections. A fixed sleep would be
+        unreliable — too short on a loaded machine, wasteful on a fast one.
         """
         deadline = time.monotonic() + timeout
         last_error: Optional[Exception] = None
@@ -164,13 +164,13 @@ class DockerProvisioner(ProvisionerBase):
                     dbname=dbname,
                     connect_timeout=2,
                 ):
-                    return  # Conexão bem-sucedida — PostgreSQL pronto
+                    return  # Successful connection — PostgreSQL ready
             except Exception as exc:
                 last_error = exc
                 time.sleep(_READY_POLL_INTERVAL)
 
         raise RuntimeError(
-            f"PostgreSQL não ficou pronto em {timeout}s. Último erro: {last_error}"
+            f"PostgreSQL was not ready within {timeout}s. Last error: {last_error}"
         )
 
     def _setup_database_and_role(
@@ -183,24 +183,24 @@ class DockerProvisioner(ProvisionerBase):
         db_password: str,
     ) -> None:
         """
-        Conectar como superuser e criar a role + banco com privilégios mínimos.
+        Connects as superuser and creates the role + database with minimal privileges.
 
-        Estratégia de privilégios (princípio do menor privilégio):
-        1. Criar role com LOGIN e senha (só pode logar — ainda sem banco)
-        2. Criar banco de propriedade dessa role (CREATE DATABASE — AUTOCOMMIT obrigatório)
-        3. Dentro do novo banco: GRANT USAGE, CREATE no schema public
-        4. DEFAULT PRIVILEGES: futuras tabelas/sequências acessíveis pela role
+        Privilege strategy (principle of least privilege):
+        1. Create the role with LOGIN and a password (can only log in — no database yet)
+        2. Create a database owned by that role (CREATE DATABASE — requires AUTOCOMMIT)
+        3. Inside the new database: GRANT USAGE, CREATE on the public schema
+        4. DEFAULT PRIVILEGES: future tables/sequences accessible by the role
 
-        Por que AUTOCOMMIT=True?
-        CREATE DATABASE não pode rodar dentro de um bloco de transação no
-        PostgreSQL. A conexão psycopg abre uma transação implícita por padrão,
-        então precisa desativá-la com autocommit=True para esse statement.
+        Why AUTOCOMMIT=True?
+        CREATE DATABASE cannot run inside a transaction block in
+        PostgreSQL. The psycopg connection opens an implicit transaction by default,
+        so it needs to be disabled with autocommit=True for that statement.
         """
         quoted_user = _quote_ident(db_user)
         quoted_db = _quote_ident(db_name)
         password_literal = _pg_literal_string(db_password)
 
-        # Passo 1: conectar ao banco padrão 'postgres' como superuser
+        # Step 1: connect to the default 'postgres' database as superuser
         with psycopg.connect(
             host=host,
             port=port,
@@ -211,16 +211,16 @@ class DockerProvisioner(ProvisionerBase):
             autocommit=True,
         ) as conn:
             with conn.cursor() as cur:
-                # Criar a role com LOGIN + senha (DDL — requer autocommit)
+                # Create the role with LOGIN + password (DDL — requires autocommit)
                 cur.execute(
                     f"CREATE ROLE {quoted_user} WITH LOGIN PASSWORD {password_literal}"
                 )
-                # Criar o banco de propriedade da role
+                # Create the database owned by the role
                 cur.execute(
                     f"CREATE DATABASE {quoted_db} OWNER {quoted_user}"
                 )
 
-        # Passo 2: conectar ao NOVO banco para configurar privilégios de schema
+        # Step 2: connect to the NEW database to configure schema privileges
         with psycopg.connect(
             host=host,
             port=port,
@@ -231,48 +231,48 @@ class DockerProvisioner(ProvisionerBase):
             autocommit=True,
         ) as conn:
             with conn.cursor() as cur:
-                # Instalar pg_stat_statements no banco da instância
-                # IF NOT EXISTS garante idempotência — sem erro se já existir
+                # Install pg_stat_statements on the instance's database
+                # IF NOT EXISTS guarantees idempotency — no error if it already exists
                 cur.execute("CREATE EXTENSION IF NOT EXISTS pg_stat_statements")
 
-                # Conceder pg_monitor ao db_user — acesso a pg_stat_*, pg_locks,
-                # pg_stat_statements etc. sem precisar de superuser
+                # Grant pg_monitor to db_user — access to pg_stat_*, pg_locks,
+                # pg_stat_statements etc. without needing superuser
                 cur.execute(
                     f"GRANT pg_monitor TO {quoted_user}"
                 )
 
-                # Conceder pg_signal_backend — permite que o db_user chame
-                # pg_terminate_backend() para encerrar conexões idle ou longas.
-                # Necessário para as tarefas KILL_IDLE e KILL_LONG da FASE 6.
-                # Sem esse grant, pg_terminate_backend() retornaria false silenciosamente
-                # para conexões de outros usuários.
+                # Grant pg_signal_backend — lets db_user call
+                # pg_terminate_backend() to end idle or long-running connections.
+                # Required for the KILL_IDLE and KILL_LONG tasks from PHASE 6.
+                # Without this grant, pg_terminate_backend() would silently return false
+                # for other users' connections.
                 cur.execute(
                     f"GRANT pg_signal_backend TO {quoted_user}"
                 )
 
-                # Permitir zerar as estatísticas de query. pg_monitor concede só
-                # LEITURA do pg_stat_statements; sem este EXECUTE, o usuário da
-                # instância não consegue resetar a view — e as queries pesadas de
-                # provisionamento (COPY do dataset, carga inicial) ficam para
-                # sempre no p99, descrevendo o seed em vez do serviço.
-                # A assinatura é explícita porque a função tem três parâmetros
-                # com default: GRANT ... ON FUNCTION f() não casaria com ela.
+                # Allows resetting query statistics. pg_monitor only grants
+                # READ access to pg_stat_statements; without this EXECUTE, the instance's
+                # user can't reset the view — and the heavy provisioning queries
+                # (dataset COPY, initial load) would stay forever in the
+                # p99, describing the seed instead of the service.
+                # The signature is explicit because the function has three parameters
+                # with defaults: GRANT ... ON FUNCTION f() wouldn't match it.
                 cur.execute(
                     f"GRANT EXECUTE ON FUNCTION "
                     f"pg_stat_statements_reset(oid, oid, bigint) TO {quoted_user}"
                 )
 
-                # Conceder privilégio REPLICATION — necessário para pg_basebackup
-                # (backup físico) conectar a esta instância via protocolo de replicação.
+                # Grant the REPLICATION privilege — required for pg_basebackup
+                # (physical backup) to connect to this instance via the replication protocol.
                 cur.execute(
                     f"ALTER ROLE {quoted_user} WITH REPLICATION"
                 )
 
-                # Permitir uso e criação de objetos no schema public
+                # Allow using and creating objects in the public schema
                 cur.execute(
                     f"GRANT USAGE, CREATE ON SCHEMA public TO {quoted_user}"
                 )
-                # DEFAULT PRIVILEGES: tabelas criadas no futuro já são acessíveis
+                # DEFAULT PRIVILEGES: tables created in the future are already accessible
                 cur.execute(
                     f"ALTER DEFAULT PRIVILEGES IN SCHEMA public "
                     f"GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO {quoted_user}"
@@ -283,7 +283,7 @@ class DockerProvisioner(ProvisionerBase):
                 )
 
     # ---------------------------------------------------------------------------
-    # Implementação da interface ProvisionerBase
+    # ProvisionerBase interface implementation
     # ---------------------------------------------------------------------------
 
     def create(
@@ -294,17 +294,17 @@ class DockerProvisioner(ProvisionerBase):
         cpu: int | None = None,
     ) -> ProvisionResult:
         """
-        Provisionar um container PostgreSQL completo para uma instância.
+        Provisions a complete PostgreSQL container for an instance.
 
-        Fluxo:
-        1. Gerar nomes únicos para container, role e banco
-        2. Gerar senha aleatória para a role
-        3. Iniciar container Docker com porta dinâmica em 127.0.0.1
-        4. Aguardar PostgreSQL ficar pronto (polling)
-        5. Criar role + banco com privilégios mínimos
-        6. Retornar ProvisionResult com todas as informações de conexão
+        Flow:
+        1. Generate unique names for the container, role, and database
+        2. Generate a random password for the role
+        3. Start the Docker container with a dynamic port on 127.0.0.1
+        4. Wait for PostgreSQL to become ready (polling)
+        5. Create the role + database with minimal privileges
+        6. Return a ProvisionResult with all the connection information
 
-        Em qualquer falha após o container subir, ele é removido (cleanup).
+        On any failure after the container comes up, it is removed (cleanup).
         """
         container_name = self._container_name(instance_id)
         instance_hex = str(instance_id).replace("-", "")
@@ -312,21 +312,21 @@ class DockerProvisioner(ProvisionerBase):
         db_name = f"db_{instance_hex[:16]}"
         db_password = self._generate_password()
 
-        # Criar diretório WAL archive no host antes de iniciar o container.
-        # Este diretório é montado como /archive dentro do container e recebe
-        # os segmentos WAL via archive_command — base para PITR no futuro.
+        # Create the WAL archive directory on the host before starting the container.
+        # This directory is mounted as /archive inside the container and receives
+        # the WAL segments via archive_command — the basis for future PITR.
         wal_dir = Path(settings.BACKUP_DIR).resolve() / str(instance_id) / "wal"
         wal_dir.mkdir(parents=True, exist_ok=True)
-        # O bind mount preserva dono/modo do host, mas quem escreve em /archive é o
-        # postgres DENTRO do container (uid 70 na imagem alpine) — uid que não existe
-        # no host e nunca casa com o dono do diretório. Sem permissão de escrita para
-        # "outros", todo archive_command falha com "Permission denied": o Postgres
-        # nunca recicla os WAL (pg_wal cresce até encher o disco) e o PITR fica sem
-        # base. chmod explícito porque o mkdir aplica o umask do processo (0755).
+        # The bind mount preserves the host's owner/mode, but the one writing to /archive is
+        # postgres INSIDE the container (uid 70 in the alpine image) — a uid that doesn't exist
+        # on the host and never matches the directory's owner. Without write permission for
+        # "others", every archive_command fails with "Permission denied": Postgres
+        # never recycles the WAL (pg_wal grows until it fills the disk) and PITR is left without
+        # a base. Explicit chmod because mkdir applies the process's umask (0755).
         wal_dir.chmod(0o777)
 
-        # Iniciar container — porta None no host = Docker atribui porta livre
-        # ("127.0.0.1", None) = bind em localhost com porta dinâmica
+        # Start the container — port None on the host = Docker assigns a free port
+        # ("127.0.0.1", None) = bind on localhost with a dynamic port
         run_kwargs: dict = {
             "image": f"postgres:{engine_version}-alpine",
             "name": container_name,
@@ -338,17 +338,17 @@ class DockerProvisioner(ProvisionerBase):
             "ports": {"5432/tcp": ("127.0.0.1", None)},
             "network": _NETWORK_NAME,
             "detach": True,
-            "remove": False,  # Manter container após stop (necessário para restart)
-            "restart_policy": _RESTART_POLICY,  # Sobreviver a restart do Docker/host
+            "remove": False,  # Keep the container after stop (needed for restart)
+            "restart_policy": _RESTART_POLICY,  # Survive a Docker/host restart
             "command": [
                 "-c", "shared_preload_libraries=pg_stat_statements",
                 "-c", "wal_level=replica",
                 "-c", "archive_mode=on",
                 "-c", "archive_command=cp %p /archive/%f",
-                # Prontidão para replicação (FASE 9). max_wal_senders/slots já têm
-                # default 10 no PG10+, mas explicitá-los documenta a intenção e
-                # protege contra imagens com defaults menores. hot_standby não afeta
-                # um primário, mas é herdado fisicamente pelo standby via basebackup.
+                # Readiness for replication (PHASE 9). max_wal_senders/slots already have a
+                # default of 10 on PG10+, but making them explicit documents the intent and
+                # protects against images with lower defaults. hot_standby doesn't affect
+                # a primary, but is physically inherited by the standby via basebackup.
                 "-c", "max_wal_senders=10",
                 "-c", "max_replication_slots=10",
                 "-c", "hot_standby=on",
@@ -358,11 +358,11 @@ class DockerProvisioner(ProvisionerBase):
             },
         }
 
-        # Aplicar limites de recurso quando definidos na instância.
-        # mem_limit: string no formato "<n>m" (ex: "512m") — equivale a --memory no docker run.
-        # nano_cpus: inteiro em nanoCPUs (1 CPU = 1_000_000_000) — equivale a --cpus no docker run.
-        # Usar nano_cpus (throttling por tempo) em vez de cpuset_cpus (pinning de núcleos):
-        # cpu=2 significa "pode usar até 2 CPUs equivalentes", não "só pode usar os núcleos 0 e 1".
+        # Apply resource limits when set on the instance.
+        # mem_limit: string in "<n>m" format (e.g. "512m") — equivalent to --memory in docker run.
+        # nano_cpus: integer in nanoCPUs (1 CPU = 1_000_000_000) — equivalent to --cpus in docker run.
+        # Use nano_cpus (time-based throttling) instead of cpuset_cpus (core pinning):
+        # cpu=2 means "can use up to the equivalent of 2 CPUs", not "can only use cores 0 and 1".
         if memory_mb is not None:
             run_kwargs["mem_limit"] = f"{memory_mb}m"
         if cpu is not None:
@@ -370,17 +370,17 @@ class DockerProvisioner(ProvisionerBase):
 
         container = self._client.containers.run(**run_kwargs)
 
-        # Recarregar metadados do container para obter a porta atribuída
+        # Reload the container's metadata to get the assigned port
         container.reload()
         port_bindings = container.ports.get("5432/tcp")
         if not port_bindings:
             container.remove(force=True)
-            raise RuntimeError("Docker não atribuiu uma porta ao container")
+            raise RuntimeError("Docker did not assign a port to the container")
 
         host_port = int(port_bindings[0]["HostPort"])
         host = "127.0.0.1"
 
-        # Aguardar PostgreSQL aceitar conexões
+        # Wait for PostgreSQL to accept connections
         try:
             self._wait_until_database_ready(
                 host=host,
@@ -393,7 +393,7 @@ class DockerProvisioner(ProvisionerBase):
             container.remove(force=True)
             raise
 
-        # Criar role dedicada + banco com privilégios mínimos
+        # Create the dedicated role + database with minimal privileges
         try:
             self._setup_database_and_role(
                 host=host,
@@ -405,7 +405,7 @@ class DockerProvisioner(ProvisionerBase):
             )
         except Exception as exc:
             container.remove(force=True)
-            raise RuntimeError(f"Setup do banco falhou: {exc}") from exc
+            raise RuntimeError(f"Database setup failed: {exc}") from exc
 
         return ProvisionResult(
             container_id=container.id,
@@ -419,35 +419,35 @@ class DockerProvisioner(ProvisionerBase):
 
     def start(self, instance_id: uuid.UUID) -> int:
         """
-        Iniciar um container parado e retornar a porta publicada no host.
+        Starts a stopped container and returns the port published on the host.
 
-        Portas publicadas dinamicamente (("127.0.0.1", None)) NÃO são preservadas
-        pelo Docker entre stop/start — cada start pode receber uma porta nova.
-        Relemos o mapeamento após o start e devolvemos a porta atual.
+        Dynamically published ports (("127.0.0.1", None)) are NOT preserved
+        by Docker between stop/start — each start can get a new port.
+        We re-read the mapping after the start and return the current port.
         """
         container_name = self._container_name(instance_id)
         try:
             container = self._client.containers.get(container_name)
-            # Garantir a política de restart também em containers já existentes
-            # (criados antes desta política). Idempotente — no-op se já estiver
-            # definida. Aplicar aqui faz o upgrade acontecer no primeiro start.
+            # Also ensure the restart policy on already-existing containers
+            # (created before this policy). Idempotent — a no-op if it's already
+            # set. Applying it here makes the upgrade happen on the first start.
             container.update(restart_policy=_RESTART_POLICY)
             container.start()
         except docker.errors.NotFound as exc:
-            raise RuntimeError(f"Container {container_name} não encontrado") from exc
+            raise RuntimeError(f"Container {container_name} not found") from exc
 
         container.reload()
         port_bindings = container.ports.get("5432/tcp")
         if not port_bindings:
             raise RuntimeError(
-                "Docker não atribuiu uma porta ao container após o start"
+                "Docker did not assign a port to the container after start"
             )
         host_port = int(port_bindings[0]["HostPort"])
 
-        # Aguardar o PostgreSQL aceitar conexões antes de retornar. O container
-        # inicia em milissegundos, mas o PG leva alguns segundos. Sem esta espera,
-        # o status RUNNING seria reportado antes do banco aceitar conexões — e
-        # consultas ao vivo (health, slow-queries) falhariam nessa janela.
+        # Wait for PostgreSQL to accept connections before returning. The container
+        # starts in milliseconds, but PG takes a few seconds. Without this wait,
+        # the RUNNING status would be reported before the database accepts connections — and
+        # live queries (health, slow-queries) would fail in that window.
         self._wait_until_database_ready(
             host="127.0.0.1",
             port=host_port,
@@ -458,38 +458,38 @@ class DockerProvisioner(ProvisionerBase):
         return host_port
 
     def stop(self, instance_id: uuid.UUID) -> None:
-        """Parar um container em execução com timeout de 10 segundos."""
+        """Stops a running container with a 10-second timeout."""
         container_name = self._container_name(instance_id)
         try:
             container = self._client.containers.get(container_name)
             container.stop(timeout=10)
         except docker.errors.NotFound as exc:
-            raise RuntimeError(f"Container {container_name} não encontrado") from exc
+            raise RuntimeError(f"Container {container_name} not found") from exc
 
     def delete(self, instance_id: uuid.UUID) -> None:
         """
-        Remover um container permanentemente.
+        Permanently removes a container.
 
-        Idempotente: se o container já não existir, a operação é bem-sucedida
-        (pass on NotFound). Isso garante que uma segunda chamada a delete()
-        não vai levantar erro se o container já foi removido.
+        Idempotent: if the container no longer exists, the operation succeeds
+        (pass on NotFound). This guarantees a second call to delete()
+        won't raise an error if the container was already removed.
         """
         container_name = self._container_name(instance_id)
         try:
             container = self._client.containers.get(container_name)
             container.remove(force=True)
         except docker.errors.NotFound:
-            pass  # Já removido — comportamento idempotente correto
-        # Se esta instância for um standby, remove também seu volume de PGDATA.
-        # No-op para instâncias normais (usam bind mount, não volume nomeado).
+            pass  # Already removed — correct idempotent behavior
+        # If this instance is a standby, also remove its PGDATA volume.
+        # A no-op for normal instances (they use a bind mount, not a named volume).
         self._remove_volume_quietly(self._replica_volume_name(instance_id))
 
     def get_status(self, instance_id: uuid.UUID) -> ProvisionerStatus:
         """
-        Retornar o status de infra do container sem lançar exceção.
+        Returns the container's infra status without raising an exception.
 
-        Usado pelo status_poller para detectar containers que pararam
-        inesperadamente (ex: OOM, crash, reinicialização do host Docker).
+        Used by the status_poller to detect containers that stopped
+        unexpectedly (e.g. OOM, crash, Docker host restart).
         """
         container_name = self._container_name(instance_id)
         try:
@@ -504,12 +504,12 @@ class DockerProvisioner(ProvisionerBase):
 
     def get_port(self, instance_id: uuid.UUID) -> Optional[int]:
         """
-        Retornar a porta atualmente publicada por um container em execução.
+        Returns the port currently published by a running container.
 
-        Usado pelo status_poller para detectar quando o Docker republicou uma
-        porta diferente (acontece ao religar o container após restart do host) e
-        ressincronizar a connection_uri. Retorna None se o container não existe,
-        não está rodando, ou ainda não tem porta publicada — sem lançar exceção.
+        Used by the status_poller to detect when Docker republished a
+        different port (happens when the container restarts after a host restart) and
+        resync connection_uri. Returns None if the container doesn't exist,
+        isn't running, or doesn't have a published port yet — without raising an exception.
         """
         container_name = self._container_name(instance_id)
         try:
@@ -527,27 +527,27 @@ class DockerProvisioner(ProvisionerBase):
             return None
 
     # ---------------------------------------------------------------------------
-    # Replicação (FASE 9)
+    # Replication (PHASE 9)
     # ---------------------------------------------------------------------------
 
     def _replica_volume_name(self, replica_instance_id: uuid.UUID) -> str:
-        """Nome determinístico do volume Docker que guarda o PGDATA do standby."""
+        """Deterministic name of the Docker volume that holds the standby's PGDATA."""
         return f"dbaas-replica-{str(replica_instance_id).replace('-', '')[:12]}"
 
     def _allow_replication_on_primary(self, primary_container) -> None:
         """
-        Liberar conexões de replicação no primário.
+        Allows replication connections on the primary.
 
-        O pg_hba.conf padrão da imagem só permite `replication` de 127.0.0.1; o
-        standby conecta pela rede bridge (172.x), então anexamos uma linha
-        `host replication` cobrindo a rede interna e recarregamos o pg_hba via
-        SIGHUP ao postmaster (PID 1 do container). Sem o reload, a regra nova só
-        valeria após um restart e o pg_basebackup falharia com "no pg_hba.conf
-        entry for replication". Idempotente (grep antes de anexar). Seguro: os
-        containers publicam porta só em 127.0.0.1 no host.
+        The image's default pg_hba.conf only allows `replication` from 127.0.0.1; the
+        standby connects over the bridge network (172.x), so we append a
+        `host replication` line covering the internal network and reload pg_hba via
+        SIGHUP to the postmaster (PID 1 of the container). Without the reload, the new
+        rule would only apply after a restart and pg_basebackup would fail with "no pg_hba.conf
+        entry for replication". Idempotent (grep before appending). Safe: the
+        containers only publish their port on 127.0.0.1 on the host.
         """
         line = "host replication all 0.0.0.0/0 scram-sha-256"
-        # sh (alpine não tem bash). $PGDATA aponta para o data dir dentro da imagem.
+        # sh (alpine has no bash). $PGDATA points to the data dir inside the image.
         script = (
             f'grep -qF "{line}" "$PGDATA/pg_hba.conf" '
             f'|| echo "{line}" >> "$PGDATA/pg_hba.conf"'
@@ -555,11 +555,11 @@ class DockerProvisioner(ProvisionerBase):
         exit_code, output = primary_container.exec_run(["sh", "-c", script])
         if exit_code != 0:
             raise RuntimeError(
-                f"Falha ao ajustar pg_hba.conf do primário: {output!r}"
+                f"Failed to adjust the primary's pg_hba.conf: {output!r}"
             )
-        # SIGHUP ao postmaster recarrega pg_hba.conf/postgresql.conf sem restart.
+        # SIGHUP to the postmaster reloads pg_hba.conf/postgresql.conf without a restart.
         primary_container.kill(signal="SIGHUP")
-        # Pequena espera para o reload assentar antes do pg_basebackup conectar.
+        # Small wait for the reload to settle before pg_basebackup connects.
         time.sleep(1.5)
 
     def create_replica(
@@ -574,21 +574,21 @@ class DockerProvisioner(ProvisionerBase):
         cpu: Optional[int] = None,
     ) -> ProvisionResult:
         """
-        Criar um standby em streaming a partir de um primário existente.
+        Creates a streaming standby from an existing primary.
 
-        Fluxo:
-        1. Localizar o container do primário e liberar replicação no pg_hba.conf
-        2. `pg_basebackup` num container one-shot → volume novo (cópia física + `-R`,
-           que grava standby.signal e primary_conninfo já com a senha embutida)
-        3. Subir o container standby sobre esse volume (boota em recovery/hot standby)
-        4. Aguardar aceitar conexões read-only e retornar as infos de conexão
+        Flow:
+        1. Locate the primary's container and allow replication in pg_hba.conf
+        2. `pg_basebackup` in a one-shot container → new volume (physical copy + `-R`,
+           which writes standby.signal and primary_conninfo already with the password embedded)
+        3. Bring up the standby container on top of that volume (boots into recovery/hot standby)
+        4. Wait for it to accept read-only connections and return the connection info
         """
         primary_name = self._container_name(primary_instance_id)
         try:
             primary_container = self._client.containers.get(primary_name)
         except docker.errors.NotFound as exc:
             raise RuntimeError(
-                f"Primário {primary_name} não encontrado — não é possível replicar"
+                f"Primary {primary_name} not found — cannot replicate"
             ) from exc
 
         self._allow_replication_on_primary(primary_container)
@@ -598,10 +598,10 @@ class DockerProvisioner(ProvisionerBase):
         replica_name = self._container_name(replica_instance_id)
         superuser_password = settings.PROVISIONER_SUPERUSER_PASSWORD
 
-        # Passo 2 — pg_basebackup one-shot. -R grava a config de standby; passar a
-        # conninfo completa em -d faz o primary_conninfo já incluir a senha (sem
-        # isso o walreceiver do standby não autentica). -Xs = stream do WAL em
-        # paralelo; -Fp = formato plain (data dir pronto para uso).
+        # Step 2 — one-shot pg_basebackup. -R writes the standby config; passing the
+        # full conninfo via -d means primary_conninfo already includes the password (without
+        # this, the standby's walreceiver wouldn't authenticate). -Xs = stream the WAL in
+        # parallel; -Fp = plain format (data dir ready to use).
         conninfo = (
             f"host={primary_name} port=5432 user=postgres "
             f"password={superuser_password} dbname=postgres"
@@ -621,13 +621,13 @@ class DockerProvisioner(ProvisionerBase):
                 ],
             )
         except docker.errors.ContainerError as exc:
-            # Volume parcial/sujo — remove para permitir uma nova tentativa limpa.
+            # Partial/dirty volume — remove it to allow a clean retry.
             self._remove_volume_quietly(volume_name)
-            raise RuntimeError(f"pg_basebackup falhou: {exc}") from exc
+            raise RuntimeError(f"pg_basebackup failed: {exc}") from exc
 
-        # Passo 3 — subir o standby sobre o data dir replicado. Como o PGDATA já
-        # existe, o entrypoint pula o initdb e o PostgreSQL entra em recovery,
-        # conectando ao primário via primary_conninfo.
+        # Step 3 — bring up the standby on top of the replicated data dir. Since PGDATA
+        # already exists, the entrypoint skips initdb and PostgreSQL enters recovery,
+        # connecting to the primary via primary_conninfo.
         run_kwargs: dict = {
             "image": image,
             "name": replica_name,
@@ -652,11 +652,11 @@ class DockerProvisioner(ProvisionerBase):
         if not port_bindings:
             container.remove(force=True)
             self._remove_volume_quietly(volume_name)
-            raise RuntimeError("Docker não atribuiu uma porta ao standby")
+            raise RuntimeError("Docker did not assign a port to the standby")
         host_port = int(port_bindings[0]["HostPort"])
 
-        # Passo 4 — aguardar o standby aceitar conexões (recovery consistente).
-        # Usa o superuser, cuja senha foi copiada fisicamente do primário.
+        # Step 4 — wait for the standby to accept connections (consistent recovery).
+        # Uses the superuser, whose password was physically copied from the primary.
         try:
             self._wait_until_database_ready(
                 host="127.0.0.1",
@@ -682,14 +682,14 @@ class DockerProvisioner(ProvisionerBase):
 
     def promote_replica(self, replica_instance_id: uuid.UUID) -> None:
         """
-        Promover o standby a primário via pg_promote().
+        Promotes the standby to primary via pg_promote().
 
-        Conecta como superuser e chama pg_promote(); o PostgreSQL sai do modo de
-        recovery, remove standby.signal e passa a aceitar escritas.
+        Connects as superuser and calls pg_promote(); PostgreSQL exits
+        recovery mode, removes standby.signal, and starts accepting writes.
         """
         host_port = self.get_port(replica_instance_id)
         if host_port is None:
-            raise RuntimeError("Standby não está em execução — não é possível promover")
+            raise RuntimeError("Standby is not running — cannot promote")
         try:
             with psycopg.connect(
                 host="127.0.0.1",
@@ -703,10 +703,10 @@ class DockerProvisioner(ProvisionerBase):
                 with conn.cursor() as cur:
                     cur.execute("SELECT pg_promote(wait => true)")
         except Exception as exc:
-            raise RuntimeError(f"Falha ao promover o standby: {exc}") from exc
+            raise RuntimeError(f"Failed to promote the standby: {exc}") from exc
 
     def _remove_volume_quietly(self, volume_name: str) -> None:
-        """Remover um volume Docker ignorando ausência/erros (cleanup best-effort)."""
+        """Removes a Docker volume, ignoring absence/errors (best-effort cleanup)."""
         try:
             self._client.volumes.get(volume_name).remove(force=True)
         except Exception:
@@ -714,11 +714,11 @@ class DockerProvisioner(ProvisionerBase):
 
     def logs(self, instance_id: uuid.UUID, tail: int = 200) -> str:
         """
-        Retornar as últimas `tail` linhas de log do container da instância.
+        Returns the last `tail` log lines of the instance's container.
 
-        timestamps=True prefixa cada linha com o horário — útil para depurar
-        ordem de eventos. Decodifica com errors="replace" para nunca quebrar em
-        bytes inválidos no stream de log.
+        timestamps=True prefixes each line with the time — useful for debugging
+        event order. Decodes with errors="replace" so it never breaks on
+        invalid bytes in the log stream.
         """
         container_name = self._container_name(instance_id)
         try:
@@ -726,4 +726,4 @@ class DockerProvisioner(ProvisionerBase):
             raw = container.logs(tail=tail, timestamps=True)
             return raw.decode("utf-8", errors="replace")
         except docker.errors.NotFound as exc:
-            raise RuntimeError(f"Container {container_name} não encontrado") from exc
+            raise RuntimeError(f"Container {container_name} not found") from exc

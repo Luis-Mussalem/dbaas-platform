@@ -1,35 +1,35 @@
 """
-Seed da frota de demonstração (multi-tenant) — a frota que um clone limpo
-entrega pronta para explorar.
+Seed for the demo (multi-tenant) fleet — the fleet a clean clone
+delivers ready to explore.
 
-O que este seed cria é REAL: empresas, usuários e containers PostgreSQL de
-verdade com dados carregados. Além disso, no fim do boot ele deixa a frota VIVA:
-semeia o histórico sintético (24h de métricas, uptime, backups, alertas,
-manutenção, audit — via `seed/history.enrich_fleet`) e o gerador de carga
-(`services/workload_simulator.py`) mantém uma carga-base contínua, para o
-dashboard mostrar uma plataforma robusta e viva já no primeiro login, sem
-ninguém precisar clicar em nada.
+What this seed creates is REAL: actual companies, users, and PostgreSQL
+containers with loaded data. It also leaves the fleet ALIVE by the end of boot:
+it seeds synthetic history (24h of metrics, uptime, backups, alerts,
+maintenance, audit — via `seed/history.enrich_fleet`) and the load generator
+(`services/workload_simulator.py`) keeps a continuous baseline load, so the
+dashboard shows a robust, live platform right on the first login, without
+anyone needing to click anything.
 
-Cria, de forma idempotente:
-- 3 empresas fictícias + 5 usuários cada (1 admin de empresa + 4 membros), todos
-  com a mesma senha demo (dado mock, sem segredo real).
-- 2 instâncias por empresa (prod + staging), com região e ambiente.
+Creates, idempotently:
+- 3 fictitious companies + 5 users each (1 company admin + 4 members), all
+  with the same demo password (mock data, no real secret).
+- 2 instances per company (prod + staging), with region and environment.
 
-Modo de provisionamento:
-- **Docker disponível** (docker compose num host Linux, ou uvicorn no host): cria
-  CONTAINERS PostgreSQL REAIS e carrega um schema de negócio por empresa (catálogo
-  + tabela transacional) em prod e staging. SQL Console, logs e métricas ao vivo
-  funcionam de verdade.
-- **Sem Docker** (ex.: Docker Desktop em Mac/Windows): cai para registros
-  dados-apenas (STOPPED), para o dashboard ainda mostrar a frota (mapa de
-  regiões, cards) — sem tráfego, porque não há banco para consultar.
+Provisioning mode:
+- **Docker available** (docker compose on a Linux host, or uvicorn on the host): creates
+  REAL PostgreSQL CONTAINERS and loads a business schema per company (catalog
+  + transactional table) in prod and staging. The SQL Console, logs, and live
+  metrics actually work.
+- **No Docker** (e.g. Docker Desktop on Mac/Windows): falls back to
+  data-only records (STOPPED), so the dashboard still shows the fleet (region
+  map, cards) — without traffic, since there's no database to query.
 
-Executado automaticamente pelo docker compose após as migrations. Idempotente:
-instâncias já existentes (por nome+empresa) são puladas, então religar o stack
-não recria nada. Também roda à mão, a partir de backend/ com a venv ativa:
+Run automatically by docker compose after the migrations. Idempotent:
+instances that already exist (by name+company) are skipped, so restarting the
+stack doesn't recreate anything. Also runs by hand, from backend/ with the venv active:
 
-    python -m src.seed.demo            # semeia
-    python -m src.seed.demo --clear    # remove a frota demo (containers + registros)
+    python -m src.seed.demo            # seeds
+    python -m src.seed.demo --clear    # removes the demo fleet (containers + records)
 """
 import asyncio
 import logging
@@ -50,21 +50,21 @@ from src.services.instance import create_instance
 
 logger = logging.getLogger(__name__)
 
-DEMO_MARKER = "__demo_fleet__"  # marca as instâncias deste seed (idempotência/teardown)
+DEMO_MARKER = "__demo_fleet__"  # marks the instances created by this seed (idempotency/teardown)
 
-# Senha única de demonstração. Atende à política (12+ chars, maiúscula, minúscula,
-# dígito e símbolo). Dado mock — impresso no log para facilitar o login.
+# Single demo password. Meets the policy (12+ chars, uppercase, lowercase,
+# digit, and symbol). Mock data — printed to the log to make logging in easier.
 DEMO_PASSWORD = "DemoPass123!"
 
 MEMBER_NAMES = ["ana", "bruno", "carla", "diego"]
 
-# Tamanho-alvo do banco POR INSTÂNCIA (total de pg_database_size), contra o plano
-# de 1 GB declarado em COMPANIES. Alvos VARIADOS de propósito: com um valor único
-# por ambiente, todos os cards mostravam a mesma barra e a frota parecia de
-# brinquedo. Aqui prod ocupa ~37–60% e staging ~14–29% — um espectro que lê como
-# "frota real", ainda sem gravar gigabytes por instância. Tunável: ajuste um número
-# e o card acompanha, porque os bytes são MEDIDOS por pg_database_size, não
-# inventados — a tabela-fato de negócio é quem cresce até o alvo.
+# Target database size PER INSTANCE (total pg_database_size), against the 1 GB
+# plan declared in COMPANIES. VARIED targets on purpose: with a single value
+# per environment, every card showed the same bar and the fleet looked like a
+# toy. Here prod occupies ~37-60% and staging ~14-29% — a spread that reads as
+# a "real fleet", while still not writing gigabytes per instance. Tunable: adjust a
+# number and the card follows, because the bytes are MEASURED by pg_database_size, not
+# made up — the business fact table is what grows to the target.
 _MB = 1024 ** 2
 _DB_TARGET_BYTES = {
     "neptune-payments-prod": 620 * _MB,      # ~60%
@@ -75,29 +75,29 @@ _DB_TARGET_BYTES = {
     "jupiter-clothing-staging": 140 * _MB,   # ~14%
 }
 
-# Linhas de negócio por lote de geração. Linhas realistas são mais estreitas que o
-# BLOB antigo (~150 B vs ~640 B), então cabem mais por MB; 100k/lote mantém a
-# geração rápida e o teto de lotes protege contra loop infinito se pg_database_size
-# não subir como esperado (620 MB ÷ ~150 B ≈ 4,3M linhas ≈ 43 lotes).
+# Business rows per generation batch. Realistic rows are narrower than the
+# old BLOB (~150 B vs ~640 B), so more fit per MB; 100k/batch keeps
+# generation fast and the batch cap guards against an infinite loop if pg_database_size
+# doesn't climb as expected (620 MB ÷ ~150 B ≈ 4.3M rows ≈ 43 batches).
 _FILL_BATCH_ROWS = 100_000
 _FILL_MAX_BATCHES = 140
 
-# Tabelas de layouts ANTIGOS do seed, dropadas na migração para o schema de
-# negócio (o BLOB `storage_ballast` e os catálogos antigos).
+# Tables from the seed's OLD layouts, dropped in the migration to the business
+# schema (the `storage_ballast` BLOB and the old catalogs).
 _LEGACY_TABLES = ("storage_ballast", "transactions", "inventory")
 
-# Configuração por empresa: região, admin, o SCHEMA de negócio e as 2 instâncias
-# (nome, ambiente, cpu, memória MB, storage GB).
+# Per-company configuration: region, admin, the business SCHEMA, and the 2 instances
+# (name, environment, cpu, memory MB, storage GB).
 #
-# Cada base tem um CATÁLOGO pequeno e curado (dimensão) e uma tabela transacional
-# GRANDE (fato) — esta é quem enche o disco até o alvo de `_DB_TARGET_BYTES`,
-# gerando linhas de negócio realistas em vez de um BLOB. Toda tabela-fato tem
-# `amount` e `created_at`, o contrato que a carga (`workload_simulator`) usa para a
-# query pesada "receita por hora". Tudo em inglês (dado de negócio, não UI).
+# Each database has a small, curated CATALOG (dimension) and a LARGE transactional
+# table (fact) — this is what fills the disk up to the `_DB_TARGET_BYTES` target,
+# generating realistic business rows instead of a BLOB. Every fact table has
+# `amount` and `created_at`, the contract the load (`workload_simulator`) uses for the
+# heavy "hourly revenue" query. Everything in English (business data, not UI).
 #
-#   catalog.seed  — INSERT com VALUES curados (roda uma vez).
-#   fact.gen      — INSERT ... SELECT FROM generate_series(1, %s) que referencia o
-#                   catálogo por LATERAL; repetido em lotes até o tamanho-alvo.
+#   catalog.seed  — INSERT with curated VALUES (runs once).
+#   fact.gen      — INSERT ... SELECT FROM generate_series(1, %s) that references the
+#                   catalog via LATERAL; repeated in batches up to the target size.
 COMPANIES: dict[str, dict] = {
     "Neptune Payments": {
         "slug": "neptune",
@@ -374,7 +374,7 @@ COMPANIES: dict[str, dict] = {
 
 
 # --------------------------------------------------------------------------- #
-# Empresas e usuários
+# Companies and users
 # --------------------------------------------------------------------------- #
 def _get_or_create_company(db, name: str) -> Company:
     company = db.query(Company).filter(Company.name == name).first()
@@ -415,13 +415,13 @@ def _seed_company_and_users(db, company_name: str, slug: str) -> tuple[Company, 
 
 
 # --------------------------------------------------------------------------- #
-# Provisionamento real vs. fallback dados-apenas
+# Real provisioning vs. data-only fallback
 # --------------------------------------------------------------------------- #
 def _provisioner_available() -> bool:
-    """True se o daemon Docker está acessível (senão, seed dados-apenas).
+    """True if the Docker daemon is reachable (otherwise, data-only seed).
 
-    get_provisioner() bate no daemon já na construção (via _ensure_network), então
-    levanta docker.errors.DockerException se o Docker não estiver acessível.
+    get_provisioner() hits the daemon right at construction (via _ensure_network), so it
+    raises docker.errors.DockerException if Docker isn't reachable.
     """
     try:
         from src.services.provisioning import get_provisioner
@@ -429,7 +429,7 @@ def _provisioner_available() -> bool:
         get_provisioner()
         return True
     except Exception as exc:
-        logger.info("Seed demo: Docker indisponível (%s) — usando modo dados-apenas.", exc)
+        logger.info("Demo seed: Docker unavailable (%s) — using data-only mode.", exc)
         return False
 
 
@@ -447,21 +447,21 @@ def _existing_instance(db, name: str, company_id):
 
 def _seed_business_data(inst: DatabaseInstance, cfg: dict) -> None:
     """
-    Deixar o banco com um schema de negócio REAL e ocupado até o alvo do ambiente.
+    Leaves the database with a REAL business schema, filled up to the environment's target.
 
-    Um PostgreSQL recém-provisionado ocupa ~8 MB. Contra qualquer plano plausível
-    isso arredonda para 0%, e a barra do card fica morta. Antes o volume vinha de
-    um BLOB opaco (`storage_ballast`) — que aparecia cru na SQL Console e denunciava
-    a demo. Agora o volume é a própria tabela transacional do negócio (payments /
-    sales): as linhas existem de verdade, `pg_database_size` mede o que está no
-    disco, o backup as carrega e a SQL Console mostra dados que fazem sentido.
+    A freshly provisioned PostgreSQL occupies ~8 MB. Against any plausible plan
+    that rounds to 0%, and the card's bar looks dead. The volume used to come from
+    an opaque BLOB (`storage_ballast`) — which showed up raw in the SQL Console and gave
+    the demo away. Now the volume is the business's actual transactional table (payments /
+    sales): the rows genuinely exist, `pg_database_size` measures what's on
+    disk, the backup carries them, and the SQL Console shows data that makes sense.
 
-    Migração + idempotência pela EXISTÊNCIA da tabela-fato:
-    - Fato ausente → base no layout antigo (ou vazia): dropa o legado (BLOB +
-      catálogos antigos) e quaisquer tabelas do schema novo, recria catálogo + fato
-      e semeia o catálogo curado (uma vez).
-    - Fato presente → só completa o preenchimento até o alvo (relê o tamanho a cada
-      lote e para ao alcançar), então reexecutar o seed não engorda o banco.
+    Migration + idempotency via the EXISTENCE of the fact table:
+    - Fact missing → database on the old layout (or empty): drops the legacy (BLOB +
+      old catalogs) and any tables from the new schema, recreates catalog + fact,
+      and seeds the curated catalog (once).
+    - Fact present → just tops up the fill to the target (rereads the size on each
+      batch and stops once reached), so rerunning the seed doesn't bloat the database.
     """
     target = _DB_TARGET_BYTES.get(inst.name)
     if target is None or not inst.connection_uri:
@@ -473,8 +473,8 @@ def _seed_business_data(inst: DatabaseInstance, cfg: dict) -> None:
             "SELECT to_regclass(%s) IS NOT NULL", (fact["name"],)
         ).fetchone()[0]
         if not fact_exists:
-            # Estado limpo: derruba o legado (BLOB + catálogos antigos) e o schema
-            # novo (caso um seed anterior tenha parado no meio), depois recria.
+            # Clean state: tears down the legacy (BLOB + old catalogs) and the new
+            # schema (in case a previous seed stopped halfway through), then recreates.
             drop = ", ".join(_LEGACY_TABLES + (catalog["name"], fact["name"]))
             conn.execute(f"DROP TABLE IF EXISTS {drop} CASCADE")
             conn.execute(catalog["ddl"])
@@ -484,7 +484,7 @@ def _seed_business_data(inst: DatabaseInstance, cfg: dict) -> None:
 
 
 def _fill_to_target(conn, gen_sql: str, target: int, inst_name: str) -> None:
-    """Gera linhas de negócio em lotes até `pg_database_size` alcançar o alvo."""
+    """Generates business rows in batches until `pg_database_size` reaches the target."""
     for _ in range(_FILL_MAX_BATCHES):
         size = conn.execute("SELECT pg_database_size(current_database())").fetchone()[0]
         if size >= target:
@@ -492,32 +492,32 @@ def _fill_to_target(conn, gen_sql: str, target: int, inst_name: str) -> None:
         conn.execute(gen_sql, (_FILL_BATCH_ROWS,))
     else:
         logger.warning(
-            "Seed demo: %s parou no teto de lotes sem atingir %d bytes", inst_name, target
+            "Demo seed: %s stopped at the batch cap without reaching %d bytes", inst_name, target
         )
 
 
 def _reset_query_stats(inst: DatabaseInstance) -> None:
     """
-    Zera o pg_stat_statements depois de semear.
+    Resets pg_stat_statements after seeding.
 
-    As queries de PROVISIONAMENTO — o COPY do dataset e os INSERTs do lastro —
-    levam centenas de milissegundos e ficam gravadas para sempre na view, que
-    agrega por fingerprint desde o último reset. Com elas dentro, o p99 da
-    instância fica cravado em ~900ms: um número real, mas que descreve o seed,
-    não o serviço. Zerando aqui, os percentis passam a medir só o tráfego que a
-    instância de fato atende.
+    The PROVISIONING queries — the dataset COPY and the ballast INSERTs —
+    take hundreds of milliseconds and stay recorded forever in the view, which
+    aggregates by fingerprint since the last reset. With them still in there, the
+    instance's p99 stays pinned at ~900ms: a real number, but one that describes the seed,
+    not the service. Resetting here, the percentiles go on to measure only the traffic the
+    instance actually serves.
     """
     if not inst.connection_uri:
         return
     try:
         with psycopg.connect(decrypt_value(inst.connection_uri), autocommit=True) as conn:
             conn.execute("SELECT pg_stat_statements_reset()")
-    except Exception as exc:  # noqa: BLE001 — sem a extensão, não há o que zerar
-        logger.debug("Seed demo: pg_stat_statements_reset em %s: %s", inst.name, exc)
+    except Exception as exc:  # noqa: BLE001 — without the extension, there's nothing to reset
+        logger.debug("Demo seed: pg_stat_statements_reset on %s: %s", inst.name, exc)
 
 
 def _seed_real(db, company: Company, admin: User, cfg: dict) -> None:
-    """Provisiona containers reais e carrega o schema de negócio em prod E staging."""
+    """Provisions real containers and loads the business schema in prod AND staging."""
     for name, env, cpu, mem, storage in cfg["instances"]:
         inst = _existing_instance(db, name, company.id)
         if inst is None:
@@ -531,22 +531,22 @@ def _seed_real(db, company: Company, admin: User, cfg: dict) -> None:
                 environment=env,
                 notes=DEMO_MARKER,
             )
-            logger.info("Seed demo: provisionando %s ...", name)
+            logger.info("Demo seed: provisioning %s ...", name)
             inst = asyncio.run(create_instance(db, data, admin))
-            logger.info("Seed demo:   -> %s em %s:%s", inst.status.value, inst.host, inst.port)
+            logger.info("Demo seed:   -> %s at %s:%s", inst.status.value, inst.host, inst.port)
         elif inst.storage_gb != storage:
-            # Instância de um seed anterior, com o plano antigo: reconcilia. Sem
-            # isto a barra de storage do card continuaria calculada sobre uma
-            # capacidade que o seed não declara mais.
+            # Instance from a previous seed, with the old plan: reconcile it. Without
+            # this the card's storage bar would keep being calculated against a
+            # capacity the seed no longer declares.
             inst.storage_gb = storage
             db.commit()
-        # Prod e staging ganham o MESMO schema (staging só com menos linhas): uma
-        # staging que mostrasse só o BLOB não parecia uma cópia do app.
+        # Prod and staging get the SAME schema (staging just with fewer rows): a
+        # staging that only showed the BLOB didn't look like a copy of the app.
         if inst.status == InstanceStatus.RUNNING:
             _seed_business_data(inst, cfg)
 
-    # Por último, com o dataset e o lastro já gravados: as estatísticas de query
-    # começam do zero, medindo serviço em vez de provisionamento.
+    # Last, with the dataset and ballast already written: query statistics
+    # start from zero, measuring service instead of provisioning.
     for name, _env, *_ in cfg["instances"]:
         inst = _existing_instance(db, name, company.id)
         if inst is not None and inst.status == InstanceStatus.RUNNING:
@@ -554,9 +554,9 @@ def _seed_real(db, company: Company, admin: User, cfg: dict) -> None:
 
 
 def _seed_data_only(db, company: Company, cfg: dict) -> None:
-    """Insere registros STOPPED (sem Docker). Se o usuário rodar a simulação,
-    o backfill histórico ainda popula estas instâncias — mas não haverá
-    tráfego, porque não existe banco para consultar."""
+    """Inserts STOPPED records (no Docker). If the user runs the simulation,
+    the historical backfill still populates these instances — but there will be no
+    traffic, since there's no database to query."""
     for name, env, cpu, mem, storage in cfg["instances"]:
         if _existing_instance(db, name, company.id) is not None:
             continue
@@ -573,48 +573,48 @@ def _seed_data_only(db, company: Company, cfg: dict) -> None:
             port=5432,
             db_name=name.replace("-", "_"),
             db_user="app",
-            connection_uri=None,  # demo — nada conecta de verdade
+            connection_uri=None,  # demo — nothing actually connects
             notes=DEMO_MARKER,
             company_id=company.id,
         )
         db.add(inst)
         db.commit()
         db.refresh(inst)
-        logger.info("Seed demo: %s (dados-apenas, %s, %s)", name, cfg["region"], env.value)
+        logger.info("Demo seed: %s (data-only, %s, %s)", name, cfg["region"], env.value)
 
 
 # --------------------------------------------------------------------------- #
-# Orquestração
+# Orchestration
 # --------------------------------------------------------------------------- #
 def seed(db) -> None:
     can_provision = _provisioner_available()
-    mode = "containers reais" if can_provision else "dados-apenas"
-    logger.info("Seed demo: iniciando (%s).", mode)
+    mode = "real containers" if can_provision else "data-only"
+    logger.info("Demo seed: starting (%s).", mode)
     for company_name, cfg in COMPANIES.items():
         company, admin = _seed_company_and_users(db, company_name, cfg["slug"])
         if can_provision:
             _seed_real(db, company, admin, cfg)
         else:
             _seed_data_only(db, company, cfg)
-    # A frota nasce VIVA: o histórico sintético (24h de métricas, uptime, backups,
-    # alertas, manutenção, audit) é semeado agora, no boot — o dashboard mostra
-    # uma plataforma robusta já no primeiro login, sem ninguém clicar em nada. O
-    # botão "Ver ao vivo" em /demo só amplifica isso por ~1 min.
+    # The fleet is born ALIVE: synthetic history (24h of metrics, uptime, backups,
+    # alerts, maintenance, audit) is seeded right now, at boot — the dashboard shows
+    # a robust platform right on the first login, without anyone clicking anything. The
+    # "View live" button on /demo just amplifies this for ~1 min.
     _enrich_boot(db)
-    logger.info("Seed demo: concluído. Login: qualquer usuário @{neptune,saturn,jupiter}.example / %s", DEMO_PASSWORD)
+    logger.info("Demo seed: done. Login: any user @{neptune,saturn,jupiter}.example / %s", DEMO_PASSWORD)
 
 
 def _enrich_boot(db) -> None:
     """
-    Popula a frota demo com histórico logo após o provisionamento.
+    Populates the demo fleet with history right after provisioning.
 
-    Uma coleta real primeiro, para o backfill de 24h ancorar no tamanho de fato
-    medido (senão `enrich_fleet` cai para uma fração arbitrária da capacidade, e
-    a barra de storage não bate com o lastro gravado). Depois `enrich_fleet`
-    (idempotente: reruns não duplicam).
+    A real collection first, so the 24h backfill anchors on the actually
+    measured size (otherwise `enrich_fleet` falls back to an arbitrary fraction of the
+    capacity, and the storage bar doesn't match the recorded ballast). Then `enrich_fleet`
+    (idempotent: reruns don't duplicate).
 
-    Best-effort: falha de coleta numa instância só a deixa com o backfill de
-    fallback — o boot nunca falha por isto.
+    Best-effort: a collection failure on one instance just leaves it with the fallback
+    backfill — boot never fails because of this.
     """
     from src.models.instance_status_history import InstanceStatusHistory
     from src.services.metrics import collect_and_store
@@ -633,15 +633,15 @@ def _enrich_boot(db) -> None:
             continue
         try:
             collect_and_store(db, inst)
-        except Exception as exc:  # noqa: BLE001 — o boot não pode falhar por isto
+        except Exception as exc:  # noqa: BLE001 — boot must not fail because of this
             db.rollback()
-            logger.warning("Seed demo: coleta inicial em %s falhou: %s", inst.name, exc)
+            logger.warning("Demo seed: initial collection on %s failed: %s", inst.name, exc)
 
-    # O provisionamento já gravou linhas pending→provisioning→running no histórico
-    # de status. Sem removê-las, o guard de `enrich_fleet::_backdate_status`
-    # (`not _has(InstanceStatusHistory)`) pula o retroagir do created_at, e o KPI
-    # de uptime de 30 dias mede uma janela de segundos → percentuais absurdos.
-    # Zeramos aqui para o enrich semear a idade real (RUNNING desde ~45 dias).
+    # Provisioning already wrote pending→provisioning→running rows into the status
+    # history. Without removing them, the `enrich_fleet::_backdate_status` guard
+    # (`not _has(InstanceStatusHistory)`) skips backdating created_at, and the 30-day
+    # uptime KPI measures a window of seconds → absurd percentages.
+    # We clear it here so enrich can seed the real age (RUNNING for ~45 days).
     demo_ids = [i.id for i in demos]
     if demo_ids:
         db.query(InstanceStatusHistory).filter(
@@ -653,7 +653,7 @@ def _enrich_boot(db) -> None:
 
 
 def clear(db) -> int:
-    """Remove a frota demo (containers, se houver, + registros + métricas + empresas)."""
+    """Removes the demo fleet (containers, if any, + records + metrics + companies)."""
     removed = 0
     demos = db.query(DatabaseInstance).filter(DatabaseInstance.notes == DEMO_MARKER).all()
     if demos:
@@ -668,11 +668,11 @@ def clear(db) -> int:
                 try:
                     provisioner.delete(inst.id)
                 except Exception as exc:
-                    logger.warning("Seed demo: delete do container %s falhou: %s", inst.name, exc)
+                    logger.warning("Demo seed: deleting container %s failed: %s", inst.name, exc)
             db.query(Metric).filter(Metric.instance_id == inst.id).delete(synchronize_session=False)
-            # Backups e schedules referenciam instance_id sem FK — não caem no
-            # cascade do DELETE da instância (alertas, manutenção e status_history
-            # caem, pois têm FK ON DELETE CASCADE). Removê-los à mão.
+            # Backups and schedules reference instance_id without an FK — they don't fall
+            # under the instance's DELETE cascade (alerts, maintenance, and status_history
+            # do, since they have an FK ON DELETE CASCADE). Remove them by hand.
             db.query(Backup).filter(Backup.instance_id == inst.id).delete(synchronize_session=False)
             db.query(BackupSchedule).filter(BackupSchedule.instance_id == inst.id).delete(synchronize_session=False)
             db.delete(inst)
@@ -682,8 +682,8 @@ def clear(db) -> int:
         company = db.query(Company).filter(Company.name == company_name).first()
         if company is None:
             continue
-        # Audit logs têm FK SET NULL para company — apagá-los explicitamente
-        # (senão sobrariam órfãos com company_id nulo após o delete da empresa).
+        # Audit logs have an FK SET NULL to company — delete them explicitly
+        # (otherwise orphans with a null company_id would remain after the company's delete).
         db.query(AuditLog).filter(AuditLog.company_id == company.id).delete(synchronize_session=False)
         db.query(User).filter(User.company_id == company.id).delete(synchronize_session=False)
         db.delete(company)
@@ -696,7 +696,7 @@ def run(clear_only: bool = False) -> None:
     try:
         if clear_only:
             n = clear(db)
-            logger.info("Seed demo: removidas %d instâncias e as 3 empresas demo.", n)
+            logger.info("Demo seed: removed %d instances and the 3 demo companies.", n)
         else:
             seed(db)
     finally:

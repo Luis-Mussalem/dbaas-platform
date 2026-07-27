@@ -12,8 +12,8 @@ import { useFormatters } from "@/hooks/use-formatters";
 import { cn } from "@/lib/utils";
 import { BTN, BTN_GHOST } from "@/lib/ui";
 
-// Cores semânticas por estado de replicação (mesmo vocabulário visual dos outros
-// badges). Espelha o enum ReplicationState do backend; os rótulos vêm do i18n.
+// Semantic colors by replication state (same visual vocabulary as the other
+// badges). Mirrors the backend's ReplicationState enum; the labels come from i18n.
 const STATE_CLS: Record<ReplicationState, string> = {
   pending: "text-info border-info/25 bg-info/10",
   provisioning: "text-info border-info/25 bg-info/10",
@@ -29,8 +29,8 @@ export function ReplicasTab({ instance }: { instance: Instance }) {
   const tc = useTranslations("Common");
   const { ago, bytes, ratio } = useFormatters();
 
-  // Lag em segundos → string curta. null (sem medição ainda) vira "—".
-  // Vive no componente porque o decimal passa pelo Intl do locale ativo.
+  // Lag in seconds → short string. null (no measurement yet) becomes "—".
+  // Lives in the component because the decimal goes through the active locale's Intl.
   function lagSeconds(seconds: number | null): string {
     if (seconds == null) return tc("none");
     if (seconds < 1) return "< 1 s";
@@ -79,7 +79,7 @@ export function ReplicasTab({ instance }: { instance: Instance }) {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* ação: criar réplica */}
+      {/* action: create replica */}
       <div className="rounded-xl border border-border bg-surface p-4">
         <div className="mb-3 flex items-center justify-between">
           <div>
@@ -97,7 +97,7 @@ export function ReplicasTab({ instance }: { instance: Instance }) {
         </button>
       </div>
 
-      {/* lista de réplicas */}
+      {/* replica list */}
       <div className="overflow-hidden rounded-xl border border-border bg-surface">
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <h2 className="text-sm font-semibold">{t("listTitle")}</h2>

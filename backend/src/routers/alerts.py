@@ -33,7 +33,7 @@ def _get_event_or_404(event_id: uuid.UUID, db: Session) -> AlertEvent:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Regras de alerta
+# Alert rules
 # ──────────────────────────────────────────────────────────────────────────────
 
 @router.post(
@@ -74,7 +74,7 @@ def get_alert_rule(
     current_user: User = Depends(get_current_user),
 ):
     rule = _get_rule_or_404(rule_id, db)
-    # Scoping: a instância dona da regra precisa ser visível ao usuário.
+    # Scoping: the instance owning the rule must be visible to the user.
     get_instance_or_404(rule.instance_id, db, current_user)
     return rule
 
@@ -109,7 +109,7 @@ def delete_alert_rule(
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Seed de regras padrão
+# Default rule seeding
 # ──────────────────────────────────────────────────────────────────────────────
 
 @router.post(
@@ -123,18 +123,18 @@ def seed_default_alert_rules(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Cria as 5 regras padrão para a instância.
+    Creates the 5 default rules for the instance.
 
-    Idempotente: regras já existentes do mesmo metric_type são puladas.
-    Use após provisionar uma nova instância para ativar o monitoramento
-    automático com os thresholds recomendados.
+    Idempotent: rules that already exist for the same metric_type are skipped.
+    Use after provisioning a new instance to enable automatic
+    monitoring with the recommended thresholds.
     """
     get_instance_or_404(instance_id, db, current_user)
     return alert_service.seed_default_rules(db, instance_id)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Eventos de alerta
+# Alert events
 # ──────────────────────────────────────────────────────────────────────────────
 
 @router.get(
@@ -148,9 +148,9 @@ def list_instance_alert_events(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Lista eventos de alerta de uma instância específica.
+    Lists alert events for a specific instance.
 
-    ?only_open=true retorna apenas eventos ainda não resolvidos.
+    ?only_open=true returns only events that are not yet resolved.
     """
     get_instance_or_404(instance_id, db, current_user)
     return alert_service.list_events(db, instance_id, only_open=only_open)
@@ -166,10 +166,10 @@ def list_all_alert_events(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Lista os eventos da plataforma visíveis ao usuário. ?only_open=true filtra abertos.
+    Lists the platform's events visible to the user. ?only_open=true filters to open ones.
 
-    Escopado por empresa: usuário comum vê só eventos das instâncias da sua
-    empresa; superuser (visible_company_id=None) vê todos.
+    Scoped by company: a regular user only sees events from their
+    company's instances; a superuser (visible_company_id=None) sees all.
     """
     return alert_service.list_events(
         db, only_open=only_open, company_id=visible_company_id(current_user)
@@ -186,16 +186,16 @@ def resolve_alert_event(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Resolve manualmente um evento de alerta aberto.
+    Manually resolves an open alert event.
 
-    O avaliador automático resolve eventos quando a condição deixa de ser
-    satisfeita. Este endpoint permite resolução manual quando o operador
-    sabe que o problema foi tratado antes do próximo ciclo de 60s.
+    The automatic evaluator resolves events when the condition is no longer
+    met. This endpoint allows manual resolution when the operator
+    knows the problem was handled before the next 60s cycle.
 
-    Retorna 409 se o evento já foi resolvido.
+    Returns 409 if the event is already resolved.
     """
     event = _get_event_or_404(event_id, db)
-    # Scoping: a instância dona do evento precisa ser visível ao usuário.
+    # Scoping: the instance owning the event must be visible to the user.
     get_instance_or_404(event.instance_id, db, current_user)
     if event.resolved_at is not None:
         raise HTTPException(

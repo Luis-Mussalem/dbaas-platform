@@ -13,8 +13,8 @@ import { navKeyFor } from "@/lib/nav";
 import { setLocale } from "@/i18n/locale-action";
 import type { Locale } from "@/i18n/config";
 
-// Breadcrumb derivado da URL. Os rótulos vêm de lib/nav.ts + mensagens Nav.*,
-// a mesma fonte que a Sidebar usa — antes havia um mapa próprio aqui.
+// Breadcrumb derived from the URL. The labels come from lib/nav.ts + Nav.* messages,
+// the same source the Sidebar uses — there used to be a separate map here.
 function useCrumbs(pathname: string): string[] {
   const t = useTranslations("Nav");
   const tTop = useTranslations("Topbar");
@@ -35,8 +35,8 @@ export function Topbar() {
   const tCmd = useTranslations("CommandPalette");
   const { theme, toggleTheme } = useTheme();
 
-  // O locale é a verdade do cookie, servida pelo provider — sem estado local
-  // duplicado. A Server Action grava o cookie e revalida o layout.
+  // The locale is the cookie's source of truth, served by the provider — no duplicated
+  // local state. The Server Action writes the cookie and revalidates the layout.
   const locale = useLocale();
   const [isPending, startTransition] = useTransition();
 
@@ -56,10 +56,10 @@ export function Topbar() {
 
       <div className="flex-1" />
 
-      {/* Busca rápida de instâncias (atalho "/") */}
+      {/* Quick instance search ("/" shortcut) */}
       <InstanceSearch />
 
-      {/* Abre o command palette (Ctrl+K) — mesmo evento do atalho global */}
+      {/* Opens the command palette (Ctrl+K) — same event as the global shortcut */}
       <button
         onClick={() => window.dispatchEvent(new CustomEvent(OPEN_EVENT))}
         title={tCmd("openLabel")}
@@ -72,7 +72,7 @@ export function Topbar() {
         </kbd>
       </button>
 
-      {/* Idioma — grava o cookie via Server Action e revalida o layout */}
+      {/* Language — writes the cookie via a Server Action and revalidates the layout */}
       <div className={`hidden sm:block ${isPending ? "pointer-events-none opacity-60" : ""}`}>
         <Segmented<Locale>
           size="lg"
@@ -85,7 +85,7 @@ export function Topbar() {
         />
       </div>
 
-      {/* Toggle de tema (sol/lua) — usa o ThemeProvider da Etapa 1 */}
+      {/* Theme toggle (sun/moon) — uses the ThemeProvider from Step 1 */}
       <button
         onClick={toggleTheme}
         title={t("toggleTheme")}
@@ -94,7 +94,7 @@ export function Topbar() {
         {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
       </button>
 
-      {/* Nova instância → abre o wizard de criação */}
+      {/* New instance → opens the creation wizard */}
       <Link
         href="/instances/new"
         className="flex h-9 items-center gap-2 rounded-md bg-primary px-3.5 text-[15px] font-medium text-primary-foreground transition hover:brightness-110"

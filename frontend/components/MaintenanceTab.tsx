@@ -11,8 +11,8 @@ import { useFormatters } from "@/hooks/use-formatters";
 import { cn } from "@/lib/utils";
 import { BTN, BTN_GHOST } from "@/lib/ui";
 
-// Tarefas que rodam no banco inteiro (sem target_table). VACUUM_FULL fica de
-// fora dos botões rápidos porque exige uma tabela específica (lock exclusivo).
+// Tasks that run on the entire database (no target_table). VACUUM_FULL is left
+// out of the quick buttons because it requires a specific table (exclusive lock).
 const RUN_ACTIONS: TaskType[] = ["vacuum", "analyze", "reindex", "kill_idle", "kill_long"];
 
 const STATUS_CLS: Record<TaskStatus, string> = {
@@ -46,7 +46,7 @@ export function MaintenanceTab({ instance }: { instance: Instance }) {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* ações */}
+      {/* actions */}
       <div className="rounded-xl border border-border bg-surface p-4">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold">{t("runTitle")}</h2>
@@ -66,7 +66,7 @@ export function MaintenanceTab({ instance }: { instance: Instance }) {
         </div>
       </div>
 
-      {/* histórico */}
+      {/* history */}
       <div className="overflow-hidden rounded-xl border border-border bg-surface">
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <h2 className="text-sm font-semibold">{t("historyTitle")}</h2>
@@ -109,8 +109,8 @@ export function MaintenanceTab({ instance }: { instance: Instance }) {
                   <td className="px-4 py-2 text-fg-2">
                     {ago(task.started_at ?? task.scheduled_at)}
                   </td>
-                  {/* result_summary vem cru do backend (inglês) — traduzir exigiria
-                      códigos estruturados na API. Fica sob um label traduzido. */}
+                  {/* result_summary comes raw from the backend (English) — translating it would require
+                      structured codes in the API. It's kept under a translated label. */}
                   <td className="max-w-0 truncate px-4 py-2 font-mono text-xs text-fg-3">
                     {task.result_summary ?? tc("none")}
                   </td>

@@ -16,7 +16,7 @@ import { useFormatters } from "@/hooks/use-formatters";
 import type { Company } from "@/lib/types";
 import { INPUT } from "@/lib/ui";
 
-// Variante única desta página (h-7 com borda) — as compartilhadas estão em lib/ui.
+// Variant unique to this page (h-7 with a border) — the shared ones are in lib/ui.
 const BTN_SM =
   "inline-flex h-7 items-center rounded-md border border-border px-2.5 text-[12px] font-medium text-fg-2 transition hover:bg-surface-2 hover:text-foreground disabled:opacity-50";
 
@@ -32,15 +32,15 @@ export default function AdminUsersPage() {
   const [filterCompanyId, setFilterCompanyId] = useState("");
   const [filterStatus, setFilterStatus] = useState<"all" | "active" | "inactive">("all");
 
-  // Admin guard — redireciona usuário comum (não admin) antes de qualquer render visível.
+  // Admin guard — redirects a regular (non-admin) user before any visible render.
   useEffect(() => {
     if (me && !me.is_superuser && me.role !== "admin") router.replace("/");
   }, [me, router]);
 
-  // Só superuser pode listar empresas (403 para os demais) — evita chamada
-  // inútil e permite tratar erro real com toast em vez de engoli-lo.
-  // `toast` é memoizado no ToastProvider e `t` só muda ao trocar de idioma —
-  // nenhum dos dois re-dispara o effect à toa.
+  // Only a superuser can list companies (403 for everyone else) — avoids a
+  // useless call and lets us handle a real error with a toast instead of swallowing it.
+  // `toast` is memoized in ToastProvider and `t` only changes when the language changes —
+  // neither re-triggers the effect needlessly.
   const isSuperuserMe = me?.is_superuser === true;
   useEffect(() => {
     if (!isSuperuserMe) return;
@@ -55,7 +55,7 @@ export default function AdminUsersPage() {
     filterCompanyId || undefined
   );
 
-  // Retorna null (sem renderização) se não autenticado ou não admin
+  // Returns null (no rendering) if not authenticated or not an admin
   if (!me || (me.is_superuser !== true && me.role !== "admin")) return null;
 
   const isSuperuser = me.is_superuser === true;
@@ -66,7 +66,7 @@ export default function AdminUsersPage() {
     return true;
   });
 
-  // Métricas-resumo (client-side, sobre a lista já carregada).
+  // Summary metrics (client-side, over the already-loaded list).
   const adminCount = users.filter((u) => u.is_superuser || u.role === "admin").length;
   const lastActivityIso = users
     .map((u) => u.last_activity)
@@ -116,7 +116,7 @@ export default function AdminUsersPage() {
         <CreateUserDialog companies={companies} onCreate={create} isSuperuser={isSuperuser} />
       </div>
 
-      {/* métricas-resumo: total, donos/admins, atividade mais recente */}
+      {/* summary metrics: total, owners/admins, most recent activity */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <StatCard label={t("stats.total")} value={users.length} sub={t("stats.totalSub")} />
         <StatCard

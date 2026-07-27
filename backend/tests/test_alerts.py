@@ -1,12 +1,12 @@
 """
-Testes de alertas (PHASE 7): CRUD de regras via router, seed idempotente de
-regras padrão, ciclo de vida de eventos e o motor de avaliação.
+Tests for alerts (PHASE 7): rule CRUD via the router, idempotent seeding of
+default rules, event lifecycle, and the evaluation engine.
 
-Duas camadas exercitadas:
-- Router (/api/v1/instances/{id}/alerts/...) — autenticação, 404, validação.
-- Service alert_service — funções puras (_evaluate_condition, _build_message) e
-  o evaluate_all_rules ponta-a-ponta usando a métrica backup_age_hours, que NÃO
-  depende de conexão viva ao Postgres da instância (999h quando não há backup).
+Two layers exercised:
+- Router (/api/v1/instances/{id}/alerts/...) — authentication, 404, validation.
+- Service alert_service — pure functions (_evaluate_condition, _build_message) and
+  evaluate_all_rules end-to-end using the backup_age_hours metric, which does NOT
+  depend on a live connection to the instance's Postgres (999h when there's no backup).
 """
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -26,7 +26,7 @@ from src.services import alert as alert_service
 
 @pytest.fixture
 def instance(db):
-    """Instância RUNNING — pré-requisito para regras e avaliação."""
+    """RUNNING instance — prerequisite for rules and evaluation."""
     inst = DatabaseInstance(
         name="alert-db", status=InstanceStatus.RUNNING, storage_gb=1
     )
@@ -41,7 +41,7 @@ def _rules_url(instance_id) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# CRUD de regras (router)
+# Rule CRUD (router)
 # --------------------------------------------------------------------------- #
 
 
@@ -94,7 +94,7 @@ def test_create_rule_rejects_unknown_metric_type(client, auth_headers, instance)
         headers=headers,
         json={"name": "x", "metric_type": "bogus", "condition": "lt", "threshold": 1},
     )
-    assert resp.status_code == 422  # AlertMetricType enum rejeita valor inválido
+    assert resp.status_code == 422  # AlertMetricType enum rejects invalid value
 
 
 def test_update_and_delete_rule(client, auth_headers, instance):
@@ -125,7 +125,7 @@ def test_update_and_delete_rule(client, auth_headers, instance):
 
 
 # --------------------------------------------------------------------------- #
-# Seed de regras padrão (idempotência)
+# Default rule seeding (idempotency)
 # --------------------------------------------------------------------------- #
 
 
@@ -135,9 +135,9 @@ def test_seed_defaults_is_idempotent(client, auth_headers, instance):
 
     first = client.post(url, headers=headers)
     assert first.status_code == 201
-    assert len(first.json()) == 5  # as 5 regras padrão
+    assert len(first.json()) == 5  # the 5 default rules
 
-    # Segunda chamada não duplica: todos os metric_types já existem.
+    # Second call doesn't duplicate: all metric_types already exist.
     second = client.post(url, headers=headers)
     assert second.status_code == 201
     assert second.json() == []
@@ -147,7 +147,7 @@ def test_seed_defaults_is_idempotent(client, auth_headers, instance):
 
 
 # --------------------------------------------------------------------------- #
-# Eventos (resolução manual)
+# Events (manual resolution)
 # --------------------------------------------------------------------------- #
 
 
@@ -175,7 +175,7 @@ def test_resolve_event_then_conflict(client, auth_headers, instance, db):
     assert resolved.status_code == 200
     assert resolved.json()["resolved_at"] is not None
 
-    # Resolver de novo → 409.
+    # Resolve again → 409.
     again = client.post(f"/api/v1/alerts/events/{event.id}/resolve", headers=headers)
     assert again.status_code == 409
 
@@ -207,7 +207,7 @@ def test_list_only_open_events(client, auth_headers, instance, db):
 
 
 # --------------------------------------------------------------------------- #
-# Funções puras de avaliação
+# Pure evaluation functions
 # --------------------------------------------------------------------------- #
 
 
@@ -243,15 +243,15 @@ def test_build_message_includes_unit_and_severity(db):
 
 
 # --------------------------------------------------------------------------- #
-# Avaliador ponta-a-ponta (fire + auto-resolve via backup_age_hours)
+# End-to-end evaluator (fire + auto-resolve via backup_age_hours)
 # --------------------------------------------------------------------------- #
 
 
 def test_evaluate_all_rules_fires_and_resolves(db, instance):
     """
-    backup_age_hours não exige conexão viva: sem backup COMPLETED retorna 999h,
-    o que dispara a regra "> 24". Depois de inserir um backup recente, o valor
-    cai e o avaliador resolve o evento automaticamente.
+    backup_age_hours doesn't require a live connection: with no COMPLETED backup it returns 999h,
+    which fires the "> 24" rule. After inserting a recent backup, the value
+    drops and the evaluator resolves the event automatically.
     """
     rule = AlertRule(
         instance_id=instance.id,
@@ -265,7 +265,7 @@ def test_evaluate_all_rules_fires_and_resolves(db, instance):
     db.add(rule)
     db.commit()
 
-    # 1º ciclo: nenhum backup → 999h > 24 → dispara um evento aberto.
+    # 1st cycle: no backup → 999h > 24 → fires an open event.
     alert_service.evaluate_all_rules(db)
     open_events = (
         db.query(AlertEvent)
@@ -274,7 +274,7 @@ def test_evaluate_all_rules_fires_and_resolves(db, instance):
     )
     assert len(open_events) == 1
 
-    # 2º ciclo sem mudança: não duplica (já há evento aberto).
+    # 2nd cycle with no change: doesn't duplicate (there's already an open event).
     alert_service.evaluate_all_rules(db)
     still_open = (
         db.query(AlertEvent)
@@ -283,7 +283,7 @@ def test_evaluate_all_rules_fires_and_resolves(db, instance):
     )
     assert still_open == 1
 
-    # Backup recente COMPLETED → idade << 24h → condição deixa de valer → resolve.
+    # Recent COMPLETED backup → age << 24h → condition no longer holds → resolves.
     db.add(Backup(
         instance_id=instance.id,
         status=BackupStatus.COMPLETED,
@@ -301,7 +301,7 @@ def test_evaluate_all_rules_fires_and_resolves(db, instance):
 
 
 def test_evaluate_skips_non_running_instances(db):
-    """Regras de instâncias STOPPED não são avaliadas (nenhum evento criado)."""
+    """Rules of STOPPED instances are not evaluated (no event created)."""
     inst = DatabaseInstance(name="stopped", status=InstanceStatus.STOPPED, storage_gb=1)
     db.add(inst)
     db.commit()

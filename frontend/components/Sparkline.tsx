@@ -1,23 +1,23 @@
-// Sparkline — mini gráfico de linha (com preenchimento opcional em gradiente)
-// desenhado em SVG puro, sem dependência externa. Escala os valores para caber
-// no viewBox e estica para 100% da largura do contêiner.
+// Sparkline — mini line chart (with optional gradient fill)
+// drawn in pure SVG, no external dependency. Scales the values to fit
+// the viewBox and stretches to 100% of the container's width.
 //
-// Conceito novo: SVG responsivo. O viewBox define um sistema de coordenadas
-// fixo (W×H); preserveAspectRatio="none" deixa o SVG esticar livremente para o
-// tamanho real do elemento, então o desenho acompanha qualquer largura do card.
+// New concept: responsive SVG. The viewBox defines a fixed coordinate
+// system (W×H); preserveAspectRatio="none" lets the SVG stretch freely to the
+// element's real size, so the drawing follows any card width.
 
 type SparklineProps = {
   data: number[];
-  // Cor da linha/preenchimento — aceita um token CSS (ex.: "var(--brand)").
+  // Line/fill color — accepts a CSS token (e.g.: "var(--brand)").
   color?: string;
   fill?: boolean;
   className?: string;
   strokeWidth?: number;
-  // Domínio Y explícito. Sem ele, cada sparkline se auto-escala à própria faixa
-  // (bom para ver a FORMA de uma série isolada). Com ele — tipicamente [0, teto da
-  // frota] — a régua vira COMPARTILHADA entre cards e a altura passa a codificar
-  // MAGNITUDE: um card de 12 q/s fica mais alto que um de 4. Valores fora do
-  // domínio são grampeados (um pico raro encosta no topo em vez de estourar).
+  // Explicit Y domain. Without it, each sparkline auto-scales to its own range
+  // (good for seeing the SHAPE of an isolated series). With it — typically [0, fleet
+  // ceiling] — the scale becomes SHARED across cards and the height starts to encode
+  // MAGNITUDE: a 12 q/s card ends up taller than a 4 q/s one. Values outside the
+  // domain are clamped (a rare spike touches the top instead of overflowing).
   domainMin?: number;
   domainMax?: number;
 };
@@ -34,8 +34,8 @@ export function Sparkline({
   domainMin,
   domainMax,
 }: SparklineProps) {
-  // Sem dados suficientes: desenha uma linha de base sutil (placeholder honesto,
-  // em vez de inventar uma curva). Mantém o card visualmente completo.
+  // Not enough data: draws a subtle baseline (an honest placeholder,
+  // instead of inventing a curve). Keeps the card visually complete.
   if (!data || data.length < 2) {
     return (
       <svg
@@ -56,14 +56,14 @@ export function Sparkline({
     );
   }
 
-  // Domínio explícito (escala compartilhada entre cards) tem prioridade sobre o
-  // auto-escalonamento por série.
+  // Explicit domain (scale shared across cards) takes priority over
+  // per-series auto-scaling.
   const min = domainMin ?? Math.min(...data);
   const max = domainMax ?? Math.max(...data);
-  const span = max - min || 1; // evita divisão por zero quando a série é plana
+  const span = max - min || 1; // avoids division by zero when the series is flat
 
-  // Mapeia cada ponto para coordenadas do viewBox. y é invertido (0 = topo). O
-  // clamp mantém a linha dentro do quadro quando o domínio é compartilhado.
+  // Maps each point to viewBox coordinates. y is inverted (0 = top). The
+  // clamp keeps the line inside the frame when the domain is shared.
   const pts = data.map((v, i) => {
     const x = (i / (data.length - 1)) * W;
     const norm = Math.min(1, Math.max(0, (v - min) / span));
@@ -72,7 +72,7 @@ export function Sparkline({
   });
 
   const line = pts.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
-  // Área fechada para o preenchimento: linha + descida até a base + volta.
+  // Closed area for the fill: line + drop to the base + return.
   const area = `${line} L${W},${H} L0,${H} Z`;
   const gradId = `spark-${Math.abs(hash(data))}`;
 
@@ -85,10 +85,10 @@ export function Sparkline({
     >
       {fill && (
         <>
-          {/* Gradiente ancorado na BASE: mais sólido embaixo (o zero, numa régua
-              compartilhada) e suave junto à linha. Assim o preenchimento lê como
-              uma COLUNA de nível a partir do zero — uma série de 10 q/s enche
-              visivelmente o dobro de uma de 5 — em vez de uma faixinha sob a linha. */}
+          {/* Gradient anchored at the BASE: more solid at the bottom (zero, on a
+              shared scale) and soft near the line. This way the fill reads as
+              a level COLUMN starting from zero — a 10 q/s series visibly fills
+              twice as much as a 5 q/s one — instead of a thin strip under the line. */}
           <defs>
             <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={color} stopOpacity="0.12" />
@@ -111,8 +111,8 @@ export function Sparkline({
   );
 }
 
-// Hash simples só para gerar um id de gradiente estável por série (evita que
-// dois sparklines compartilhem o mesmo <linearGradient>).
+// Simple hash just to generate a gradient id stable per series (avoids
+// two sparklines sharing the same <linearGradient>).
 function hash(data: number[]): number {
   let h = 0;
   for (const v of data) h = (h * 31 + Math.round(v * 100)) | 0;

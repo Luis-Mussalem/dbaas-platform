@@ -6,12 +6,12 @@ import { regionInfo, project, type RegionInfo } from "@/lib/regions";
 import { countryColor } from "@/lib/identity-color";
 import { WORLD_LAND_PATH } from "@/lib/world-geo";
 
-// Painel "Mapa de regiões": agrega as instâncias por região e marca cada uma
-// sobre um mapa-múndi vetorial real (silhueta dos continentes, Natural Earth).
-// O contorno é ilustrativo; os marcadores e a lista trazem os números reais.
+// "Region map" panel: aggregates instances by region and marks each one
+// on a real vector world map (continent silhouettes, Natural Earth).
+// The outline is illustrative; the markers and the list carry the real numbers.
 export function RegionMap({ instances }: { instances: Instance[] }) {
   const t = useTranslations("RegionMap");
-  // Agrupa por região (ignora instâncias sem região definida).
+  // Groups by region (ignores instances with no region set).
   const counts = new Map<string, { info: RegionInfo; count: number }>();
   for (const inst of instances) {
     const info = regionInfo(inst.region);
@@ -32,7 +32,7 @@ export function RegionMap({ instances }: { instances: Instance[] }) {
       </div>
       <p className="mb-3 text-[11.5px] text-fg-3">{t("subtitle")}</p>
 
-      {/* Mapa-múndi vetorial (SVG 2:1). Continentes = path; bolhas = regiões. */}
+      {/* Vector world map (SVG 2:1). Continents = path; bubbles = regions. */}
       <div className="mb-3 overflow-hidden rounded-md border border-border bg-bg-2">
         <svg
           viewBox="0 0 360 180"
@@ -40,7 +40,7 @@ export function RegionMap({ instances }: { instances: Instance[] }) {
           role="img"
           aria-label={t("aria")}
         >
-          {/* Silhueta dos continentes */}
+          {/* Continent silhouette */}
           <path
             d={WORLD_LAND_PATH}
             fill="var(--fg-faint)"
@@ -51,7 +51,7 @@ export function RegionMap({ instances }: { instances: Instance[] }) {
             vectorEffect="non-scaling-stroke"
           />
 
-          {/* Marcadores das regiões com instâncias (anel + ponto), na cor do país */}
+          {/* Markers for regions with instances (ring + dot), in the country's color */}
           {rows.map(({ info, count }) => {
             const p = project(info.lat, info.lon);
             const color = countryColor(info.code);

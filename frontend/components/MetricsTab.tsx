@@ -8,7 +8,7 @@ import type { Instance, MetricWindow } from "@/lib/types";
 import { Segmented } from "@/components/Segmented";
 import { MetricArea, MultiLineChart, type ChartPoint } from "@/components/MetricChart";
 
-// Janelas de tempo: os rótulos são unidades técnicas, iguais nos dois idiomas.
+// Time windows: the labels are technical units, the same in both languages.
 const WINDOWS: { value: MetricWindow; label: string }[] = [
   { value: "15m", label: "15m" },
   { value: "1h", label: "1h" },
@@ -16,7 +16,7 @@ const WINDOWS: { value: MetricWindow; label: string }[] = [
   { value: "24h", label: "24h" },
 ];
 
-// Percentis de latência exibidos, na ordem em que se empilham no gráfico.
+// Latency percentiles shown, in the order they stack in the chart.
 const LATENCY_SERIES = [
   { key: "p50", metric: "p50_query_latency_ms", color: "#34d399" },
   { key: "p95", metric: "p95_query_latency_ms", color: "#60a5fa" },
@@ -26,9 +26,9 @@ const LATENCY_SERIES = [
 export function MetricsTab({ instance }: { instance: Instance }) {
   const t = useTranslations("Metrics");
   const locale = useLocale();
-  // Intl preso ao locale, e não o useFormatters: o hhmm roda DENTRO do effect
-  // de busca, e o objeto do useFormatters muda a cada 60s (useNow) — isso
-  // refaria o fetch das séries a cada minuto. Aqui só muda ao trocar de idioma.
+  // Intl pinned to the locale, not useFormatters: hhmm runs INSIDE the fetch
+  // effect, and the useFormatters object changes every 60s (useNow) — that
+  // would redo the series fetch every minute. Here it only changes when the language changes.
   const timeFormat = useMemo(
     () => new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }),
     [locale]
@@ -40,9 +40,9 @@ export function MetricsTab({ instance }: { instance: Instance }) {
   const [conns, setConns] = useState<ChartPoint[]>([]);
   const [cache, setCache] = useState<ChartPoint[]>([]);
   const [latency, setLatency] = useState<ChartPoint[]>([]);
-  // Estes gráficos buscavam UMA vez e nunca mais — a página mais "de
-  // monitoramento" do produto era a única que exigia F5 para mostrar dado novo.
-  // Agora se refrescam a cada DASHBOARD_POLL_MS.
+  // These charts used to fetch ONCE and never again — the product's most
+  // "monitoring"-like page was the only one that required an F5 to show new data.
+  // Now they refresh every DASHBOARD_POLL_MS.
   useEffect(() => {
     let active = true;
 
@@ -58,9 +58,9 @@ export function MetricsTab({ instance }: { instance: Instance }) {
           setThroughput(q.points.map((p) => ({ t: hhmm(p.collected_at), v: Number(p.value.toFixed(1)) })));
           setConns(c.points.map((p) => ({ t: hhmm(p.collected_at), v: Math.round(p.value) })));
           setCache(h.points.map((p) => ({ t: hhmm(p.collected_at), v: Number(p.value.toFixed(2)) })));
-          // As três séries vêm em requisições separadas mas compartilham os
-          // instantes de coleta (o poller grava todas no mesmo collected_at),
-          // então dá para casá-las por índice num único conjunto de pontos.
+          // The three series come from separate requests but share the
+          // collection instants (the poller writes all of them at the same collected_at),
+          // so they can be matched by index into a single set of points.
           setLatency(
             percentiles[0].points.map((point, i) => {
               const row: ChartPoint = { t: hhmm(point.collected_at) };
@@ -97,7 +97,7 @@ export function MetricsTab({ instance }: { instance: Instance }) {
         <Segmented options={WINDOWS} value={range} onChange={setRange} size="sm" />
       </div>
 
-      {/* queries/s em destaque: é a grandeza-título do card da frota. */}
+      {/* queries/s featured: it's the fleet card's headline quantity. */}
       <ChartCard title={t("throughput")}>
         {throughput.length > 1 ? (
           <MetricArea data={throughput} color="#a78bfa" />
@@ -139,9 +139,9 @@ export function MetricsTab({ instance }: { instance: Instance }) {
 }
 
 function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
-  // O badge "real"/"demo" existia para separar estes gráficos da série de
-  // latência fabricada. Agora TODA série aqui é medida, e um selo "real" em
-  // três de três não distingue nada — só ocupa espaço.
+  // The "real"/"demo" badge used to exist to separate these charts from the
+  // fabricated latency series. Now EVERY series here is measured, and a "real" tag on
+  // three out of three distinguishes nothing — it just takes up space.
   return (
     <div className="rounded-xl border border-border bg-surface p-4">
       <h3 className="mb-2 text-[13px] font-semibold">{title}</h3>

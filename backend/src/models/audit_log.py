@@ -10,23 +10,23 @@ from src.core.database import Base
 
 class AuditLog(Base):
     """
-    Registro imutável de ações realizadas na plataforma.
+    Immutable record of actions performed on the platform.
 
-    user_id é nullable por dois motivos:
-    1. Login e register não possuem JWT no request — o usuário ainda não está
-       autenticado quando o request chega, portanto não há como extrair o ID.
-    2. Ações de background tasks (backup agendado, maintenance) não têm usuário.
+    user_id is nullable for two reasons:
+    1. Login and register have no JWT in the request — the user isn't
+       authenticated yet when the request arrives, so there's no way to extract the ID.
+    2. Background task actions (scheduled backup, maintenance) have no user.
 
-    resource_id é String (não UUID) para suportar ações onde não existe um
-    recurso específico — e.g. action="login", resource_type="auth".
+    resource_id is String (not UUID) to support actions where there is no
+    specific resource — e.g. action="login", resource_type="auth".
 
-    details armazena contexto adicional (method, path, response status) sem
-    parsear o body do request. O middleware não pode consumir o body — isso
-    quebraria o handler que processa o request depois.
+    details stores additional context (method, path, response status) without
+    parsing the request body. The middleware cannot consume the body — that
+    would break the handler that processes the request afterward.
 
-    Índice composto (user_id, timestamp): a query mais comum é
-    "todas as ações deste usuário, ordenadas por data".
-    Índice simples em timestamp: cobre paginação global sem filtro de usuário.
+    Composite index (user_id, timestamp): the most common query is
+    "all actions of this user, ordered by date".
+    Simple index on timestamp: covers global pagination without a user filter.
     """
 
     __tablename__ = "audit_logs"

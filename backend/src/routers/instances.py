@@ -64,18 +64,18 @@ def list_all(
     return list_instances(db, current_user)
 
 
-# ATENÇÃO: precisa vir ANTES de /{instance_id}, senão "fleet-summary" é lido
-# como um UUID de instância e a rota devolve 422.
+# WARNING: this needs to come BEFORE /{instance_id}, otherwise "fleet-summary" is
+# read as an instance UUID and the route returns 422.
 @router.get("/fleet-summary", response_model=FleetSummaryResponse)
 def fleet_summary(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Estado agregado de todas as instâncias no escopo do usuário, numa chamada.
+    Aggregated state of all instances in the user's scope, in one call.
 
-    Existe para o grid de cards: sem ela, cada card puxaria alertas, backups,
-    uptime e métricas por conta própria (N instâncias × 4 requests a cada poll).
+    Exists for the card grid: without it, each card would pull alerts, backups,
+    uptime, and metrics on its own (N instances × 4 requests per poll).
     """
     instances = list_instances(db, current_user)
     return FleetSummaryResponse(instances=get_fleet_summary(db, instances))
@@ -127,9 +127,9 @@ async def get_logs(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Retorna as últimas `tail` linhas de log do container PostgreSQL da instância.
+    Returns the last `tail` log lines of the instance's PostgreSQL container.
 
-    Lê direto do Docker (stdout/stderr do container). Bloqueante — vai para o
+    Reads directly from Docker (the container's stdout/stderr). Blocking — goes to the
     thread pool via asyncio.to_thread.
     """
     get_instance_or_404(instance_id, db, current_user)

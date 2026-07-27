@@ -1,17 +1,17 @@
 """
-Testes dos loops de background (PHASE 3–7): status poller, metrics poller,
-backup scheduler, maintenance scheduler e alert evaluator.
+Tests for the background loops (PHASE 3-7): status poller, metrics poller,
+backup scheduler, maintenance scheduler, and alert evaluator.
 
-Cada loop expõe uma função de tick SÍNCRONA (poll_once / poll_metrics_once /
-poll_schedules_once / evaluate_once) que abre sua própria SessionLocal — ou
-seja, roda fora do contexto HTTP. Testamos essa função diretamente, com as
-dependências externas (Docker, pg_dump, coleta de métricas) substituídas por
-dublês. As versões async (…_loop) são exercitadas por um ciclo controlado,
-com asyncio.to_thread substituído por um shim in-loop que dispara o stop_event.
+Each loop exposes a SYNCHRONOUS tick function (poll_once / poll_metrics_once /
+poll_schedules_once / evaluate_once) that opens its own SessionLocal — in
+other words, it runs outside the HTTP context. We test that function directly, with the
+external dependencies (Docker, pg_dump, metrics collection) replaced by
+stubs. The async versions (…_loop) are exercised through a controlled cycle,
+with asyncio.to_thread replaced by an in-loop shim that fires the stop_event.
 
-Importante: o tick usa SessionLocal() próprio, mas aponta para o MESMO banco de
-teste do fixture `db`. Após o tick, usamos db.expire_all() para reler o estado
-commitado pela sessão do poller.
+Important: the tick uses its own SessionLocal(), but points to the SAME test
+database as the `db` fixture. After the tick, we use db.expire_all() to re-read the state
+committed by the poller's session.
 """
 import asyncio
 from datetime import datetime, timedelta, timezone
@@ -67,7 +67,7 @@ class _FakeProvisioner:
     def start(self, instance_id):
         self.started = True
         if self._start_error:
-            raise RuntimeError("falha simulada no start")
+            raise RuntimeError("simulated start failure")
         return self._start_port
 
 
@@ -86,7 +86,7 @@ def test_poll_once_marks_running_as_failed_when_container_gone(db, running_insta
     db.expire_all()
     refreshed = db.get(DatabaseInstance, running_instance.id)
     assert refreshed.status == InstanceStatus.FAILED
-    # A transição RUNNING→FAILED foi registrada no histórico.
+    # The RUNNING→FAILED transition was recorded in the history.
     hist = (
         db.query(InstanceStatusHistory)
         .filter_by(instance_id=running_instance.id)
@@ -105,7 +105,7 @@ def test_poll_once_keeps_running_when_container_running(db, running_instance, mo
     db.expire_all()
     refreshed = db.get(DatabaseInstance, running_instance.id)
     assert refreshed.status == InstanceStatus.RUNNING
-    # Poll sem mudança de status NÃO deve gravar histórico (evita flood).
+    # A poll with no status change must NOT write history (avoids flooding it).
     assert (
         db.query(InstanceStatusHistory)
         .filter_by(instance_id=running_instance.id)
@@ -114,8 +114,8 @@ def test_poll_once_keeps_running_when_container_running(db, running_instance, mo
 
 
 def test_poll_once_resyncs_port_when_container_republished(db, running_instance, monkeypatch):
-    # Container vivo numa porta nova (Docker religou após restart do host) →
-    # o poller ressincroniza a porta e a connection_uri.
+    # Container alive on a new port (Docker restarted it after a host restart) →
+    # the poller resyncs the port and connection_uri.
     monkeypatch.setattr(
         status_poller, "get_provisioner",
         lambda: _FakeProvisioner(ProvisionerStatus.RUNNING, port=62000),
@@ -130,8 +130,8 @@ def test_poll_once_resyncs_port_when_container_republished(db, running_instance,
 
 
 def test_poll_once_recovers_failed_when_container_restartable(db, monkeypatch):
-    # Instância FAILED cujo container parado pode ser religado → auto-recuperação.
-    # (Este é o caso de um restart do Docker que derrubou as instâncias.)
+    # FAILED instance whose stopped container can be restarted → auto-recovery.
+    # (This is the case of a Docker restart that took the instances down.)
     inst = DatabaseInstance(
         name="failed-db",
         status=InstanceStatus.FAILED,
@@ -155,7 +155,7 @@ def test_poll_once_recovers_failed_when_container_restartable(db, monkeypatch):
 
 
 def test_poll_once_keeps_failed_when_container_gone(db, monkeypatch):
-    # Instância FAILED sem container (NOT_FOUND) → nada a recuperar, permanece FAILED.
+    # FAILED instance with no container (NOT_FOUND) → nothing to recover, stays FAILED.
     inst = DatabaseInstance(
         name="gone-db",
         status=InstanceStatus.FAILED,
@@ -177,7 +177,7 @@ def test_poll_once_keeps_failed_when_container_gone(db, monkeypatch):
 
 
 def test_poll_once_marks_failed_when_restart_fails(db, running_instance, monkeypatch):
-    # Container parado mas o religamento falha → instância marcada FAILED.
+    # Container stopped but the restart fails → instance marked FAILED.
     fake = _FakeProvisioner(ProvisionerStatus.STOPPED, start_error=True)
     monkeypatch.setattr(status_poller, "get_provisioner", lambda: fake)
     status_poller.poll_once()
@@ -207,20 +207,20 @@ def test_poll_metrics_once_collects_for_running(db, running_instance, monkeypatc
 
 
 def test_poll_metrics_once_isolates_instance_failure(db, running_instance, monkeypatch):
-    # Uma instância que explode na coleta não derruba o ciclo (exceção engolida).
+    # An instance that blows up during collection doesn't take down the cycle (exception swallowed).
     def boom(session, instance):
         raise RuntimeError("connection refused")
 
     monkeypatch.setattr(metrics_poller, "collect_and_store", boom)
-    metrics_poller.poll_metrics_once()  # não levanta
+    metrics_poller.poll_metrics_once()  # doesn't raise
 
     db.expire_all()
     assert db.query(Metric).count() == 0
 
 
 def test_poll_metrics_once_rolls_back_failed_instance(db, monkeypatch):
-    # Regressão: uma coleta que deixa a sessão suja e explode não pode
-    # contaminar o commit das instâncias seguintes do ciclo (db.rollback()).
+    # Regression: a collection that leaves the session dirty and blows up must not
+    # contaminate the commit of the cycle's following instances (db.rollback()).
     for name in ("m-db-1", "m-db-2"):
         db.add(
             DatabaseInstance(
@@ -236,8 +236,8 @@ def test_poll_metrics_once_rolls_back_failed_instance(db, monkeypatch):
     def flaky_collect(session, instance):
         if not failed_once:
             failed_once.append(instance.id)
-            # Deixa lixo pendente na sessão antes de explodir — sem rollback,
-            # este Metric órfão seria commitado junto com a próxima instância.
+            # Leaves pending garbage in the session before blowing up — without a rollback,
+            # this orphan Metric would be committed together with the next instance.
             session.add(
                 Metric(instance_id=instance.id, metric_name="orphan", value=1.0)
             )
@@ -268,7 +268,7 @@ def test_backup_scheduler_runs_due_schedule(db, running_instance, monkeypatch):
         cron_expression="*/5 * * * *",
         retention_days=7,
         is_active=True,
-        next_run_at=datetime.now(timezone.utc) - timedelta(minutes=1),  # vencido
+        next_run_at=datetime.now(timezone.utc) - timedelta(minutes=1),  # overdue
     )
     db.add(schedule)
     db.commit()
@@ -288,15 +288,15 @@ def test_backup_scheduler_runs_due_schedule(db, running_instance, monkeypatch):
     assert called["retention_days"] == 7
     db.expire_all()
     db.refresh(schedule)
-    assert schedule.last_run_at is not None  # schedule avançado
+    assert schedule.last_run_at is not None  # schedule advanced
 
 
 def test_backup_scheduler_resyncs_port_before_backup(db, running_instance, monkeypatch):
     """
-    O Docker republica portas ao religar containers. Se o backup vencido rodar
-    antes da primeira passada do status_poller, o pg_dump bate numa porta morta,
-    grava FAILED e o schedule avança — deixando um CRITICAL de backup atrasado
-    aberto até a próxima janela do cron. Por isso confere a porta antes.
+    Docker republishes ports when containers restart. If an overdue backup runs
+    before the status_poller's first pass, pg_dump hits a dead port,
+    writes FAILED, and the schedule advances — leaving an overdue-backup CRITICAL
+    open until the next cron window. That's why it checks the port beforehand.
     """
     stale_port = running_instance.port
     db.add(BackupSchedule(
@@ -324,11 +324,11 @@ def test_backup_scheduler_resyncs_port_before_backup(db, running_instance, monke
     backup_scheduler.poll_schedules_once()
 
     assert stale_port != 54321
-    assert port_at_backup["port"] == 54321  # backup usou a porta viva, não a do banco
+    assert port_at_backup["port"] == 54321  # backup used the live port, not the database's
 
 
 def test_backup_scheduler_runs_when_port_check_fails(db, running_instance, monkeypatch):
-    """Provisioner indisponível não pode impedir o backup — só best-effort."""
+    """An unavailable provisioner must not block the backup — it's only best-effort."""
     db.add(BackupSchedule(
         instance_id=running_instance.id,
         strategy=BackupStrategy.LOGICAL,
@@ -356,7 +356,7 @@ def test_backup_scheduler_runs_when_port_check_fails(db, running_instance, monke
 
 
 def test_backup_scheduler_skips_when_no_due(db, monkeypatch):
-    # Nenhum schedule vencido → early return, nada é chamado.
+    # No overdue schedule → early return, nothing is called.
     called = []
     monkeypatch.setattr(
         backup_scheduler, "create_logical_backup",
@@ -395,7 +395,7 @@ def test_maintenance_scheduler_runs_due_schedule(db, running_instance, monkeypat
 
         return _Task
 
-    # run_task é importado dentro da função → patch no módulo de origem.
+    # run_task is imported inside the function → patch on the origin module.
     monkeypatch.setattr("src.services.maintenance.run_task", fake_run_task)
 
     maintenance_scheduler.poll_schedules_once()
@@ -412,7 +412,7 @@ def test_maintenance_scheduler_runs_due_schedule(db, running_instance, monkeypat
 
 
 def test_evaluate_once_runs_without_rules(db):
-    # Sem regras ativas, o ciclo apenas abre/fecha a sessão sem erro.
+    # With no active rules, the cycle just opens/closes the session without error.
     alert_evaluator.evaluate_once()
 
 
@@ -421,22 +421,22 @@ def test_evaluate_once_swallows_errors(monkeypatch):
         "src.services.alert.evaluate_all_rules",
         lambda session: (_ for _ in ()).throw(RuntimeError("boom")),
     )
-    # Exceção é capturada e logada — evaluate_once não propaga.
+    # Exception is caught and logged — evaluate_once doesn't propagate it.
     alert_evaluator.evaluate_once()
 
 
 # --------------------------------------------------------------------------- #
-# Loops async: um ciclo controlado via shim de to_thread
+# Async loops: a controlled cycle via a to_thread shim
 # --------------------------------------------------------------------------- #
 
 
 def _run_one_loop_cycle(module, loop_coro_name, tick_name):
     """
-    Executa exatamente um ciclo de um …_loop async.
+    Runs exactly one cycle of an async …_loop.
 
-    Substitui asyncio.to_thread por um shim que roda o tick no próprio event
-    loop (sem thread, evitando problemas de thread-safety com asyncio.Event) e
-    seta o stop_event logo após — assim o while encerra após uma iteração.
+    Replaces asyncio.to_thread with a shim that runs the tick on the same event
+    loop (no thread, avoiding thread-safety issues with asyncio.Event) and
+    sets the stop_event right after — so the while loop ends after one iteration.
     """
     stop = asyncio.Event()
     calls = []
@@ -489,11 +489,11 @@ def test_alert_evaluation_loop_one_cycle():
 
 def test_metrics_cleanup_is_time_based_not_cycle_based(db, monkeypatch):
     """
-    A limpeza de retenção roda uma vez por dia de RELÓGIO.
+    Retention cleanup runs once per WALL-CLOCK day.
 
-    Contando ciclos, a periodicidade dependia do intervalo de coleta: durante
-    uma simulação de uso ele cai para 5s e a limpeza passava a varrer a tabela
-    a cada ~2h, sem nada a apagar.
+    Counting cycles, the periodicity would depend on the collection interval: during
+    a usage simulation it drops to 5s and cleanup would end up scanning the table
+    every ~2h, with nothing to delete.
     """
     from src.services import metrics_poller
 
@@ -501,13 +501,13 @@ def test_metrics_cleanup_is_time_based_not_cycle_based(db, monkeypatch):
 
     metrics_poller.poll_metrics_once()
     first = metrics_poller._last_metrics_cleanup
-    assert first is not None, "a primeira passagem deve limpar"
+    assert first is not None, "the first pass should clean up"
 
     for _ in range(5):
         metrics_poller.poll_metrics_once()
     assert metrics_poller._last_metrics_cleanup == first
 
-    # Passado um dia, limpa de novo.
+    # After a day passes, cleans up again.
     monkeypatch.setattr(
         metrics_poller,
         "_last_metrics_cleanup",

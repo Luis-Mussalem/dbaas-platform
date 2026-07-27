@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 const PUBLIC_ROUTES = ["/login"];
 
-// Next.js 16 renomeou a convenção `middleware` para `proxy` (mesmo runtime/edge,
-// mesmo `config.matcher`); a função exportada passa a se chamar `proxy`.
-// O cookie access_token é HttpOnly (gravado pelo backend) — invisível para o JS
-// do cliente, mas o proxy roda no servidor e o lê normalmente do request.
+// Next.js 16 renamed the `middleware` convention to `proxy` (same runtime/edge,
+// same `config.matcher`); the exported function is now called `proxy`.
+// The access_token cookie is HttpOnly (written by the backend) — invisible to client-side
+// JS, but the proxy runs on the server and reads it from the request normally.
 export function proxy(request: NextRequest) {
   const token = request.cookies.get("access_token")?.value;
   const { pathname } = request.nextUrl;
@@ -15,9 +15,9 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  // Sem redirect /login → / quando há cookie: JS não consegue apagar cookie
-  // HttpOnly, então um token morto (refresh falhou) criaria um loop infinito
-  // login ↔ dashboard. Logado que visita /login só vê o formulário — inócuo.
+  // No /login → / redirect when a cookie is present: JS can't clear an HttpOnly
+  // cookie, so a dead token (refresh failed) would create an infinite
+  // login ↔ dashboard loop. A logged-in user visiting /login just sees the form — harmless.
   return NextResponse.next();
 }
 

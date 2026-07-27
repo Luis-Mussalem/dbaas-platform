@@ -6,11 +6,11 @@ import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { useFormatters } from "@/hooks/use-formatters";
 import type { DashboardSummary } from "@/lib/types";
 
-// Linha de KPIs de performance da frota (Painel + Instâncias).
-// Contagem de instâncias/alertas/backups vive na saudação e no cabeçalho da
-// lista — aqui ficam as métricas de desempenho e custo, como no design.
-// Latência P95 e Uptime exibem "—" enquanto ainda não há dados reais suficientes
-// (nunca um zero fabricado).
+// Fleet performance KPI row (Dashboard + Instances).
+// The count of instances/alerts/backups lives in the greeting and in the list's
+// header — here go the performance and cost metrics, as in the design.
+// P95 Latency and Uptime show "—" while there isn't yet enough real data
+// (never a fabricated zero).
 export function FleetKpiRow({
   summary,
   monthlyCost,

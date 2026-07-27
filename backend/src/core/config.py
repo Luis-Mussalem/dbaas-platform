@@ -43,50 +43,50 @@ class Settings(BaseSettings):
 
     # Backup
     BACKUP_DIR: str = str(_PROJECT_ROOT / "data" / "backups")
-    # Diretório raiz onde todos os backups são armazenados no host.
-    # Cada instância tem sua própria subpasta: {BACKUP_DIR}/{instance_id}/
-    # Subpastas: logical/ (pg_dump .dump files), physical/ (pg_basebackup dirs), wal/ (WAL archive)
-    # Em produção, substituir por um caminho com bastante espaço em disco.
+    # Root directory where all backups are stored on the host.
+    # Each instance has its own subfolder: {BACKUP_DIR}/{instance_id}/
+    # Subfolders: logical/ (pg_dump .dump files), physical/ (pg_basebackup dirs), wal/ (WAL archive)
+    # In production, replace with a path that has plenty of disk space.
 
     # Alerts
-    # URL opcional para entrega de webhooks quando um alerta dispara ou é resolvido.
-    # Se não definida, alertas são registrados apenas no log da aplicação.
-    # O payload enviado é JSON com: event, severity, metric_type, instance_id,
+    # Optional URL for webhook delivery when an alert fires or is resolved.
+    # If not set, alerts are only logged to the application log.
+    # The payload sent is JSON with: event, severity, metric_type, instance_id,
     # current_value, threshold, message, triggered_at, resolved_at.
     ALERT_WEBHOOK_URL: str | None = None
 
-    # Cadência do poller de métricas: quão frequentemente coletamos e persistimos
-    # métricas de cada instância RUNNING. Produção usa 60s (barato; a maioria das
-    # métricas move devagar). A demo baixa para 15s (ver .env/.env.example) para o
-    # dashboard — queries/s, conexões, latência — atualizar de forma visivelmente
-    # viva em vez de saltar a cada minuto; 15s casa com o ciclo do simulador de
-    # carga, então cada janela cobre uma rodada inteira de commits.
+    # Metrics poller cadence: how often we collect and persist
+    # metrics for each RUNNING instance. Production uses 60s (cheap; most
+    # metrics move slowly). The demo lowers it to 15s (see .env/.env.example) so the
+    # dashboard — queries/s, connections, latency — updates visibly
+    # live instead of jumping every minute; 15s matches the workload simulator's
+    # cycle, so each window covers a full round of commits.
     METRICS_POLL_INTERVAL_SECONDS: int = 60
 
-    # Demo mode — frota de demonstração viva por padrão
-    # Expõe /api/v1/demo e sobe o diretor do "demo ao vivo" + o gerador de carga.
-    # Ao contrário do modelo antigo (frota nascia vazia), aqui o seed já popula a
-    # frota com histórico e o gerador mantém uma carga-base contínua, então o
-    # dashboard mostra uma plataforma viva já no primeiro login. O botão "Ver ao
-    # vivo" apenas amplifica isso por ~1 min. Com DEMO_MODE=false os endpoints
-    # respondem 404 e os loops não sobem.
+    # Demo mode — live demo fleet by default
+    # Exposes /api/v1/demo and starts the "live demo" director + the load generator.
+    # Unlike the old model (fleet started empty), here the seed already populates the
+    # fleet with history and the generator keeps a continuous baseline load, so the
+    # dashboard shows a live platform right on first login. The "View live"
+    # button just amplifies this for ~1 min. With DEMO_MODE=false the endpoints
+    # respond 404 and the loops don't start.
     DEMO_MODE: bool = True
-    # Cadência do gerador de carga. 5s (e não 15s) para os commits saírem em
-    # rajadas menores e mais frequentes: cada janela de coleta do poller (15s)
-    # cobre ~3 rajadas, o que evita o aliasing do queries/s (poll e rajada com o
-    # mesmo período batiam mal). Ver _QUERIES_PER_ACTIVE_CONN, dimensionado junto.
+    # Load generator cadence. 5s (not 15s) so commits go out in
+    # smaller, more frequent bursts: each poller collection window (15s)
+    # covers ~3 bursts, which avoids queries/s aliasing (poll and burst with the
+    # same period would beat against each other). See _QUERIES_PER_ACTIVE_CONN, sized together with this.
     DEMO_WORKLOAD_INTERVAL_SECONDS: int = 5
-    # Teto de conexões simultâneas por instância de produção (staging usa ~metade).
-    # Cada conexão é um backend PostgreSQL (~10 MB): 14 × 3 prod + 7 × 3 staging
-    # ≈ 60 conexões na frota inteira. Baixe se a máquina for modesta.
+    # Cap on simultaneous connections per production instance (staging uses ~half).
+    # Each connection is a PostgreSQL backend (~10 MB): 14 × 3 prod + 7 × 3 staging
+    # ≈ 60 connections across the whole fleet. Lower this if the machine is modest.
     DEMO_WORKLOAD_MAX_CONNECTIONS: int = 14
 
     # Provisioning — Docker
-    # Senha do superuser postgres dentro de cada container provisionado.
-    # Sem default intencional: pydantic-settings levanta ValidationError no
-    # startup se esta variável não estiver definida no .env, impedindo a
-    # aplicação de rodar com uma senha conhecida/fraca acidentalmente.
-    # Gerar com: python -c "import secrets; print(secrets.token_urlsafe(32))"
+    # Password for the postgres superuser inside each provisioned container.
+    # No default intentionally: pydantic-settings raises a ValidationError at
+    # startup if this variable isn't set in .env, preventing the
+    # application from accidentally running with a known/weak password.
+    # Generate with: python -c "import secrets; print(secrets.token_urlsafe(32))"
     PROVISIONER_SUPERUSER_PASSWORD: str
 
     @model_validator(mode="after")
@@ -101,9 +101,9 @@ class Settings(BaseSettings):
                 "FERNET_KEY must be changed from the default placeholder. "
                 'Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
             )
-        # Falha cedo, no startup, se a FERNET_KEY não for uma chave Fernet válida
-        # (ex.: o placeholder do .env.example antigo). Sem isso, o erro só apareceria
-        # no primeiro encrypt/decrypt — ao provisionar/ler uma instância.
+        # Fails early, at startup, if FERNET_KEY isn't a valid Fernet key
+        # (e.g. the old .env.example placeholder). Without this, the error would only
+        # show up on the first encrypt/decrypt — when provisioning/reading an instance.
         from cryptography.fernet import Fernet
 
         try:

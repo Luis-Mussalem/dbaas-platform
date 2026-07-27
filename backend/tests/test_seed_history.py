@@ -1,10 +1,10 @@
 """
-Testes do backfill histórico da frota demo (`src/seed/history.py`).
+Tests for the demo fleet's historical backfill (`src/seed/history.py`).
 
-O foco é a guarda de idempotência, que é onde a coisa quebrou de verdade: a
-versão anterior pulava o backfill se existisse QUALQUER métrica, e como o
-poller ao vivo grava uma linha por minuto, bastava um intervalo entre o reset e
-o clique em "Simular uso" para os gráficos de 24h nunca serem semeados.
+The focus is the idempotency guard, which is where things actually broke: the
+previous version skipped the backfill if ANY metric existed, and since the
+live poller writes one row per minute, a mere gap between the reset and
+clicking "Simulate usage" was enough for the 24h charts to never get seeded.
 """
 from datetime import datetime, timedelta, timezone
 
@@ -70,9 +70,9 @@ def test_backfill_seeds_the_window(db, demo_instance):
 
 def test_backfill_runs_even_when_the_live_poller_already_wrote(db, demo_instance):
     """
-    REGRESSÃO: alguns minutos de coleta ao vivo não podem suprimir o backfill —
-    era exatamente isso que deixava os gráficos com poucos minutos de dados
-    depois de parar e simular de novo.
+    REGRESSION: a few minutes of live collection must not suppress the backfill —
+    that was exactly what left the charts with only a few minutes of data
+    after stopping and simulating again.
     """
     for minutes in (4, 3, 2, 1, 0):
         _add_live_sample(db, demo_instance, "connections_active", 7.0, minutes)
@@ -84,7 +84,7 @@ def test_backfill_runs_even_when_the_live_poller_already_wrote(db, demo_instance
 
 
 def test_backfill_skips_when_the_window_is_already_covered(db, demo_instance):
-    """Com 24h de medição real, o sintético é desnecessário — e não deve entrar."""
+    """With 24h of real measurement, the synthetic data is unnecessary — and must not be added."""
     _add_live_sample(db, demo_instance, "connections_active", 7.0, minutes_ago=60 * 24)
     before = len(_series(db, demo_instance))
 
@@ -94,7 +94,7 @@ def test_backfill_skips_when_the_window_is_already_covered(db, demo_instance):
 
 
 def test_seeded_series_stops_where_the_measured_one_starts(db, demo_instance):
-    """Sem sobreposição: dois pontos concorrentes no mesmo instante viram ruído."""
+    """No overlap: two competing points at the same instant become noise."""
     _add_live_sample(db, demo_instance, "connections_active", 7.0, minutes_ago=10)
 
     history._backfill_metrics(db, demo_instance, idx=0)
@@ -106,10 +106,10 @@ def test_seeded_series_stops_where_the_measured_one_starts(db, demo_instance):
 
 def test_size_series_is_anchored_to_the_measured_size(db, demo_instance):
     """
-    O tamanho semeado converge para o que a instância REALMENTE reporta.
+    The seeded size converges to what the instance ACTUALLY reports.
 
-    Antes ele era uma fração arbitrária da capacidade contratada: com o plano de
-    1 GB isso desenhava um degrau na emenda e uma barra de storage acima de 100%.
+    It used to be an arbitrary fraction of the contracted capacity: with the
+    1 GB plan that drew a step at the join and a storage bar above 100%.
     """
     measured = 264.0 * 1024 ** 2
     _add_live_sample(db, demo_instance, "db_size_bytes", measured, minutes_ago=10)
@@ -118,17 +118,17 @@ def test_size_series_is_anchored_to_the_measured_size(db, demo_instance):
 
     seeded = [p.value for p in _series(db, demo_instance, "db_size_bytes")
               if p.value != measured]
-    # Termina logo abaixo do medido (o banco cresceu ao longo do dia) e nunca
-    # ultrapassa a capacidade do plano.
+    # Ends just below the measured value (the database grew over the day) and never
+    # exceeds the plan's capacity.
     assert 0.95 * measured < max(seeded) <= measured
     assert max(seeded) < demo_instance.storage_gb * 1024 ** 3
 
 
 def test_enrich_fleet_still_seeds_backups_when_only_a_rule_exists(db, demo_instance):
     """
-    REGRESSÃO: a fase ALERT da simulação cria uma regra. Com a guarda única
-    ("tem regra?"), a instância passava a ser considerada já enriquecida e
-    nenhum outro histórico era semeado numa segunda execução.
+    REGRESSION: the simulation's ALERT phase creates a rule. With the single guard
+    ("has a rule?"), the instance would be considered already enriched and
+    no other history would be seeded on a second run.
     """
     db.add(AlertRule(
         instance_id=demo_instance.id,
@@ -147,9 +147,9 @@ def test_enrich_fleet_still_seeds_backups_when_only_a_rule_exists(db, demo_insta
 
 def test_staging_also_gets_a_backup_schedule(db):
     """
-    REGRESSÃO: só produção ganhava agendamento, mas a regra `backup_age_hours`
-    é semeada na frota inteira. Sem agendamento, staging nunca produzia backup
-    novo e acumulava um CRITICAL permanente 24h depois do primeiro boot.
+    REGRESSION: only production used to get a schedule, but the `backup_age_hours`
+    rule is seeded across the whole fleet. Without a schedule, staging never produced
+    a new backup and accumulated a permanent CRITICAL 24h after the first boot.
     """
     staging = DatabaseInstance(
         name="demo-staging",
@@ -174,9 +174,9 @@ def test_staging_also_gets_a_backup_schedule(db):
 
 def test_backup_anchor_is_refreshed_when_the_fleet_boots_stale(db, demo_instance):
     """
-    A frota demo passa a maior parte do tempo desligada e o marco de backup
-    envelhece em tempo de parede. Ao subir depois de um dia parada, toda
-    instância cruzava `backup_age_hours > 24` e o painel abria em CRITICAL.
+    The demo fleet spends most of its time turned off and the backup marker
+    ages in wall-clock time. Coming up after a day of being stopped, every
+    instance would cross `backup_age_hours > 24` and the panel would open in CRITICAL.
     """
     stale = datetime.now(timezone.utc) - timedelta(hours=31)
     db.add(Backup(
@@ -199,11 +199,11 @@ def test_backup_anchor_is_refreshed_when_the_fleet_boots_stale(db, demo_instance
         .first()
     )
     age = datetime.now(timezone.utc) - newest.completed_at
-    assert age < timedelta(hours=24)  # não sobe já vencida
+    assert age < timedelta(hours=24)  # doesn't boot already overdue
 
 
 def test_backup_anchor_leaves_recent_backups_alone(db, demo_instance):
-    """Backup real e recente não pode ser reescrito pelo seed."""
+    """A real, recent backup must not be rewritten by the seed."""
     recent = datetime.now(timezone.utc) - timedelta(hours=3)
     db.add(Backup(
         instance_id=demo_instance.id,
@@ -224,9 +224,9 @@ def test_backup_anchor_leaves_recent_backups_alone(db, demo_instance):
 
 def test_backfill_seeds_p95_but_never_the_cumulative_counter(db, demo_instance):
     """
-    p95 é grandeza instantânea e pode ser semeada; xact_commit é um CONTADOR
-    cumulativo — uma série sintética dele produziria uma taxa de queries/s falsa
-    exatamente na emenda com a medição real.
+    p95 is an instantaneous quantity and can be seeded; xact_commit is a cumulative
+    COUNTER — a synthetic series of it would produce a false queries/s rate
+    exactly at the join with the real measurement.
     """
     history._backfill_metrics(db, demo_instance, idx=0)
 
@@ -235,7 +235,7 @@ def test_backfill_seeds_p95_but_never_the_cumulative_counter(db, demo_instance):
 
 
 def test_seeded_p95_follows_the_traffic_curve(db, demo_instance):
-    """Latência mais alta sob carga: uma linha reta não ensinaria nada."""
+    """Higher latency under load: a straight line wouldn't teach anything."""
     history._backfill_metrics(db, demo_instance, idx=0)
 
     values = [p.value for p in _series(db, demo_instance, "p95_query_latency_ms")]
@@ -244,9 +244,9 @@ def test_seeded_p95_follows_the_traffic_curve(db, demo_instance):
 
 def test_xact_commit_anchor_dates_the_pair_safely_in_the_past(db, monkeypatch):
     """
-    O par ancorado nasce no PASSADO (nunca em `now`) e monotônico, para não cruzar
-    com as coletas quase-simultâneas do poller ao vivo — o que derivaria Δ negativo
-    e devolveria o queries/s a "—". Uma coleta viva futura mantém o Δ positivo.
+    The anchored pair is born in the PAST (never at `now`) and monotonic, so it doesn't cross
+    with the live poller's near-simultaneous collections — which would derive a negative Δ
+    and bring queries/s back to "—". A future live collection keeps the Δ positive.
     """
     import contextlib
 
@@ -265,8 +265,8 @@ def test_xact_commit_anchor_dates_the_pair_safely_in_the_past(db, monkeypatch):
     db.commit()
     db.refresh(inst)
 
-    # Sample obsoleto de um "boot anterior" (contador maior): tem de ser apagado,
-    # senão o Δ contra o par fresco sairia negativo.
+    # Stale sample from a "previous boot" (a larger counter): must be erased,
+    # otherwise the Δ against the fresh pair would come out negative.
     _add_live_sample(db, inst, "xact_commit", 99999.0, minutes_ago=30)
 
     current = 1000.0
@@ -283,16 +283,16 @@ def test_xact_commit_anchor_dates_the_pair_safely_in_the_past(db, monkeypatch):
     history._seed_xact_commit_anchor(db, inst)
 
     pair = _series(db, inst, "xact_commit")
-    assert len(pair) == 2  # obsoleto apagado, par fresco no lugar
+    assert len(pair) == 2  # stale sample erased, fresh pair in its place
     older, newer = pair
-    # Datado no passado (nunca em `now`), para não cruzar com a coleta viva.
+    # Dated in the past (never at `now`), so it doesn't cross with the live collection.
     assert newer.collected_at <= now - timedelta(seconds=5)
     assert older.collected_at < newer.collected_at
-    # Recuados do contador real (não gravamos `current`), e monotônicos.
+    # Stepped back from the real counter (we don't write `current`), and monotonic.
     assert older.value < newer.value < current
-    # O par sozinho — antes de qualquer coleta viva — já rende uma taxa positiva.
+    # The pair alone — before any live collection — already yields a positive rate.
     assert queries_per_second_by_instance(db, [inst.id])[inst.id] > 0
 
-    # E a coleta viva seguinte (mais nova, lê ~o contador atual) mantém Δ positivo.
+    # And the next live collection (newer, reads ~the current counter) keeps Δ positive.
     _add_live_sample(db, inst, "xact_commit", current, minutes_ago=0)
     assert queries_per_second_by_instance(db, [inst.id])[inst.id] > 0

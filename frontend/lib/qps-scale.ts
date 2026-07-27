@@ -1,9 +1,9 @@
-// Teto comum (base zero) para os sparklines de queries/s dos cards. Com uma régua
-// COMPARTILHADA a altura da linha passa a codificar magnitude — um card de 12 q/s
-// fica visivelmente mais alto que um de 4 — em vez de cada card se auto-escalar e
-// todos parecerem igualmente cheios. Parte do maior número da frota, adiciona folga
-// para os picos da linha (que oscila acima da média) e arredonda para um valor
-// "redondo", para o teto não pular a cada atualização.
+// Common (zero-based) ceiling for the cards' queries/s sparklines. With a SHARED
+// scale, the line's height starts to encode magnitude — a 12 q/s card ends up
+// visibly taller than a 4 q/s one — instead of each card auto-scaling and all of
+// them looking equally full. Starts from the fleet's highest number, adds slack
+// for the line's peaks (which oscillate above the average), and rounds to a "round"
+// value, so the ceiling doesn't jump on every update.
 export function qpsScaleMax(values: (number | null | undefined)[]): number {
   const peak = Math.max(0, ...values.map((v) => v ?? 0)) * 1.5;
   if (peak <= 0) return 1;

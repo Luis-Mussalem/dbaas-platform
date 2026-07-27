@@ -19,7 +19,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Coluna nullable + índice + FK (SET NULL), mesmo padrão de users.company_id.
+    # Nullable column + index + FK (SET NULL), same pattern as users.company_id.
     op.add_column(
         'database_instances',
         sa.Column('company_id', sa.UUID(), nullable=True),
@@ -39,9 +39,9 @@ def upgrade() -> None:
         ondelete='SET NULL',
     )
 
-    # Backfill: atribui as instâncias órfãs à empresa de demonstração.
-    # O EXISTS evita rodar o UPDATE em ambientes onde essa empresa não existe
-    # (ex.: banco de teste/CI vazio) — ali o backfill simplesmente não se aplica.
+    # Backfill: assigns orphan instances to the demo company.
+    # The EXISTS avoids running the UPDATE in environments where that company
+    # doesn't exist (e.g. empty test/CI database) — there the backfill simply doesn't apply.
     op.execute(
         """
         UPDATE database_instances
