@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { TriangleAlert, DatabaseBackup, ShieldCheck } from "lucide-react";
+import { TriangleAlert, DatabaseBackup, ShieldCheck, Info } from "lucide-react";
 import type { Instance, InstanceSummary } from "@/lib/types";
 import { useMetricHistory } from "@/hooks/use-metric-history";
 import { DASHBOARD_POLL_MS } from "@/lib/constants";
@@ -14,9 +14,9 @@ import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { RegionTag } from "@/components/RegionTag";
 import { Sparkline } from "@/components/Sparkline";
 
-// Largura mínima da barra de storage, em %. Um banco pequeno num plano grande
-// dá uma fração de 1%: sem piso, a barra some e o card sugere "sem dados"
-// quando na verdade a leitura é boa.
+// Minimum width of the storage bar, in %. A small database on a big plan
+// gives a fraction of 1%: without a floor, the bar disappears and the card suggests "no data"
+// when the reading is actually fine.
 const MIN_BAR_PCT = 1.5;
 
 export function InstanceCard({
@@ -25,27 +25,27 @@ export function InstanceCard({
   qpsScaleMax,
 }: {
   instance: Instance;
-  // Ausente enquanto o agregado da frota carrega — o card renderiza sem ele.
+  // Absent while the fleet aggregate is loading — the card renders without it.
   summary?: InstanceSummary;
-  // Teto Y comum a todos os cards (base zero) para o sparkline de queries/s: a
-  // altura da linha passa a codificar magnitude, comparável entre cards. Ausente
-  // → o sparkline se auto-escala à própria faixa (fallback).
+  // Y ceiling common to all cards (zero-based) for the queries/s sparkline: the
+  // line's height starts to encode magnitude, comparable across cards. Absent
+  // → the sparkline auto-scales to its own range (fallback).
   qpsScaleMax?: number;
 }) {
   const t = useTranslations("InstanceCard");
   const tc = useTranslations("Common");
   const { bytes, ratio, number, ago } = useFormatters();
 
-  // Sparkline REAL: histórico de queries/s — a MESMA grandeza do número que o
-  // card exibe em destaque, para gráfico e número contarem uma história só
-  // (conexões continua como número no card e como gráfico na tela de detalhe).
-  // queries/s não é armazenado: o endpoint deriva a série do contador xact_commit.
-  // Vazio → o Sparkline mostra uma linha-base.
+  // REAL sparkline: queries/s history — the SAME quantity as the number the
+  // card highlights, so the chart and the number tell a single story
+  // (connections stays as a number on the card and as a chart on the detail screen).
+  // queries/s isn't stored: the endpoint derives the series from the xact_commit counter.
+  // Empty → Sparkline shows a baseline.
   //
-  // Janela de 15m em 60 baldes = um balde por COLETA (15s): cada escrita do poller
-  // vira um ponto, então a linha reflete a resolução real do dado, sem médias de
-  // 1 min que empastavam a escrita de 15s. O card mostra o presente; a visão de
-  // horas continua na tela de detalhe, onde há espaço para lê-la.
+  // 15m window in 60 buckets = one bucket per COLLECTION (15s): every poller write
+  // becomes a point, so the line reflects the data's real resolution, without 1 min
+  // averages that used to blur the 15s writes. The card shows the present; the hours
+  // view stays on the detail screen, where there's room to read it.
   const throughputHistory = useMetricHistory(
     instance.id,
     "queries_per_second",
@@ -54,13 +54,13 @@ export function InstanceCard({
     60
   );
 
-  // Todos os valores escalares vêm do agregado da frota: uma requisição serve
-  // o grid inteiro, em vez de um GET /metrics por card a cada poll.
+  // All scalar values come from the fleet aggregate: one request serves
+  // the whole grid, instead of a GET /metrics per card on every poll.
   const connActive = summary?.connections_active;
   const connMax = summary?.connections_max;
   const sizeBytes = summary?.db_size_bytes;
 
-  // Barra de armazenamento: tamanho atual do banco vs capacidade contratada.
+  // Storage bar: current database size vs. contracted capacity.
   const capacityBytes = instance.storage_gb ? instance.storage_gb * 1024 ** 3 : null;
   const storagePct =
     capacityBytes && sizeBytes ? Math.min(100, (sizeBytes / capacityBytes) * 100) : null;
@@ -68,8 +68,8 @@ export function InstanceCard({
   const growth = summary?.size_delta_24h_bytes;
   const growthDirection = growth == null || growth === 0 ? "flat" : growth > 0 ? "up" : "down";
 
-  // A linha do sparkline usa a cor de IDENTIDADE do país (mesma do avatar),
-  // exceto quando falhou — aí o vermelho de status prevalece como sinal forte.
+  // The sparkline's line uses the country's IDENTITY color (same as the avatar),
+  // except when failed — there the status red prevails as a strong signal.
   const sparkColor =
     instance.status === "failed"
       ? "var(--danger)"
@@ -84,10 +84,10 @@ export function InstanceCard({
       href={`/instances/${instance.id}`}
       className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-4 transition hover:-translate-y-0.5 hover:border-border-strong hover:shadow-lg"
     >
-      {/* topo: ícone + nome + região  ·  saúde */}
+      {/* top: icon + name + region  ·  health */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
-          {/* avatar com cor de identidade do PAÍS (matiz) + tom pelo ambiente */}
+          {/* avatar with the COUNTRY's identity color (hue) + tone by environment */}
           <div
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] text-[11px] font-bold"
             style={{
@@ -111,7 +111,7 @@ export function InstanceCard({
         <HealthBadge status={instance.status} />
       </div>
 
-      {/* ambiente (tag) · alertas abertos */}
+      {/* environment (tag) · open alerts */}
       <div className="flex items-center justify-between gap-2">
         {instance.environment ? <EnvBadge environment={instance.environment} /> : <span />}
         {openAlerts > 0 && (
@@ -125,17 +125,31 @@ export function InstanceCard({
         )}
       </div>
 
-      {/* sparkline real: queries/s na última hora, em régua compartilhada (base
-          zero) para a altura ser comparável entre cards */}
-      <Sparkline
-        data={throughputHistory}
-        color={sparkColor}
-        domainMin={0}
-        domainMax={qpsScaleMax}
-        className="h-14 w-full"
-      />
+      {/* sparkline caption: without it, the line looked decorative — nothing on the
+          card said it's queries/s (the same quantity as the "throughput" number
+          right below) and not connections or latency. The native tooltip (title)
+          carries the update cadence, the same pattern as the copy button in
+          ConnString.tsx. */}
+      <div className="flex flex-col gap-1">
+        <div
+          className="flex items-center gap-1 text-[11px] text-fg-3"
+          title={t("throughputTooltip", { seconds: DASHBOARD_POLL_MS / 1000 })}
+        >
+          <span>{t("throughputCaption")}</span>
+          <Info className="h-3 w-3 shrink-0 text-fg-faint" aria-hidden />
+        </div>
+        {/* real sparkline: queries/s over the last hour, on a shared (zero-based)
+            scale so the height is comparable across cards */}
+        <Sparkline
+          data={throughputHistory}
+          color={sparkColor}
+          domainMin={0}
+          domainMax={qpsScaleMax}
+          className="h-14 w-full"
+        />
+      </div>
 
-      {/* métricas ao vivo: as três que se movem com a carga */}
+      {/* live metrics: the three that move with the load */}
       <div className="flex items-center justify-between">
         <Metric
           label={t("connections")}
@@ -158,6 +172,9 @@ export function InstanceCard({
               : tc("none")
           }
           align="right"
+          // Same color as the sparkline's line right above: the number that stands out
+          // on the card now reads as "the value FROM THAT chart", not a loose data point.
+          valueColor={sparkColor}
         />
         <Metric
           label={t("p95")}
@@ -170,7 +187,7 @@ export function InstanceCard({
         />
       </div>
 
-      {/* armazenamento: usado / plano, com o crescimento das últimas 24h */}
+      {/* storage: used / plan, with growth over the last 24h */}
       <div>
         <div className="mb-1.5 flex items-center justify-between text-[11.5px] text-fg-3">
           <span>{t("storage")}</span>
@@ -204,7 +221,7 @@ export function InstanceCard({
         </div>
       </div>
 
-      {/* rodapé: sinais de operação — o que um DBA olha antes de abrir a instância */}
+      {/* footer: operational signals — what a DBA checks before opening the instance */}
       <div className="flex items-center gap-3 border-t border-border pt-2.5 text-[11.5px] text-fg-3">
         <span className="inline-flex items-center gap-1.5">
           <DatabaseBackup className="h-3.5 w-3.5 shrink-0" />
@@ -229,14 +246,23 @@ function Metric({
   label,
   value,
   align = "left",
+  valueColor,
 }: {
   label: string;
   value: React.ReactNode;
   align?: "left" | "right";
+  // Color of the highlighted value — used to match the number with the color of the
+  // sparkline line it describes. Absent → the card's default text color.
+  valueColor?: string;
 }) {
   return (
     <div className={align === "right" ? "text-right" : ""}>
-      <div className="font-mono text-base font-semibold tabular-nums">{value}</div>
+      <div
+        className="font-mono text-base font-semibold tabular-nums"
+        style={valueColor ? { color: valueColor } : undefined}
+      >
+        {value}
+      </div>
       <div className="text-[11.5px] text-fg-3">{label}</div>
     </div>
   );

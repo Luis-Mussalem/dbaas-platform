@@ -403,6 +403,8 @@
     "p95": "latência p95",
     "storage": "Armazenamento",
     "throughput": "consultas/s",
+    "throughputCaption": "Consultas/s · últimos 15min",
+    "throughputTooltip": "Atualiza a cada {seconds}s",
     "uptime30d": "{pct}% no ar · 30d"
   },
   "InstanceDetail": {

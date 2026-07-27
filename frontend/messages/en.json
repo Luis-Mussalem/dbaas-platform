@@ -403,6 +403,8 @@
     "p95": "p95 latency",
     "storage": "Storage",
     "throughput": "queries/s",
+    "throughputCaption": "Queries/s · last 15m",
+    "throughputTooltip": "Refreshes every {seconds}s",
     "uptime30d": "{pct}% uptime · 30d"
   },
   "InstanceDetail": {
