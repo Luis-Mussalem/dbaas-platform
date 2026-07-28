@@ -48,7 +48,7 @@ class BackupScheduleCreate(BaseModel):
 
     strategy: BackupStrategy = BackupStrategy.LOGICAL
     cron_expression: str
-    retention_days: int = Field(default=7, ge=1, le=365)
+    retention_days: int | None = Field(default=7, ge=1, le=365)
     is_active: bool = True
 
     @field_validator("cron_expression")
@@ -67,7 +67,12 @@ class BackupScheduleCreate(BaseModel):
 class BackupScheduleUpdate(BaseModel):
     """
     Body for PATCH /instances/{id}/schedules/{schedule_id}.
-    All fields are optional — only the ones provided are updated.
+
+    All fields are optional — only the ones PROVIDED are updated, which the
+    service reads from `model_fields_set` rather than from `is not None`. The
+    difference is load-bearing for `retention_days`: an explicit `null` means
+    "keep these backups indefinitely", while omitting the field leaves the current
+    retention alone.
     """
 
     cron_expression: str | None = None
@@ -99,7 +104,7 @@ class BackupScheduleRead(BaseModel):
     instance_id: uuid.UUID
     strategy: BackupStrategy
     cron_expression: str
-    retention_days: int
+    retention_days: int | None
     is_active: bool
     created_at: datetime
     updated_at: datetime

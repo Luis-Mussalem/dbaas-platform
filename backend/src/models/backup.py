@@ -154,11 +154,14 @@ class BackupSchedule(Base):
         nullable=False,
         comment="Standard 5-field cron expression, e.g. '0 2 * * *'",
     )
-    retention_days: Mapped[int] = mapped_column(
+    retention_days: Mapped[int | None] = mapped_column(
         Integer,
-        nullable=False,
+        nullable=True,
         default=7,
-        comment="How many days to keep backups created by this schedule",
+        comment=(
+            "How many days to keep backups created by this schedule; "
+            "NULL = keep indefinitely"
+        ),
     )
     is_active: Mapped[bool] = mapped_column(
         Boolean,

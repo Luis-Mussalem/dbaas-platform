@@ -369,3 +369,74 @@ def test_advance_and_delete_schedule(db, instance):
     assert backup_service.get_schedule_by_id(db, sched.id) is not None
     backup_service.delete_schedule(db, sched)
     assert backup_service.get_schedule_by_id(db, sched.id) is None
+
+
+# --------------------------------------------------------------------------- #
+# Retention is a two-way door
+#
+# PATCH semantics distinguish "field omitted" from "field explicitly null". The
+# service used to read presence as `is not None`, which conflated them and made
+# retention one-way: once set, "keep these forever" was unreachable except by
+# deleting the schedule and recreating it.
+# --------------------------------------------------------------------------- #
+
+
+def test_explicit_null_retention_means_keep_indefinitely(db, instance):
+    sched = backup_service.create_schedule(
+        db, instance.id,
+        BackupScheduleCreate(cron_expression="0 2 * * *", retention_days=30),
+    )
+    assert sched.retention_days == 30
+
+    updated = backup_service.update_schedule(
+        db, sched, BackupScheduleUpdate(retention_days=None),
+    )
+    assert updated.retention_days is None
+
+
+def test_omitting_retention_leaves_it_untouched(db, instance):
+    """The other half: a PATCH about the cron must not silently clear retention."""
+    sched = backup_service.create_schedule(
+        db, instance.id,
+        BackupScheduleCreate(cron_expression="0 2 * * *", retention_days=30),
+    )
+    updated = backup_service.update_schedule(
+        db, sched, BackupScheduleUpdate(cron_expression="0 5 * * *"),
+    )
+    assert updated.retention_days == 30
+    assert updated.cron_expression == "0 5 * * *"
+
+
+def test_backup_without_retention_has_no_expiry(db, instance, monkeypatch):
+    """A schedule with no retention produces backups that never expire."""
+    monkeypatch.setattr(
+        backup_service.subprocess, "run", _fake_run(returncode=0),
+    )
+    result = backup_service.create_logical_backup(db, instance, retention_days=None)
+    assert result.expires_at is None
+
+
+def test_failed_backup_error_message_is_redacted(db, instance, monkeypatch):
+    """
+    Backup.error_message is returned to the client by BackupRead, so the raw
+    pg_dump stderr must not survive into it — see core.redaction.
+    """
+    monkeypatch.setattr(
+        backup_service.subprocess, "run",
+        _fake_run(
+            returncode=1,
+            stderr=(
+                'pg_dump: error: connection to server at "localhost" (127.0.0.1), '
+                "port 55004 failed: Connection refused"
+            ),
+        ),
+    )
+    with pytest.raises(RuntimeError):
+        backup_service.create_logical_backup(db, instance)
+
+    rec = db.query(Backup).filter_by(instance_id=instance.id).first()
+    assert rec.status == BackupStatus.FAILED
+    assert "127.0.0.1" not in rec.error_message
+    assert "55004" not in rec.error_message
+    # ...but the operator still learns why it failed.
+    assert "Connection refused" in rec.error_message
