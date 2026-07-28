@@ -6,7 +6,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from src.core.scoping import assert_can_manage_target
-from src.core.security import hash_password
+from src.core.security import hash_password, verify_password
 from src.models.audit_log import AuditLog
 from src.models.user import User, UserRole
 from src.schemas.user import UserAdminCreate, UserAdminUpdate
@@ -118,13 +118,41 @@ def create_user_admin(db: Session, data: UserAdminCreate, acting_user: User) -> 
     return user
 
 
-def update_user_self(db: Session, user: User, email: Optional[str], password: Optional[str]) -> User:
-    """Self-service update of the user's own email/password."""
-    if email is not None and email != user.email:
+def update_user_self(
+    db: Session,
+    user: User,
+    email: Optional[str] = None,
+    password: Optional[str] = None,
+    current_password: Optional[str] = None,
+) -> User:
+    """
+    Self-service update of the user's own email/password.
+
+    Re-authentication is required for any change that touches the account's
+    recovery handles. See schemas.user.UserUpdate for why: a stolen access token
+    must not be convertible into permanent ownership of the account.
+
+    A no-op call (nothing to change) is allowed without the password so the
+    endpoint stays usable for future profile fields that carry no such risk.
+    """
+    wants_email_change = email is not None and email != user.email
+    wants_password_change = password is not None
+
+    if wants_email_change or wants_password_change:
+        if not current_password:
+            raise HTTPException(
+                status_code=400,
+                detail="current_password is required to change your email or password",
+            )
+        if not verify_password(current_password, user.hashed_password):
+            # 403, not 400: the request is well-formed, the credential is wrong.
+            raise HTTPException(status_code=403, detail="Current password is incorrect")
+
+    if wants_email_change:
         if get_user_by_email(db, email):
             raise HTTPException(status_code=400, detail="Email already registered")
         user.email = email
-    if password is not None:
+    if wants_password_change:
         user.hashed_password = hash_password(password)
 
     db.commit()

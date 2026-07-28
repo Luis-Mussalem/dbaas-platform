@@ -32,12 +32,20 @@ export default function SettingsPage() {
   // after saving, so the Sidebar reflects the new email right away.
   const { user, refreshUser } = useAuth();
 
+  // Both forms ask for the CURRENT password. Email and password are the account's
+  // recovery handles, so the backend requires re-authentication to change either
+  // (see the UserUpdate schema): a stolen session must not convert into permanent
+  // ownership of the account. Each form keeps its own field — they are independent
+  // and neither should leave a credential sitting in the other's state.
+
   // ── Form 1: email ──
   const [email, setEmail] = useState(user?.email ?? "");
+  const [emailPwd, setEmailPwd] = useState("");
   const [emailBusy, setEmailBusy] = useState(false);
   const [emailMsg, setEmailMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
 
   // ── Form 2: password ── (independent from the email one)
+  const [currentPwd, setCurrentPwd] = useState("");
   const [pwd, setPwd] = useState("");
   const [pwd2, setPwd2] = useState("");
   const [pwdBusy, setPwdBusy] = useState(false);
@@ -52,11 +60,18 @@ export default function SettingsPage() {
       setEmailMsg({ kind: "error", text: t("email.sameAsCurrent") });
       return;
     }
+    if (!emailPwd) {
+      setEmailMsg({ kind: "error", text: t("currentPasswordRequired") });
+      return;
+    }
     setEmailBusy(true);
     setEmailMsg(null);
     try {
-      await updateUser(user.id, { email: email.trim() });
+      await updateUser(user.id, { email: email.trim(), current_password: emailPwd });
       await refreshUser();
+      // Clear the credential as soon as it has served its purpose — it should not
+      // linger in component state after the request.
+      setEmailPwd("");
       setEmailMsg({ kind: "ok", text: t("email.updated") });
     } catch (err) {
       setEmailMsg({ kind: "error", text: err instanceof Error ? err.message : t("saveFailed") });
@@ -76,10 +91,15 @@ export default function SettingsPage() {
       setPwdMsg({ kind: "error", text: t("password.mismatch") });
       return;
     }
+    if (!currentPwd) {
+      setPwdMsg({ kind: "error", text: t("currentPasswordRequired") });
+      return;
+    }
     setPwdBusy(true);
     setPwdMsg(null);
     try {
-      await updateUser(user.id, { password: pwd });
+      await updateUser(user.id, { password: pwd, current_password: currentPwd });
+      setCurrentPwd("");
       setPwd("");
       setPwd2("");
       setPwdMsg({ kind: "ok", text: t("password.updated") });
@@ -132,6 +152,15 @@ export default function SettingsPage() {
             className={INPUT_LG}
             placeholder={t("email.placeholder")}
           />
+          <input
+            type="password"
+            value={emailPwd}
+            onChange={(e) => setEmailPwd(e.target.value)}
+            className={INPUT_LG}
+            placeholder={t("email.currentPasswordPlaceholder")}
+            autoComplete="current-password"
+          />
+          <p className="text-xs text-fg-3">{t("email.reauthHint")}</p>
           {emailMsg && <Notice kind={emailMsg.kind} text={emailMsg.text} />}
           <button type="submit" disabled={emailBusy} className={BTN_PRIMARY}>
             {emailBusy ? tc("saving") : t("email.save")}
@@ -148,6 +177,14 @@ export default function SettingsPage() {
         <div className="flex flex-col gap-3 sm:max-w-md">
           <input
             type="password"
+            value={currentPwd}
+            onChange={(e) => setCurrentPwd(e.target.value)}
+            className={INPUT_LG}
+            placeholder={t("password.currentPasswordPlaceholder")}
+            autoComplete="current-password"
+          />
+          <input
+            type="password"
             value={pwd}
             onChange={(e) => setPwd(e.target.value)}
             className={INPUT_LG}
@@ -162,6 +199,7 @@ export default function SettingsPage() {
             placeholder={t("password.confirmPlaceholder")}
             autoComplete="new-password"
           />
+          <p className="text-xs text-fg-3">{t("password.reauthHint")}</p>
           {pwdMsg && <Notice kind={pwdMsg.kind} text={pwdMsg.text} />}
           <button type="submit" disabled={pwdBusy} className={BTN_PRIMARY}>
             {pwdBusy ? tc("saving") : t("password.save")}

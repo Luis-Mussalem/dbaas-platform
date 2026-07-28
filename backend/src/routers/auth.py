@@ -34,8 +34,13 @@ def _set_auth_cookies(response: Response, request: Request, access: str, refresh
 
     The JSON body with the tokens is kept on the endpoints (Swagger, API clients, and
     tests use the Authorization header); the frontend uses only the cookies.
+
+    `Secure` comes from the request scheme OR from settings.COOKIE_SECURE. The scheme
+    alone is not enough: behind a reverse proxy that terminates TLS, the backend is
+    reached over plain HTTP and would ship the session cookies without `Secure` on a
+    site that is actually HTTPS. COOKIE_SECURE=true forces it in those deployments.
     """
-    secure = request.url.scheme == "https"
+    secure = settings.COOKIE_SECURE or request.url.scheme == "https"
     response.set_cookie(
         "access_token",
         access,
@@ -56,9 +61,20 @@ def _set_auth_cookies(response: Response, request: Request, access: str, refresh
     )
 
 
-def _clear_auth_cookies(response: Response) -> None:
-    response.delete_cookie("access_token", path="/")
-    response.delete_cookie("refresh_token", path="/")
+def _clear_auth_cookies(response: Response, request: Request) -> None:
+    """
+    Expires both auth cookies.
+
+    The attributes must MATCH the ones used when setting them (path, samesite,
+    secure, httponly): browsers key a cookie by name+domain+path, and a Set-Cookie
+    whose SameSite/Secure disagree with the original can be rejected, leaving a
+    logged-out user still holding a live cookie.
+    """
+    secure = settings.COOKIE_SECURE or request.url.scheme == "https"
+    for name in ("access_token", "refresh_token"):
+        response.delete_cookie(
+            name, path="/", httponly=True, samesite="lax", secure=secure
+        )
 
 
 @router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
@@ -131,19 +147,22 @@ def refresh(request: Request, response: Response, db: Session = Depends(get_db))
 
         if user_id is None or token_type != "refresh" or jti is None:
             raise credentials_exception
-    except JWTError:
+        # Inside the try: a malformed `sub` is a bad token, not a server fault.
+        # Parsing it outside would surface as an unhandled ValueError → 500.
+        user_uuid = uuid.UUID(user_id)
+    except (JWTError, ValueError):
         raise credentials_exception
 
     if is_token_blacklisted(db, jti):
         raise credentials_exception
 
-    user = db.query(User).filter(User.id == uuid.UUID(user_id)).first()
+    user = db.query(User).filter(User.id == user_uuid).first()
     if user is None or not user.is_active:
         raise credentials_exception
 
     # Blacklist the consumed refresh token (token rotation — prevent reuse)
     ref_expires_at = datetime.fromtimestamp(payload["exp"], tz=timezone.utc)
-    blacklist_token(db, jti, "refresh", uuid.UUID(user_id), ref_expires_at)
+    blacklist_token(db, jti, "refresh", user_uuid, ref_expires_at)
 
     new_access_token = create_access_token({"sub": str(user.id)})
     new_refresh_token = create_refresh_token({"sub": str(user.id)})
@@ -207,7 +226,7 @@ def logout(
         except (JWTError, KeyError):
             pass
 
-    _clear_auth_cookies(response)
+    _clear_auth_cookies(response, request)
     return {"detail": "Successfully logged out"}
 
 

@@ -26,8 +26,12 @@ def test_get_own_user_ok(client, auth_headers):
 
 
 def test_get_other_user_forbidden(client, auth_headers, make_user):
-    # IDOR regression: a regular user CANNOT read another user.
-    headers, _ = auth_headers(email="attacker@example.com")
+    # IDOR regression: a MEMBER cannot read another user. The role is explicit —
+    # a company admin legitimately reads their own colleagues (see test_rbac.py),
+    # so this test has to name the role it is actually about.
+    from src.models.user import UserRole
+
+    headers, _ = auth_headers(email="attacker@example.com", role=UserRole.MEMBER)
     victim = make_user(email="victim@example.com")
     resp = client.get(f"{API}/{victim.id}", headers=headers)
     assert resp.status_code == 403
@@ -88,7 +92,7 @@ def test_patch_own_email_ok(client, auth_headers):
     resp = client.patch(
         f"{API}/{user.id}",
         headers=headers,
-        json={"email": "patched@example.com"},
+        json={"email": "patched@example.com", "current_password": TEST_PASSWORD},
     )
     assert resp.status_code == 200
     assert resp.json()["email"] == "patched@example.com"
@@ -101,7 +105,7 @@ def test_patch_own_email_to_taken_email_rejected(client, auth_headers, make_user
     resp = client.patch(
         f"{API}/{user.id}",
         headers=headers,
-        json={"email": "taken@example.com"},
+        json={"email": "taken@example.com", "current_password": TEST_PASSWORD},
     )
     assert resp.status_code == 400
     assert "already registered" in resp.json()["detail"]
@@ -135,7 +139,7 @@ def test_patch_new_password_works_for_login(client, auth_headers):
     patch = client.patch(
         f"{API}/{user.id}",
         headers=headers,
-        json={"password": new_password},
+        json={"password": new_password, "current_password": TEST_PASSWORD},
     )
     assert patch.status_code == 200
 
@@ -150,3 +154,67 @@ def test_patch_new_password_works_for_login(client, auth_headers):
         data={"username": "pwchange@example.com", "password": TEST_PASSWORD},
     )
     assert old.status_code == 401
+
+
+# --------------------------------------------------------------------------- #
+# Re-authentication on self-service changes
+#
+# Email and password are the account's recovery handles. Without asking for the
+# current password, a stolen access token (30 min of validity) converts into
+# PERMANENT ownership: change the password and the real owner is locked out;
+# change the email and the reset flow points at the attacker.
+# --------------------------------------------------------------------------- #
+
+
+def test_password_change_without_current_password_is_rejected(client, auth_headers):
+    headers, user = auth_headers(email="noconfirm@example.com")
+    resp = client.patch(
+        f"{API}/{user.id}", headers=headers, json={"password": "BrandNewPass456!"}
+    )
+    assert resp.status_code == 400
+    assert "current_password" in resp.json()["detail"]
+
+    # And the old password still works — nothing was changed.
+    login = client.post(
+        "/api/v1/auth/login",
+        data={"username": "noconfirm@example.com", "password": TEST_PASSWORD},
+    )
+    assert login.status_code == 200
+
+
+def test_email_change_without_current_password_is_rejected(client, auth_headers):
+    headers, user = auth_headers(email="noconfirm2@example.com")
+    resp = client.patch(
+        f"{API}/{user.id}", headers=headers, json={"email": "hijacked@example.com"}
+    )
+    assert resp.status_code == 400
+
+
+def test_wrong_current_password_is_rejected(client, auth_headers):
+    headers, user = auth_headers(email="wrongpw@example.com")
+    resp = client.patch(
+        f"{API}/{user.id}",
+        headers=headers,
+        json={"password": "BrandNewPass456!", "current_password": "NotMyPassword1!"},
+    )
+    # 403, not 400: the request is well-formed, the credential is wrong.
+    assert resp.status_code == 403
+
+    login = client.post(
+        "/api/v1/auth/login",
+        data={"username": "wrongpw@example.com", "password": TEST_PASSWORD},
+    )
+    assert login.status_code == 200
+
+
+def test_no_op_patch_does_not_require_the_password(client, auth_headers):
+    """
+    Submitting the unchanged email is not a credential change, so it must not
+    demand re-authentication — otherwise a profile form that always posts every
+    field would be unusable.
+    """
+    headers, user = auth_headers(email="noop@example.com")
+    resp = client.patch(
+        f"{API}/{user.id}", headers=headers, json={"email": "noop@example.com"}
+    )
+    assert resp.status_code == 200

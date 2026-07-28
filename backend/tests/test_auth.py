@@ -37,6 +37,49 @@ def test_register_first_user_succeeds(client):
     assert "hashed_password" not in body  # never expose the hash
 
 
+def test_first_user_is_promoted_to_superuser(client):
+    """
+    Bootstrap: the very first account on an empty platform becomes the superuser.
+
+    Without it, a fresh install with DEMO_MODE=false has no way in — the demo
+    superuser is only seeded in demo mode and every other account-creating route
+    already requires an authenticated admin. Reachable exactly once: with
+    REGISTRATION_ENABLED=false the endpoint refuses to serve once any user exists.
+    """
+    body = client.post(
+        f"{API}/register",
+        json={"email": "owner@example.com", "password": TEST_PASSWORD},
+    ).json()
+
+    assert body["is_superuser"] is True
+    assert body["role"] == "admin"
+    # A platform-level account belongs to no single company.
+    assert body["company_id"] is None
+
+
+def test_second_registration_is_not_a_superuser(client, monkeypatch):
+    """
+    Only the bootstrap account is privileged. With open registration the second
+    signup is an ordinary member — and, having no company, it is scoped to
+    nothing (see test_scoping.py).
+    """
+    from src.core.config import settings
+
+    monkeypatch.setattr(settings, "REGISTRATION_ENABLED", True)
+    client.post(
+        f"{API}/register",
+        json={"email": "owner@example.com", "password": TEST_PASSWORD},
+    )
+    body = client.post(
+        f"{API}/register",
+        json={"email": "joiner@example.com", "password": TEST_PASSWORD},
+    ).json()
+
+    assert body["is_superuser"] is False
+    assert body["role"] == "member"
+    assert body["company_id"] is None
+
+
 def test_register_blocked_when_users_exist(client, make_user):
     # With a user already existing and REGISTRATION_ENABLED=false, new registrations get 403.
     make_user(email="existing@example.com")

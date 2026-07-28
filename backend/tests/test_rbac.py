@@ -11,6 +11,7 @@ Relevant error postures:
 - missing the role entirely (member on an admin route) → 403.
 """
 from src.models.user import UserRole
+from tests.conftest import TEST_PASSWORD
 
 API = "/api/v1/users"
 STRONG_PASSWORD = "ValidPass123!"
@@ -327,11 +328,32 @@ def test_company_admin_update_superuser_target_returns_404(
     assert resp.status_code == 404
 
 
-def test_company_admin_get_foreign_user_returns_403(
+def test_company_admin_reads_their_own_employee(
     client, auth_headers, make_company, make_user
 ):
-    """GET /{id} uses the router's self-or-superuser guard — a company admin is not a
-    superuser, so reading another user gives 403 (the router's object-level auth)."""
+    """
+    An admin can GET a colleague by id — the same set they already see in
+    `GET /users` and can edit via `PATCH /users/{id}/admin`. Refusing it here was
+    an inconsistency, not a protection.
+    """
+    company = make_company(name="Company A")
+    employee = make_user(email="employee@a.com", company_id=company.id)
+    headers, _ = auth_headers(
+        email="admin@a.com", company_id=company.id, role=UserRole.ADMIN
+    )
+
+    resp = client.get(f"{API}/{employee.id}", headers=headers)
+    assert resp.status_code == 200
+    assert resp.json()["email"] == "employee@a.com"
+
+
+def test_company_admin_get_foreign_user_returns_404(
+    client, auth_headers, make_company, make_user
+):
+    """
+    Reaching outside the company is 404, not 403 — the same posture as the rest of
+    the tenant boundary. 403 would confirm that the account exists.
+    """
     company_a = make_company(name="Company A")
     company_b = make_company(name="Company B")
     foreign = make_user(email="foreign@b.com", company_id=company_b.id)
@@ -340,7 +362,21 @@ def test_company_admin_get_foreign_user_returns_403(
     )
 
     resp = client.get(f"{API}/{foreign.id}", headers=headers)
-    assert resp.status_code == 403
+    assert resp.status_code == 404
+
+
+def test_company_admin_get_superuser_returns_404(
+    client, auth_headers, make_company, make_user
+):
+    """A platform superuser is invisible to a company admin, by id as well."""
+    company = make_company(name="Company A")
+    root = make_user(email="root@example.com", is_superuser=True)
+    headers, _ = auth_headers(
+        email="admin@a.com", company_id=company.id, role=UserRole.ADMIN
+    )
+
+    resp = client.get(f"{API}/{root.id}", headers=headers)
+    assert resp.status_code == 404
 
 
 # --------------------------------------------------------------------------- #
@@ -469,7 +505,7 @@ def test_member_can_still_self_get_and_patch(
     patch_resp = client.patch(
         f"{API}/{me.id}",
         headers=headers,
-        json={"email": "renamed@acme.com"},
+        json={"email": "renamed@acme.com", "current_password": TEST_PASSWORD},
     )
     assert patch_resp.status_code == 200
     assert patch_resp.json()["email"] == "renamed@acme.com"

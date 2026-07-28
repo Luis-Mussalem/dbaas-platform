@@ -35,10 +35,25 @@ class Settings(BaseSettings):
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
+    # Session cookies
+    # Forces the `Secure` flag on the auth cookies regardless of the scheme the
+    # application sees. Behind a reverse proxy that terminates TLS, the backend is
+    # reached over plain HTTP and `request.url.scheme` reads "http" — deriving the
+    # flag from the scheme alone would ship session cookies without `Secure` on a
+    # site that is actually HTTPS. Set to true in any deployment served over TLS.
+    # false (the default) keeps the local http://localhost flow working.
+    COOKIE_SECURE: bool = False
+
     # Encryption (Fernet) — generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
     FERNET_KEY: str = "change-me-generate-a-real-fernet-key"
 
     # Registration lockout
+    # false (the default): POST /auth/register only answers while the users table is
+    # EMPTY — the bootstrap of a fresh install, and that first account is promoted to
+    # platform superuser (see services.auth.register_user). Every later registration
+    # gets 403, so a public deployment can't be joined by strangers.
+    # true: open registration. New accounts are created WITHOUT a company and see
+    # nothing until an admin assigns one (see core.scoping.scope_instance_query).
     REGISTRATION_ENABLED: bool = False
 
     # Backup

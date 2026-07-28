@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from src.core.security import hash_password, verify_password
 from src.models.token_blacklist import TokenBlacklist
-from src.models.user import User
+from src.models.user import User, UserRole
 from src.schemas.user import UserCreate
 
 DUMMY_HASH = bcrypt.hashpw(b"dummy-password-for-timing-safety", bcrypt.gensalt()).decode()
@@ -21,14 +21,33 @@ def get_user_by_id(db: Session, user_id: uuid.UUID) -> User | None:
 
 
 def register_user(db: Session, data: UserCreate) -> User:
+    """
+    Creates an account through the public registration endpoint.
+
+    The FIRST account on an empty platform is promoted to superuser. Without this,
+    a fresh install with DEMO_MODE=false would have no way in at all: the demo
+    superuser is only seeded in demo mode, and every other account-creating route
+    (POST /users) already requires an authenticated admin — a chicken-and-egg that
+    could only be broken with manual SQL. The router guarantees this branch is
+    reachable exactly once: with REGISTRATION_ENABLED=false it refuses to serve at
+    all once any user exists (see routers.auth.register).
+
+    Later registrations (only reachable with REGISTRATION_ENABLED=true) create an
+    ordinary member with NO company, which scopes them to nothing until an admin
+    assigns one — see core.scoping.CompanyScope.
+    """
     existing = get_user_by_email(db, data.email)
     if existing:
         from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="Email already registered")
 
+    is_bootstrap = db.query(User).count() == 0
+
     user = User(
         email=data.email,
         hashed_password=hash_password(data.password),
+        is_superuser=is_bootstrap,
+        role=UserRole.ADMIN if is_bootstrap else UserRole.MEMBER,
     )
     db.add(user)
     db.commit()

@@ -179,11 +179,16 @@ export async function getCurrentUser(): Promise<User> {
 }
 
 // Updates the current user (email and/or password). The backend only allows changing
-// one's own account (PATCH /users/{id} returns 403 for another id) — consistent with the
-// single-operator model. Omitted fields are left unchanged.
+// one's own account (PATCH /users/{id} returns 403 for another id) — an admin changing
+// someone else's credentials goes through updateUserAdmin instead. Omitted fields are
+// left unchanged.
+//
+// `current_password` is REQUIRED whenever email or password changes: both are account
+// recovery handles, so the backend re-authenticates rather than trusting the session
+// alone (400 without it, 403 if it's wrong).
 export async function updateUser(
   userId: string,
-  data: { email?: string; password?: string }
+  data: { email?: string; password?: string; current_password?: string }
 ): Promise<User> {
   return request<User>(`/users/${userId}`, {
     method: "PATCH",
