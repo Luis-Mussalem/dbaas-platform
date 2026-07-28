@@ -18,6 +18,20 @@ only their own company; the admin superuser sees and switches between all.
   the `WorkspaceSwitcher` and propagated as an `X-Company-Id` header; employee management,
   company-admin RBAC (`is_superuser` × `admin`/`member`), and per-company audit scoping
   are all in place.
+- **Authorization — two rules, both load-bearing.** Read `backend/src/core/scoping.py`
+  and `get_current_company_admin` before touching any endpoint.
+  1. **Scope (which rows):** `company_scope(user)` returns a `CompanyScope` with THREE
+     cases — unrestricted (superuser, no workspace), one company, or *empty* (a regular
+     user with no company sees **nothing**). Never reduce a read filter to a bare
+     `Optional[UUID]`: `None` would mean both "everything" and "nothing".
+     `visible_company_id()` survives only for assigning `company_id` to a row being
+     created — never for building a read filter.
+  2. **Gate (read or write):** **members observe, admins operate.** A new endpoint that
+     MUTATES takes `current_user: User = Depends(get_current_company_admin)`; a
+     read-only one takes `get_current_user`. `tests/test_write_permissions.py` walks
+     every mutating route, so a missing dependency shows up as a failed test.
+  The frontend mirrors the gate with `useCanManage()` purely to decide what to render —
+  it is not enforcement, and the backend must never depend on it.
 - **Progress** — ROADMAP 100% complete: backend phases 0–10 and frontend F0–F8 all
   shipped. Phase 9 (streaming replication & HA — standbys via `pg_basebackup -R`, lag
   monitoring, manual failover) and Phase 10 (container logs, full-stack docker-compose,
@@ -90,8 +104,14 @@ npm run i18n:check                                 # en/pt message parity (runs 
 
 **Backend (Python)**
 - Use SQLAlchemy sync `Session` only — never `AsyncSession`.
-- Pydantic v2: `model_validate`; `model_dump(exclude_unset=True)` for PATCH.
+- Pydantic v2: `model_validate`; `model_dump(exclude_unset=True)` for PATCH. For a
+  field where explicit `null` is meaningful (e.g. `retention_days` = keep forever),
+  read presence from `model_fields_set`, not from `is not None`.
 - Preserve the layer order — Routers → Services → Provisioners.
+- Apply the two authorization rules above to every new endpoint.
+- Anything written to a column the API returns must be safe to return. Subprocess and
+  psycopg errors go through `core.redaction.redact_error` before being persisted; the
+  unredacted text goes to the log.
 - Comment only when the *why* is non-obvious (a constraint or workaround).
 
 **Frontend (TypeScript)** — App Router; small, single-responsibility components.

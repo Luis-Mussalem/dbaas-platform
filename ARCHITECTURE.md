@@ -97,7 +97,9 @@ sequenceDiagram
   (not JS-readable), validates it, checks the token blacklist, and yields the
   current `User`. Refresh is a separate rotating-token endpoint.
 - **Tenant scoping** resolves the active company (a superuser's `X-Company-Id`
-  header, or a regular user's own `company_id`) and is threaded into every query.
+  header, or a regular user's own `company_id`) into a `CompanyScope` that is
+  threaded into every query. A mutating route additionally passes through the
+  write gate (company admin); see §7.
 - **Audit middleware is added last** so it runs innermost — it records an action
   **only after** the handler returns 2xx, mapping method+path to a semantic action
   (`instance_created`, `backup_created`, …) without ever reading the request body.
@@ -248,13 +250,48 @@ Defense in depth, appropriate to a control plane that holds database credentials
 - **Secrets at rest** — managed-database connection URIs are **Fernet-encrypted**;
   the key is validated at startup and never committed. Placeholders like
   `change-me` are rejected on boot.
-- **RBAC** — `is_superuser` × company `role` (admin/member); every mutating action
-  checks authority, with guards against demoting the last admin/superuser.
+- **Account recovery handles** — changing your own email or password requires the
+  **current password**. Possession of a 30-minute access token must not convert
+  into permanent ownership of the account.
 - **Query safety** — the SQL console is **SELECT-only**, enforced by a SQL guard
-  (parse + validate) before execution; `EXPLAIN ANALYZE` reuses the same guard.
-- **Transport/headers** — rate limiting (slowapi), strict security headers
-  (`nosniff`, `X-Frame-Options: DENY`, referrer policy, `no-store`), scoped CORS.
+  before execution; `EXPLAIN ANALYZE` reuses the same guard. Literals and comments
+  are blanked before the keyword scan, so `WHERE action = 'create'` is data rather
+  than a rejected statement. Behind it sits the real boundary: the per-instance
+  role has CRUD on its own database and nothing else.
+- **Transport/headers** — rate limiting (slowapi) on auth *and* on SQL execution,
+  strict security headers (`nosniff`, `X-Frame-Options: DENY`, referrer policy,
+  `no-store`), scoped CORS, `Secure` cookies driven by config rather than by the
+  request scheme alone (a TLS-terminating proxy makes the scheme unreliable).
+- **Error redaction** — messages persisted to rows the API returns
+  (`Backup.error_message`, `MaintenanceTask.result_summary`) are stripped of host,
+  port, IP, URI and path before storage; the unredacted text goes only to the log.
+  Otherwise one endpoint hands back what another deliberately withholds.
 - **Auditability** — every successful mutation is recorded with the real actor.
+
+### Authorization: scope and gate
+
+Two questions, answered in two different places, and neither substitutes for the
+other.
+
+**Scope — *which rows?*** `core/scoping.py` resolves a `CompanyScope` and every
+read path applies it. Three cases, deliberately not two: a superuser with no
+workspace selected sees everything; anyone with a company sees that company; a
+regular user with **no** company sees **nothing**. Modelling this as a bare
+`Optional[UUID]` forces `None` to mean both "unrestricted" and "no company", and
+every consumer that reads it as the first hands a company-less account the
+unassigned instances and the platform-wide dashboard, alerts and audit trail. The
+type makes the wrong reading unspellable.
+
+**Gate — *read or write?*** `get_current_company_admin` states the rule once:
+**members observe, admins operate**. Everything that mutates depends on it;
+everything read-only — including the SELECT-only console — depends on
+`get_current_user`. The line is drawn at "does it mutate?" rather than by
+per-endpoint judgement, because an exceptions list rots as endpoints are added.
+
+The two compose: passing the gate grants no reach. An admin of another company
+gets `404` (not `403`, which would confirm the resource exists) because the
+scoping layer still runs. The frontend's `useCanManage()` mirrors the gate to
+decide what to render — that is cosmetics; the dependency is the boundary.
 
 ---
 

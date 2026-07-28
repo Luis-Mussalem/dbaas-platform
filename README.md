@@ -16,7 +16,7 @@ The project simulates real-world DBaaS concepts commonly found in modern platfor
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)
 
 [![CI](https://github.com/Luis-Mussalem/dbaas-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/Luis-Mussalem/dbaas-platform/actions/workflows/ci.yml)
-![Tests](https://img.shields.io/badge/tests-314%20passing-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-387%20passing-brightgreen?style=flat-square)
 ![Coverage](https://img.shields.io/badge/coverage-82%25-brightgreen?style=flat-square)
 ![Ruff](https://img.shields.io/badge/lint-ruff-blue?style=flat-square)
 
@@ -58,10 +58,10 @@ The goal is not only to build APIs, but to design systems that simulate operatio
 
 | | |
 |---|---|
-| **API surface** | 64 REST endpoints across 13 domain routers (`/api/v1`) |
-| **Codebase** | ~24,000 lines — 10,100 backend (Python) · 5,000 tests · 9,000 frontend (TypeScript) |
-| **Test suite** | 314 backend tests (82% coverage) + 13 Playwright E2E smoke tests |
-| **Data layer** | 17 Alembic migrations, 15 SQLAlchemy models |
+| **API surface** | 61 REST endpoints across 12 domain routers (`/api/v1`) |
+| **Codebase** | ~28,500 lines — 12,400 backend (Python) · 7,300 tests · 8,900 frontend (TypeScript) |
+| **Test suite** | 387 backend tests (82% coverage) + 11 Playwright E2E smoke tests |
+| **Data layer** | 19 Alembic migrations, 14 SQLAlchemy models |
 | **Frontend** | 11 routes, 39 reusable React components, fully typed API client |
 | **Background automation** | 7 concurrent loops — status, metrics, alerts, backups, maintenance, replication lag, demo workload generator |
 | **Delivery** | 3-job CI pipeline + one-command full-stack Docker Compose |
@@ -78,9 +78,17 @@ account so recruiters can try every feature end to end.
 | **Email** | `dev-test@local.dev` |
 | **Password** | `dev-test-2026` |
 
-The account is seeded automatically by the database migrations. Since the project
-runs locally with fictional seed data, each person works against their own copy —
-so exploring freely (including destructive actions) is safe and expected.
+The account is seeded by a database migration, **gated on `DEMO_MODE`**. Since the
+project runs locally with fictional seed data, each person works against their own
+copy — so exploring freely (including destructive actions) is safe and expected.
+
+> **Before deploying this anywhere reachable, set `DEMO_MODE=false`.** A migration
+> runs on every deployment; without the gate it would create this full-access
+> superuser — with the password published above — in every database the schema is
+> ever applied to. With `DEMO_MODE=false` the account is not created, and the first
+> real account is made by registering it once (`REGISTRATION_ENABLED=false` still
+> allows exactly one registration while the platform is empty, promotes it to
+> superuser, and closes the endpoint behind it). See [.env.example](.env.example).
 
 ### A demo fleet is already there — and it is real
 
@@ -126,7 +134,13 @@ the load on a modest machine.
 
 To explore the per-company view and RBAC, log in as any seeded company user
 (each company has 1 admin + 4 members) — they see only their own company, while
-the `dev-test@local.dev` superuser above sees and switches between all:
+the `dev-test@local.dev` superuser above sees and switches between all.
+
+The two roles differ in what they can *do*, not just what they see: **members
+observe, admins operate**. Log in as `user1@neptune.example` and the fleet, the
+metrics, the history and the SQL console are all there — but the provisioning,
+stop/delete, backup, restore and maintenance controls are gone, because those
+endpoints require an admin. Log in as `admin@neptune.example` and they reappear.
 
 | Company | Users | Password |
 |---|---|---|
@@ -267,14 +281,17 @@ This project focuses heavily on backend engineering and operational concepts, in
 # Features
 
 ## Authentication & Security
-- JWT access and refresh tokens
-- Token revocation (blacklist)
-- Timing-safe authentication flow
-- Strong password validation
-- Rate limiting on authentication endpoints
+- JWT access and refresh tokens, delivered in HttpOnly cookies (invisible to XSS) with rotation on refresh
+- Token revocation (blacklist), with periodic cleanup of already-expired entries
+- Timing-safe authentication flow — an unknown email still costs a bcrypt verification, so it can't be distinguished by response time
+- Strong password validation (12+ chars, mixed case, digit, symbol)
+- **Re-authentication for credential changes** — changing your own email or password requires the current password, so a stolen 30-minute token can't be converted into permanent ownership of the account
+- Rate limiting on authentication endpoints, and on the two endpoints that execute SQL against a customer database (`statement_timeout` bounds one query; the limiter bounds the rate)
+- `Secure` cookie flag driven by `COOKIE_SECURE`, not only by the request scheme — behind a TLS-terminating proxy the backend sees plain HTTP and would otherwise ship session cookies without it
 - Security headers middleware
-- Restricted registration flow
-- Encrypted connection URIs using Fernet
+- Restricted registration flow — open only while the platform has no users, and that first account becomes the superuser
+- Encrypted connection URIs using Fernet — the decrypted URI exists only inside the context manager that opens the connection
+- **Error redaction** — failures recorded on rows the API returns (`Backup.error_message`, `MaintenanceTask.result_summary`) are stripped of host, port, IP and filesystem details; the unredacted text goes to the log only
 
 ---
 
@@ -368,6 +385,8 @@ This project focuses heavily on backend engineering and operational concepts, in
 - Company-admin RBAC: two orthogonal axes — platform `is_superuser` × intra-company `admin`/`member` role; company admins manage their own company, with a guard against removing the last active admin
 - Per-company audit scoping — each company sees only its own audit trail
 - Superuser bypasses the filter and sees all companies simultaneously
+- **Write gate — members observe, admins operate**: every state-changing endpoint (provisioning, start/stop/delete, backup and restore, scheduling, maintenance, replication, alert rules) requires a company admin; everything read-only, including the SELECT-only SQL console, is open to any member. The UI hides the controls a member cannot use, but the boundary is the backend dependency, not the button
+- **Explicit tenant scope** — "sees everything" and "belongs to no company" are different values in the type (`CompanyScope`), not both `None`. A regular account with no company is scoped to *nothing*; collapsing the two would have handed it the unassigned instances and the platform-wide dashboard, alerts and audit trail
 
 ---
 
@@ -446,13 +465,13 @@ dbaas-platform/
 │   │   ├── collectors/       # PostgreSQL metrics & statistics collectors (pg_stat_*)
 │   │   ├── core/             # Config, security, encryption, scoping, SQL guard, audit middleware
 │   │   ├── models/           # SQLAlchemy ORM models (instances, backups, alerts, replicas, …)
-│   │   ├── routers/          # 14 API routers — 60 REST endpoints under /api/v1
+│   │   ├── routers/          # 12 API routers — 61 REST endpoints under /api/v1
 │   │   ├── schemas/          # Pydantic v2 request/response schemas
 │   │   ├── services/         # Business logic, background pollers & schedulers
 │   │   │   └── provisioning/ # Provisioner interface + Docker implementation
 │   │   └── main.py           # FastAPI application entrypoint (lifespan tasks)
 │   ├── alembic/              # 15 database migrations
-│   ├── tests/                # 272 tests (~5,000 lines)
+│   ├── tests/                # 387 tests (~7,400 lines)
 │   └── Dockerfile            # Multi-stage, non-root runtime image
 │
 ├── frontend/                 # Next.js 16 dashboard (TypeScript, App Router)
@@ -525,22 +544,70 @@ Each database instance behaves as a managed infrastructure resource with its own
 
 # Security Approach
 
-Security was treated as a first-class concern throughout the project.
+Security was treated as a first-class concern throughout the project. The platform
+applies defense in depth — several independent layers, none of them relied on alone:
 
-The platform applies a defense-in-depth strategy combining multiple layers of protection:
-
-- JWT validation
-- Token revocation
-- Rate limiting
-- Strong password policies
-- Encrypted connection strings
+- JWT validation, with tokens in HttpOnly cookies and rotation on refresh
+- Token revocation (blacklist), with periodic cleanup
+- Rate limiting on authentication *and* on SQL execution
+- Strong password policies, plus re-authentication for credential changes
+- Encrypted connection strings (Fernet), decrypted only inside the connection scope
+- Error redaction on anything persisted to a row the API returns
 - Security headers
 - Restricted registration flow
 - Timing-safe authentication
 - Docker networking restrictions
 - CORS hardening
 
-The objective is to simulate realistic backend security practices beyond basic authentication flows.
+## The permission model
+
+There are two orthogonal axes, and they answer different questions:
+
+| Axis | Question | Values |
+|---|---|---|
+| `is_superuser` | *Which companies?* | platform superuser (all) · regular user (their own) |
+| `role` | *Read or write?* | `admin` (operates) · `member` (observes) |
+
+**Scope — which rows you can reach.** Resolved once, in `core/scoping.py`, and
+applied to every read path. It deliberately has three cases and not two:
+
+| Who | Sees |
+|---|---|
+| Superuser, no workspace selected | everything |
+| Anyone with a company | that company |
+| Regular user with **no** company | **nothing** |
+
+That last row is the point of the `CompanyScope` type. If "which company to filter
+by" is a bare `Optional[UUID]`, then `None` has to mean both *no restriction* and
+*no company*, and every consumer reading it as the former hands a company-less
+account the unassigned instances plus the platform-wide dashboard, alert list and
+audit trail. Encoding the distinction in the type makes the dangerous reading
+impossible to spell.
+
+**Gate — what you can do.** One rule, stated once in
+`get_current_company_admin`: **members observe, admins operate**. Every endpoint
+that mutates requires an admin; everything read-only is open to any member.
+
+| Open to members | Requires a company admin |
+|---|---|
+| Fleet list, dashboard, KPIs | Provision, start, stop, delete an instance |
+| Metrics, history, health, logs | Create, delete, **restore** a backup |
+| Slow queries, locks, indexes, bloat, schema | Backup and maintenance schedules |
+| Backup / maintenance / alert history | Run `VACUUM`, `ANALYZE`, `REINDEX` |
+| SQL console (`SELECT`-only) and `EXPLAIN` | Create standbys, promote (failover) |
+| | Alert rules; employee management |
+
+The line is drawn at *does it mutate?* rather than by per-endpoint judgement,
+because a "harmless exceptions" list rots as endpoints are added — and because the
+consequences are concrete: a member who could restore a backup could replace every
+row in a live database with an old dump.
+
+Two things this is **not**. It is not a substitute for scoping: an admin is an
+admin of *their* company, and reaching outside it still answers `404` (not `403` —
+that would confirm the resource exists). And the UI's hiding of controls is not
+enforcement: the frontend's `useCanManage()` decides what is worth rendering, the
+backend dependency decides what is allowed. Deleting the check in one of them is a
+cosmetic change; deleting it in the other is a vulnerability.
 
 ---
 
@@ -602,7 +669,7 @@ This mirrors backup strategies used in real PostgreSQL production environments.
 Quality is enforced automatically on every push and pull request.
 
 ## Automated Test Suite
-- **272 backend tests** with **82% coverage** (`pytest` + `pytest-cov`)
+- **387 backend tests** with **82% coverage** (`pytest` + `pytest-cov`)
 - Isolated PostgreSQL test database (`dbaas_test`, created by the test suite) —
   never touches development data
 - External dependencies are faked, not invoked: Docker SDK, `subprocess`
@@ -614,7 +681,7 @@ Quality is enforced automatically on every push and pull request.
   provisioner, and all background pollers/schedulers
 
 ## End-to-End Tests
-- **9 Playwright smoke tests** over the critical path a recruiter actually clicks:
+- **11 Playwright smoke tests** over the critical path a recruiter actually clicks:
   login → dashboard → sidebar navigation → **⌘K/Ctrl+K command palette** →
   instance detail
 - Read-only (no create/delete), run against the live stack; a `storageState`
@@ -891,7 +958,7 @@ docker build -t dbaas-backend backend/
 - Multi-tenancy (companies, per-company scoping, employee management, company-admin RBAC, audit scoping)
 - Streaming replication & high availability (standbys, lag monitoring, manual failover)
 - Per-instance container logs endpoint
-- Automated testing (272 tests, 82% coverage)
+- Automated testing (387 tests, 82% coverage)
 - Continuous integration & full-stack Docker Compose (multi-stage backend + frontend images)
 
 ## Frontend — Complete
