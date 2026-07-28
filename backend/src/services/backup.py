@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from src.core.config import settings
 from src.core.encryption import decrypt_value
+from src.core.redaction import redact_error
 from src.models.backup import Backup, BackupSchedule, BackupStatus, BackupStrategy, BackupType
 from src.models.database_instance import DatabaseInstance
 from src.schemas.backup import BackupScheduleCreate, BackupScheduleUpdate
@@ -202,11 +203,13 @@ def create_logical_backup(
 
     except Exception as exc:
         backup.status = BackupStatus.FAILED
-        backup.error_message = str(exc)
+        # Redacted: this column is returned to the client by BackupRead.
+        backup.error_message = redact_error(str(exc))
         backup.completed_at = datetime.now(timezone.utc)
         db.commit()
         db.refresh(backup)
 
+        # The log keeps the UNREDACTED text — that's the operator's copy.
         logger.error(
             "Logical backup %s for instance %s failed: %s",
             backup.id,
@@ -404,11 +407,13 @@ def create_physical_backup(
         shutil.rmtree(output_dir, ignore_errors=True)
 
         backup.status = BackupStatus.FAILED
-        backup.error_message = str(exc)
+        # Redacted: this column is returned to the client by BackupRead.
+        backup.error_message = redact_error(str(exc))
         backup.completed_at = datetime.now(timezone.utc)
         db.commit()
         db.refresh(backup)
 
+        # The log keeps the UNREDACTED text — that's the operator's copy.
         logger.error(
             "Physical backup %s for instance %s failed: %s",
             backup.id,
@@ -558,16 +563,29 @@ def update_schedule(
     schedule: BackupSchedule,
     data: BackupScheduleUpdate,
 ) -> BackupSchedule:
-    if data.cron_expression is not None:
+    """
+    Applies a partial update to a schedule.
+
+    Field presence is read from `model_fields_set`, not from `is not None`. PATCH
+    semantics distinguish "field omitted" from "field explicitly set to null", and
+    conflating them made `retention_days` a one-way door: once a retention was
+    set, sending `null` to mean "keep these backups forever" was silently ignored,
+    and the only way back was deleting the schedule and recreating it.
+    """
+    provided = data.model_fields_set
+
+    if "cron_expression" in provided and data.cron_expression is not None:
         schedule.cron_expression = data.cron_expression
         # Recompute next_run_at if the cron changed
         if schedule.is_active:
             schedule.next_run_at = _compute_next_run(schedule.cron_expression)
 
-    if data.retention_days is not None:
+    if "retention_days" in provided:
+        # Explicit null = keep indefinitely. Already-created backups keep the
+        # expires_at they were stamped with; this only changes future ones.
         schedule.retention_days = data.retention_days
 
-    if data.is_active is not None:
+    if "is_active" in provided and data.is_active is not None:
         schedule.is_active = data.is_active
         if data.is_active and schedule.next_run_at is None:
             schedule.next_run_at = _compute_next_run(schedule.cron_expression)

@@ -1,3 +1,4 @@
+import logging
 import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -8,6 +9,7 @@ import psycopg.sql as psql
 from sqlalchemy.orm import Session
 
 from src.core.encryption import decrypt_value
+from src.core.redaction import redact_error
 from src.models.database_instance import DatabaseInstance
 from src.models.maintenance import (
     MaintenanceSchedule,
@@ -21,6 +23,8 @@ from src.schemas.maintenance import (
     MaintenanceScheduleCreate,
     MaintenanceTaskCreate,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @contextmanager
@@ -81,9 +85,28 @@ def _finish_task(
     success: bool,
     summary: str,
 ) -> MaintenanceTask:
+    """
+    Closes the task row with its outcome.
+
+    On FAILURE the summary is whatever psycopg raised, and that column is returned
+    to the client by MaintenanceTaskRead — a connection error would carry the
+    container host and published port into the response. It goes through
+    redact_error first; the unredacted text is logged for the operator.
+    Successful summaries are written by this module and need no redaction.
+    """
     task.status = TaskStatus.COMPLETED if success else TaskStatus.FAILED
     task.completed_at = datetime.now(timezone.utc)
-    task.result_summary = summary
+    if success:
+        task.result_summary = summary
+    else:
+        logger.error(
+            "Maintenance task %s (%s) failed on instance %s: %s",
+            task.id,
+            task.task_type.value,
+            task.instance_id,
+            summary,
+        )
+        task.result_summary = redact_error(summary)
     db.commit()
     db.refresh(task)
     return task
