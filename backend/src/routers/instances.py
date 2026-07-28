@@ -8,7 +8,11 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from src.core.database import get_db
-from src.core.dependencies import get_current_user, get_instance_or_404
+from src.core.dependencies import (
+    get_current_company_admin,
+    get_current_user,
+    get_instance_or_404,
+)
 from src.models.database_instance import InstanceStatus
 from src.models.user import User
 from src.schemas.instance import (
@@ -51,7 +55,7 @@ _ACTION_TO_STATUS = {
 async def create(
     data: InstanceCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_company_admin),
 ):
     return await create_instance(db, data, current_user)
 
@@ -98,7 +102,7 @@ def update(
     instance_id: uuid.UUID,
     data: InstanceUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_company_admin),
 ):
     instance = get_instance_by_id(db, instance_id, current_user)
     if not instance:
@@ -111,7 +115,7 @@ async def change_status(
     instance_id: uuid.UUID,
     body: StatusAction,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_company_admin),
 ):
     instance = get_instance_by_id(db, instance_id, current_user)
     if not instance:
@@ -149,7 +153,7 @@ async def get_logs(
 async def delete(
     instance_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_company_admin),
 ):
     instance = get_instance_by_id(db, instance_id, current_user)
     if not instance:

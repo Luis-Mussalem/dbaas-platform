@@ -14,7 +14,6 @@ import pytest
 
 from src.models.database_instance import DatabaseInstance, InstanceStatus
 from src.models.instance_status_history import InstanceStatusHistory
-from src.services.provisioning.types import ProvisionResult
 
 API = "/api/v1/instances"
 
@@ -24,58 +23,25 @@ API = "/api/v1/instances"
 # --------------------------------------------------------------------------- #
 
 
-class FakeProvisioner:
-    """Provisioner stub: records calls, doesn't touch Docker."""
-
-    def __init__(self) -> None:
-        self.fail_create = False
-        self.created: list[uuid.UUID] = []
-        self.started: list[uuid.UUID] = []
-        self.stopped: list[uuid.UUID] = []
-        self.deleted: list[uuid.UUID] = []
-
-    def create(self, instance_id, engine_version, memory_mb=None, cpu=None):
-        if self.fail_create:
-            # Message with an internal "secret" — the tests guarantee it does NOT leak.
-            raise RuntimeError("docker daemon error at internal-host:5432")
-        self.created.append(instance_id)
-        return ProvisionResult(
-            container_id="fake-container-id",
-            host="127.0.0.1",
-            port=55432,
-            db_name="db_fakeinstance",
-            db_user="inst_fakeinstance",
-            db_password="fake-plaintext-password",
-            container_name="dbaas-inst-fake",
-        )
-
-    def start(self, instance_id):
-        self.started.append(instance_id)
-        return 55433  # new port after restart (Docker republishes dynamically)
-
-    def stop(self, instance_id):
-        self.stopped.append(instance_id)
-
-    def delete(self, instance_id):
-        self.deleted.append(instance_id)
+# FakeProvisioner and the `fake_provisioner` fixture live in conftest.py — creating
+# an instance is a prerequisite in several modules now, not just this one.
 
 
 @pytest.fixture
-def fake_provisioner(monkeypatch):
-    """Replaces get_provisioner in the service with a FakeProvisioner."""
-    fake = FakeProvisioner()
-    monkeypatch.setattr("src.services.instance.get_provisioner", lambda: fake)
-    return fake
+def make_instance(db, default_company):
+    """
+    Inserts an instance directly into the database, in whatever status is desired.
 
-
-@pytest.fixture
-def make_instance(db):
-    """Inserts an instance directly into the database, in whatever status is desired."""
+    Defaults to `default_company` — the same company auth_headers() puts its user
+    in — so these tests exercise routing and status transitions rather than
+    tripping over the tenant filter. Pass company_id=... to override.
+    """
     def _make(
         name: str = "test-instance",
         status: InstanceStatus = InstanceStatus.STOPPED,
         **kwargs,
     ) -> DatabaseInstance:
+        kwargs.setdefault("company_id", default_company().id)
         inst = DatabaseInstance(name=name, status=status, **kwargs)
         db.add(inst)
         db.commit()

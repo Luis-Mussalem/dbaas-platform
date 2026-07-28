@@ -4,8 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from src.core.database import get_db
-from src.core.dependencies import get_current_user, get_instance_or_404
-from src.core.scoping import visible_company_id
+from src.core.dependencies import (
+    get_current_company_admin,
+    get_current_user,
+    get_instance_or_404,
+)
+from src.core.scoping import company_scope
 from src.models.alert import AlertEvent, AlertRule
 from src.models.user import User
 from src.schemas.alert import AlertEventRead, AlertRuleCreate, AlertRuleRead, AlertRuleUpdate
@@ -45,7 +49,7 @@ def create_alert_rule(
     instance_id: uuid.UUID,
     data: AlertRuleCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_company_admin),
 ):
     get_instance_or_404(instance_id, db, current_user)
     return alert_service.create_rule(db, instance_id, data)
@@ -87,7 +91,7 @@ def update_alert_rule(
     rule_id: uuid.UUID,
     data: AlertRuleUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_company_admin),
 ):
     rule = _get_rule_or_404(rule_id, db)
     get_instance_or_404(rule.instance_id, db, current_user)
@@ -101,7 +105,7 @@ def update_alert_rule(
 def delete_alert_rule(
     rule_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_company_admin),
 ):
     rule = _get_rule_or_404(rule_id, db)
     get_instance_or_404(rule.instance_id, db, current_user)
@@ -120,7 +124,7 @@ def delete_alert_rule(
 def seed_default_alert_rules(
     instance_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_company_admin),
 ):
     """
     Creates the 5 default rules for the instance.
@@ -168,11 +172,11 @@ def list_all_alert_events(
     """
     Lists the platform's events visible to the user. ?only_open=true filters to open ones.
 
-    Scoped by company: a regular user only sees events from their
-    company's instances; a superuser (visible_company_id=None) sees all.
+    Scoped by company: a regular user only sees events from their own company's
+    instances; a superuser with no workspace selected sees all of them.
     """
     return alert_service.list_events(
-        db, only_open=only_open, company_id=visible_company_id(current_user)
+        db, only_open=only_open, scope=company_scope(current_user)
     )
 
 
@@ -183,7 +187,7 @@ def list_all_alert_events(
 def resolve_alert_event(
     event_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_company_admin),
 ):
     """
     Manually resolves an open alert event.

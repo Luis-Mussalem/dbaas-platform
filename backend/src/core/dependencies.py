@@ -111,10 +111,29 @@ def get_current_company_admin(
     """
     Requires the authenticated user to be a superuser or the admin of a company.
 
-    Reuses get_current_user and adds the role check. The service
-    is responsible for validating whether the admin actually manages the target
-    resource (defense in depth). This dependency only proves "you're an admin
-    somewhere".
+    This is the platform's write gate. The permission model has exactly one rule:
+
+        **members observe, admins operate.**
+
+    Every endpoint that CHANGES state — provisioning, starting and stopping,
+    deleting, backing up and restoring, scheduling, maintenance, replication,
+    alert rules, employee management — depends on this. Everything that only
+    READS — metrics, health, logs, schema, slow queries, the fleet summary, the
+    dashboard, and the SQL console (SELECT-only by construction) — depends on
+    ``get_current_user`` and is open to every member of the company.
+
+    Drawing the line at "does it mutate?" rather than per-endpoint judgement is
+    deliberate: a `member` who could restore a backup would be able to overwrite
+    the whole database with an old dump, and one who could delete an instance
+    could destroy production — while an "obviously harmless" exception list is
+    exactly the kind of thing that rots as endpoints are added. A member who
+    needs to act asks an admin, which is what the role is for.
+
+    Note the split of responsibilities: this dependency only proves "you are an
+    admin SOMEWHERE". Proving the admin may touch this PARTICULAR resource is the
+    scoping layer's job — ``get_instance_or_404`` (company filter) for instances
+    and ``assert_can_manage_target`` for users — and both still run. Defense in
+    depth: neither check alone is sufficient.
     """
     if not is_company_admin(current_user):
         raise HTTPException(

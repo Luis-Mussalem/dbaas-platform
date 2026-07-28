@@ -17,10 +17,14 @@ from src.models.database_instance import DatabaseInstance, InstanceStatus
 from src.services import metrics as metrics_service
 
 
-def _make(db, status=InstanceStatus.STOPPED, with_uri=True):
+def _make(db, company_id, status=InstanceStatus.STOPPED, with_uri=True):
+    # company_id is required, not optional: a regular user is scoped to their own
+    # company, so an instance filed nowhere would 404 before reaching the code
+    # these tests are about. See conftest.default_company.
     inst = DatabaseInstance(
         name="detail-db",
         status=status,
+        company_id=company_id,
         connection_uri=encrypt_value("postgresql://u:p@127.0.0.1:5433/appdb") if with_uri else None,
     )
     db.add(inst)
@@ -34,8 +38,8 @@ def _make(db, status=InstanceStatus.STOPPED, with_uri=True):
 # --------------------------------------------------------------------------- #
 
 
-def test_connections_requires_auth(client, db):
-    inst = _make(db)
+def test_connections_requires_auth(client, db, default_company):
+    inst = _make(db, default_company().id)
     assert client.get(f"/api/v1/instances/{inst.id}/connections").status_code == 401
 
 
@@ -45,16 +49,16 @@ def test_connections_unknown_instance_404(client, auth_headers):
     assert resp.status_code == 404
 
 
-def test_connections_not_running_returns_409(client, auth_headers, db):
+def test_connections_not_running_returns_409(client, auth_headers, db, default_company):
     headers, _ = auth_headers()
-    inst = _make(db, status=InstanceStatus.STOPPED)
+    inst = _make(db, default_company().id, status=InstanceStatus.STOPPED)
     resp = client.get(f"/api/v1/instances/{inst.id}/connections", headers=headers)
     assert resp.status_code == 409
 
 
-def test_connections_running_without_uri_returns_409(client, auth_headers, db):
+def test_connections_running_without_uri_returns_409(client, auth_headers, db, default_company):
     headers, _ = auth_headers()
-    inst = _make(db, status=InstanceStatus.RUNNING, with_uri=False)
+    inst = _make(db, default_company().id, status=InstanceStatus.RUNNING, with_uri=False)
     resp = client.get(f"/api/v1/instances/{inst.id}/connections", headers=headers)
     assert resp.status_code == 409
 
@@ -64,14 +68,14 @@ def test_connections_running_without_uri_returns_409(client, auth_headers, db):
 # --------------------------------------------------------------------------- #
 
 
-def test_schema_requires_auth(client, db):
-    inst = _make(db)
+def test_schema_requires_auth(client, db, default_company):
+    inst = _make(db, default_company().id)
     assert client.get(f"/api/v1/instances/{inst.id}/schema").status_code == 401
 
 
-def test_schema_not_running_returns_409(client, auth_headers, db):
+def test_schema_not_running_returns_409(client, auth_headers, db, default_company):
     headers, _ = auth_headers()
-    inst = _make(db, status=InstanceStatus.STOPPED)
+    inst = _make(db, default_company().id, status=InstanceStatus.STOPPED)
     resp = client.get(f"/api/v1/instances/{inst.id}/schema", headers=headers)
     assert resp.status_code == 409
 

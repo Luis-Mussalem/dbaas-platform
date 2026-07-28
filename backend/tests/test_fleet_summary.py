@@ -22,11 +22,14 @@ URL = "/api/v1/instances/fleet-summary"
 
 
 @pytest.fixture
-def instance(db):
+def instance(db, default_company):
+    # Same company as auth_headers()'s default user — a regular user is scoped to
+    # their own company, so an instance filed anywhere else would simply 404.
     inst = DatabaseInstance(
         name="fleet-db",
         status=InstanceStatus.RUNNING,
         storage_gb=1,
+        company_id=default_company().id,
         connection_uri=encrypt_value("postgresql://u:p@127.0.0.1:5433/appdb"),
     )
     db.add(inst)

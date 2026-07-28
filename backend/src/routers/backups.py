@@ -5,7 +5,13 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from src.core.dependencies import get_current_user, get_db, get_instance_or_404, get_instance_if_running
+from src.core.dependencies import (
+    get_current_company_admin,
+    get_current_user,
+    get_db,
+    get_instance_if_running,
+    get_instance_or_404,
+)
 from src.models.backup import BackupStatus, BackupStrategy
 from src.models.user import User
 from src.schemas.backup import (
@@ -48,7 +54,7 @@ async def create_backup(
     instance_id: uuid.UUID,
     data: BackupRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_company_admin),
 ):
     """
     Triggers a manual backup for the specified instance.
@@ -133,7 +139,7 @@ def get_backup(
 def delete_backup(
     backup_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_company_admin),
 ):
     """
     Removes a backup: deletes the physical file and marks the record as DELETED.
@@ -162,7 +168,7 @@ def delete_backup(
 async def restore_backup(
     backup_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_company_admin),
 ):
     """
     Restores a logical backup (pg_restore) onto the source instance.
@@ -221,7 +227,7 @@ def create_backup_schedule(
     instance_id: uuid.UUID,
     data: BackupScheduleCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_company_admin),
 ):
     """
     Creates an automatic backup schedule for the instance.
@@ -255,7 +261,7 @@ def update_backup_schedule(
     schedule_id: uuid.UUID,
     data: BackupScheduleUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_company_admin),
 ):
     """
     Updates an existing schedule.
@@ -280,7 +286,7 @@ def delete_backup_schedule(
     instance_id: uuid.UUID,
     schedule_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_company_admin),
 ):
     """Removes a backup schedule. Backups already created are not affected."""
     get_instance_or_404(instance_id, db, current_user)

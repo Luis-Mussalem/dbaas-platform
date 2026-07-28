@@ -46,16 +46,17 @@ def test_dashboard_empty_platform(client, auth_headers):
     assert body["pending_maintenance_tasks"] == 0
 
 
-def test_dashboard_aggregates_instances_by_status(client, auth_headers, db):
+def test_dashboard_aggregates_instances_by_status(client, auth_headers, db, default_company):
     headers, _ = auth_headers()
     db.add_all([
-        DatabaseInstance(name="r1", status=InstanceStatus.RUNNING),
-        DatabaseInstance(name="r2", status=InstanceStatus.RUNNING),
-        DatabaseInstance(name="s1", status=InstanceStatus.STOPPED),
+        DatabaseInstance(name="r1", status=InstanceStatus.RUNNING, company_id=default_company().id),
+        DatabaseInstance(name="r2", status=InstanceStatus.RUNNING, company_id=default_company().id),
+        DatabaseInstance(name="s1", status=InstanceStatus.STOPPED, company_id=default_company().id),
         # Soft-deleted must NOT be counted.
         DatabaseInstance(
             name="gone",
             status=InstanceStatus.DELETED,
+            company_id=default_company().id,
             deleted_at=datetime.now(timezone.utc),
         ),
     ])
@@ -66,9 +67,9 @@ def test_dashboard_aggregates_instances_by_status(client, auth_headers, db):
     assert body["instances_by_status"] == {"running": 2, "stopped": 1}
 
 
-def test_dashboard_counts_alerts_backups_and_maintenance(client, auth_headers, db):
+def test_dashboard_counts_alerts_backups_and_maintenance(client, auth_headers, db, default_company):
     headers, _ = auth_headers()
-    inst = DatabaseInstance(name="db", status=InstanceStatus.RUNNING)
+    inst = DatabaseInstance(name="db", status=InstanceStatus.RUNNING, company_id=default_company().id)
     db.add(inst)
     db.commit()
     db.refresh(inst)
@@ -128,9 +129,9 @@ def test_dashboard_performance_kpis_empty_when_no_data(client, auth_headers):
     assert body["fleet_uptime_pct"] is None
 
 
-def test_dashboard_queries_per_second_from_commit_rate(client, auth_headers, db):
+def test_dashboard_queries_per_second_from_commit_rate(client, auth_headers, db, default_company):
     headers, _ = auth_headers()
-    inst = DatabaseInstance(name="qps", status=InstanceStatus.RUNNING)
+    inst = DatabaseInstance(name="qps", status=InstanceStatus.RUNNING, company_id=default_company().id)
     db.add(inst)
     db.commit()
     db.refresh(inst)
@@ -151,9 +152,9 @@ def test_dashboard_queries_per_second_from_commit_rate(client, auth_headers, db)
     assert body["queries_per_second"] == 2.0
 
 
-def test_dashboard_queries_per_second_ignores_counter_reset(client, auth_headers, db):
+def test_dashboard_queries_per_second_ignores_counter_reset(client, auth_headers, db, default_company):
     headers, _ = auth_headers()
-    inst = DatabaseInstance(name="reset", status=InstanceStatus.RUNNING)
+    inst = DatabaseInstance(name="reset", status=InstanceStatus.RUNNING, company_id=default_company().id)
     db.add(inst)
     db.commit()
     db.refresh(inst)
@@ -174,9 +175,9 @@ def test_dashboard_queries_per_second_ignores_counter_reset(client, auth_headers
     assert body["queries_per_second"] == 0.0
 
 
-def test_dashboard_p95_latency_uses_latest_per_instance(client, auth_headers, db):
+def test_dashboard_p95_latency_uses_latest_per_instance(client, auth_headers, db, default_company):
     headers, _ = auth_headers()
-    inst = DatabaseInstance(name="p95", status=InstanceStatus.RUNNING)
+    inst = DatabaseInstance(name="p95", status=InstanceStatus.RUNNING, company_id=default_company().id)
     db.add(inst)
     db.commit()
     db.refresh(inst)
@@ -198,12 +199,13 @@ def test_dashboard_p95_latency_uses_latest_per_instance(client, auth_headers, db
     assert body["p95_latency_ms"] == 42.0
 
 
-def test_dashboard_fleet_uptime_from_history(client, auth_headers, db):
+def test_dashboard_fleet_uptime_from_history(client, auth_headers, db, default_company):
     headers, _ = auth_headers()
     now = datetime.now(timezone.utc)
     inst = DatabaseInstance(
         name="up",
         status=InstanceStatus.STOPPED,
+        company_id=default_company().id,
         created_at=now - timedelta(days=10),
     )
     db.add(inst)

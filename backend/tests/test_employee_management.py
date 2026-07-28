@@ -5,6 +5,8 @@ Covers the superuser-gated endpoints for creating, listing, updating, and
 deactivating users. Regular users should get 403 on all
 administrative routes.
 """
+from src.models.user import UserRole
+
 API = "/api/v1/users"
 STRONG_PASSWORD = "ValidPass123!"
 WEAK_PASSWORD = "weak"
@@ -117,7 +119,9 @@ def test_create_user_weak_password_returns_422(client, auth_headers, make_compan
 
 def test_regular_user_cannot_create_user(client, auth_headers, make_company):
     company = make_company()
-    headers, _ = auth_headers(email="u@example.com", company_id=company.id)
+    headers, _ = auth_headers(
+        email="u@example.com", company_id=company.id, role=UserRole.MEMBER
+    )
 
     resp = client.post(
         API,
@@ -199,7 +203,9 @@ def test_list_users_no_filter_returns_all(client, auth_headers, make_company):
 
 def test_regular_user_cannot_list_users(client, auth_headers, make_company):
     company = make_company()
-    headers, _ = auth_headers(email="u@example.com", company_id=company.id)
+    headers, _ = auth_headers(
+        email="u@example.com", company_id=company.id, role=UserRole.MEMBER
+    )
 
     resp = client.get(API, headers=headers)
     assert resp.status_code == 403
@@ -239,7 +245,9 @@ def test_regular_user_cannot_admin_patch(client, auth_headers, make_company):
     import uuid
 
     company = make_company()
-    headers, _ = auth_headers(email="u@example.com", company_id=company.id)
+    headers, _ = auth_headers(
+        email="u@example.com", company_id=company.id, role=UserRole.MEMBER
+    )
 
     resp = client.patch(
         f"{API}/{uuid.uuid4()}/admin",

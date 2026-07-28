@@ -3,7 +3,13 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from src.core.dependencies import get_current_user, get_db, get_instance_or_404, get_instance_if_running
+from src.core.dependencies import (
+    get_current_company_admin,
+    get_current_user,
+    get_db,
+    get_instance_if_running,
+    get_instance_or_404,
+)
 from src.models.maintenance import MaintenanceSchedule
 from src.models.user import User
 from src.schemas.maintenance import (
@@ -58,7 +64,7 @@ def run_maintenance(
     instance_id: uuid.UUID,
     data: MaintenanceTaskCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_company_admin),
 ):
     """
     Runs a maintenance task immediately on the instance.
@@ -108,7 +114,7 @@ def create_schedule(
     instance_id: uuid.UUID,
     data: MaintenanceScheduleCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_company_admin),
 ):
     """
     Creates a recurring maintenance schedule with a cron expression.
@@ -148,7 +154,7 @@ def delete_schedule(
     instance_id: uuid.UUID,
     schedule_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_company_admin),
 ):
     """Permanently deletes a maintenance schedule."""
     get_instance_or_404(instance_id, db, current_user)

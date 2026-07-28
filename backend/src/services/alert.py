@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from src.core.config import settings
 from src.core.encryption import decrypt_value
+from src.core.scoping import CompanyScope
 from src.models.alert import AlertCondition, AlertEvent, AlertRule, AlertSeverity
 from src.models.backup import Backup, BackupStatus
 from src.models.database_instance import DatabaseInstance, InstanceStatus
@@ -74,18 +75,19 @@ def list_events(
     db: Session,
     instance_id: Optional[uuid.UUID] = None,
     only_open: bool = False,
-    company_id: Optional[uuid.UUID] = None,
+    scope: Optional[CompanyScope] = None,
 ) -> list[AlertEvent]:
     q = db.query(AlertEvent)
     if instance_id:
         q = q.filter(AlertEvent.instance_id == instance_id)
     # Scoping for the global list: joins the owning instance and filters by company.
-    # None = superuser (no filter). Per-instance endpoints already scoped via
-    # get_instance_or_404, so only the global list passes company_id.
-    if company_id is not None:
-        q = q.join(
-            DatabaseInstance, AlertEvent.instance_id == DatabaseInstance.id
-        ).filter(DatabaseInstance.company_id == company_id)
+    # scope=None means "already scoped by the caller" — the per-instance endpoints
+    # go through get_instance_or_404 first, so only the global list passes a scope.
+    if scope is not None and not scope.unrestricted:
+        q = scope.apply_to(
+            q.join(DatabaseInstance, AlertEvent.instance_id == DatabaseInstance.id),
+            DatabaseInstance.company_id,
+        )
     if only_open:
         q = q.filter(AlertEvent.resolved_at.is_(None))
     return q.order_by(AlertEvent.triggered_at.desc()).all()

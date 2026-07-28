@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
 
+from src.core.scoping import CompanyScope
 from src.models.database_instance import DatabaseInstance, InstanceStatus
 from src.models.instance_status_history import InstanceStatusHistory
 
@@ -47,9 +48,17 @@ def _uptime_from_rows(
         return None
 
     window_start = max(now - _UPTIME_WINDOW, created_at)
+
+    # Clock-skew guard. `created_at` is stamped by the DATABASE (server_default
+    # now()) while `now` comes from the application process; on a containerised
+    # setup the two clocks can differ by milliseconds in either direction. When the
+    # database runs ahead, a just-created instance gets created_at > now and the
+    # window comes out NEGATIVE — the instance would report "—" for its first few
+    # milliseconds of life, and the reason would look like missing history rather
+    # than arithmetic. Clamping keeps the window well-formed under skew.
+    if window_start > now:
+        window_start = now
     total = (now - window_start).total_seconds()
-    if total <= 0:
-        return None
 
     # Carry-in: status active at window_start.
     current = rows[0].status
@@ -58,6 +67,13 @@ def _uptime_from_rows(
             current = row.status
         else:
             break
+
+    if total <= 0:
+        # A window with no duration — the instance was created (as far as the two
+        # clocks agree) this instant. There is nothing to average, but the status
+        # is known, so report it rather than "—": an instance that has been RUNNING
+        # for the whole of its very short life has been up 100% of it.
+        return 100.0 if current == InstanceStatus.RUNNING else 0.0
 
     running_seconds = 0.0
     cursor = window_start
@@ -127,17 +143,13 @@ def get_uptime_pct_by_instance(
     }
 
 
-def get_fleet_uptime_pct(
-    db: Session, company_id: uuid.UUID | None = None
-) -> float | None:
+def get_fleet_uptime_pct(db: Session, scope: CompanyScope) -> float | None:
     """
     Fleet-wide average uptime: simple average of per-instance uptime (not deleted),
-    scoped by company. None if no instance has history yet.
+    restricted to `scope`. None if no instance in scope has history yet.
     """
     inst_q = db.query(DatabaseInstance).filter(DatabaseInstance.deleted_at.is_(None))
-    if company_id is not None:
-        inst_q = inst_q.filter(DatabaseInstance.company_id == company_id)
-    instances = inst_q.all()
+    instances = scope.apply_to(inst_q, DatabaseInstance.company_id).all()
 
     pcts = list(get_uptime_pct_by_instance(db, instances).values())
     if not pcts:

@@ -25,10 +25,14 @@ from src.services import alert as alert_service
 
 
 @pytest.fixture
-def instance(db):
+def instance(db, default_company):
     """RUNNING instance — prerequisite for rules and evaluation."""
+    # Same company as auth_headers()'s default user — see conftest.default_company.
     inst = DatabaseInstance(
-        name="alert-db", status=InstanceStatus.RUNNING, storage_gb=1
+        name="alert-db",
+        status=InstanceStatus.RUNNING,
+        storage_gb=1,
+        company_id=default_company().id,
     )
     db.add(inst)
     db.commit()

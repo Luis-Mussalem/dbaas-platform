@@ -16,10 +16,12 @@ from src.models.metric import Metric
 
 
 @pytest.fixture
-def instance(db):
+def instance(db, default_company):
+    # Same company as auth_headers()'s default user — see conftest.default_company.
     inst = DatabaseInstance(
         name="hist-db",
         status=InstanceStatus.RUNNING,
+        company_id=default_company().id,
         connection_uri=encrypt_value("postgresql://u:p@127.0.0.1:5433/appdb"),
     )
     db.add(inst)

@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from src.core.database import get_db
 from src.core.dependencies import get_current_company_admin, get_current_user
-from src.core.scoping import visible_company_id
+from src.core.scoping import company_scope
 from src.models.user import User
 from src.schemas.admin import AuditLogRead, DashboardResponse
 from src.services import admin as admin_service
@@ -27,7 +27,7 @@ def get_dashboard(
     - Backups in the last 24h (total and failed)
     - Pending or running maintenance tasks
     """
-    return admin_service.get_dashboard(db, company_id=visible_company_id(current_user))
+    return admin_service.get_dashboard(db, scope=company_scope(current_user))
 
 
 @router.get("/audit-log", response_model=list[AuditLogRead])
@@ -55,5 +55,5 @@ def get_audit_log(
         action=action,
         resource_type=resource_type,
         user_id=user_id,
-        company_id=visible_company_id(current_user),
+        scope=company_scope(current_user),
     )

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from src.core.dependencies import (
+    get_current_company_admin,
     get_current_user,
     get_db,
     get_instance_if_running,
@@ -29,7 +30,7 @@ router = APIRouter(tags=["Replication"])
 async def create_instance_replica(
     instance_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_company_admin),
 ):
     """
     Creates a streaming standby from a RUNNING primary instance.
@@ -62,7 +63,7 @@ def list_instance_replicas(
 async def promote_instance_replica(
     replica_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_company_admin),
 ):
     """Promotes a standby to a standalone primary (manual failover)."""
     replica = get_replica(db, replica_id)

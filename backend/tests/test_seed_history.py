@@ -296,3 +296,61 @@ def test_xact_commit_anchor_dates_the_pair_safely_in_the_past(db, monkeypatch):
     # And the next live collection (newer, reads ~the current counter) keeps Δ positive.
     _add_live_sample(db, inst, "xact_commit", current, minutes_ago=0)
     assert queries_per_second_by_instance(db, [inst.id])[inst.id] > 0
+
+
+# --------------------------------------------------------------------------- #
+# Uptime under clock skew
+#
+# `created_at` is stamped by the DATABASE (server_default now()) while the window
+# is closed with the APPLICATION's clock. On a containerised setup the two differ
+# by milliseconds in either direction. When the database ran ahead, the window came
+# out negative and a just-created instance reported "—" — which reads as missing
+# history rather than as arithmetic, and made the fleet-summary test flaky.
+# --------------------------------------------------------------------------- #
+
+
+def test_uptime_survives_a_database_clock_ahead_of_the_app():
+    from datetime import datetime, timedelta, timezone
+
+    from src.models.database_instance import InstanceStatus
+    from src.models.instance_status_history import InstanceStatusHistory
+    from src.services.status_history import _uptime_from_rows
+
+    now = datetime.now(timezone.utc)
+    # The row is stamped 5 ms in the FUTURE relative to `now`.
+    created_at = now + timedelta(milliseconds=5)
+    rows = [
+        InstanceStatusHistory(
+            instance_id=None, status=InstanceStatus.RUNNING, changed_at=created_at
+        )
+    ]
+
+    assert _uptime_from_rows(rows, created_at, now) == 100.0
+
+
+def test_zero_length_window_reports_the_current_status():
+    """A stopped instance created this instant is 0%, not 100% and not "—"."""
+    from datetime import datetime, timezone
+
+    from src.models.database_instance import InstanceStatus
+    from src.models.instance_status_history import InstanceStatusHistory
+    from src.services.status_history import _uptime_from_rows
+
+    now = datetime.now(timezone.utc)
+    rows = [
+        InstanceStatusHistory(
+            instance_id=None, status=InstanceStatus.STOPPED, changed_at=now
+        )
+    ]
+
+    assert _uptime_from_rows(rows, now, now) == 0.0
+
+
+def test_no_history_is_still_unknown():
+    """The clamp must not turn "we have no idea" into a fabricated number."""
+    from datetime import datetime, timezone
+
+    from src.services.status_history import _uptime_from_rows
+
+    now = datetime.now(timezone.utc)
+    assert _uptime_from_rows([], now, now) is None

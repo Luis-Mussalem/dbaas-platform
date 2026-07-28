@@ -9,7 +9,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from src.core.encryption import decrypt_value, encrypt_value
-from src.core.scoping import scope_instance_query
+from src.core.scoping import scope_instance_query, visible_company_id
 from src.models.database_instance import DatabaseInstance, InstanceStatus
 from src.models.user import User
 from src.schemas.instance import InstanceCreate, InstanceUpdate
@@ -143,9 +143,13 @@ async def create_instance(
         environment=data.environment,
         notes=data.notes,
         status=InstanceStatus.PENDING,
-        # The instance is born in the company of whoever created it. A superuser with no company
-        # creates it with company_id NULL (until Stage B allows choosing the active company).
-        company_id=current_user.company_id,
+        # The instance is born in the company the creator is CURRENTLY LOOKING AT, which
+        # is what visible_company_id resolves: their own company for a regular user, the
+        # workspace picked in the switcher (X-Company-Id) for a superuser. Using
+        # current_user.company_id instead would file every superuser-created instance
+        # under NULL — invisible in the very workspace that was on screen when it was
+        # created, and reachable only from the "All companies" view.
+        company_id=visible_company_id(current_user),
     )
     db.add(instance)
     db.commit()

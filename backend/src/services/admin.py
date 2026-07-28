@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from src.core.scoping import CompanyScope
 from src.models.alert import AlertEvent
 from src.models.audit_log import AuditLog
 from src.models.backup import Backup, BackupStatus
@@ -14,36 +15,29 @@ from src.schemas.admin import DashboardResponse
 from src.services import fleet_summary, status_history
 
 
-def _running_instance_ids(
-    db: Session, company_id: uuid.UUID | None
-) -> list[uuid.UUID]:
+def _running_instance_ids(db: Session, scope: CompanyScope) -> list[uuid.UUID]:
     """IDs of RUNNING instances in scope (basis for the throughput/latency KPIs)."""
     q = db.query(DatabaseInstance.id).filter(
         DatabaseInstance.status == InstanceStatus.RUNNING,
         DatabaseInstance.deleted_at.is_(None),
     )
-    if company_id is not None:
-        q = q.filter(DatabaseInstance.company_id == company_id)
+    q = scope.apply_to(q, DatabaseInstance.company_id)
     return [row[0] for row in q.all()]
 
 
-def _compute_fleet_queries_per_second(
-    db: Session, company_id: uuid.UUID | None
-) -> float:
+def _compute_fleet_queries_per_second(db: Session, scope: CompanyScope) -> float:
     """Real fleet throughput: sum of commit rates per RUNNING instance."""
-    instance_ids = _running_instance_ids(db, company_id)
+    instance_ids = _running_instance_ids(db, scope)
     rates = fleet_summary.queries_per_second_by_instance(db, instance_ids)
     return round(sum(rates.values()), 2)
 
 
-def _compute_fleet_p95_latency(
-    db: Session, company_id: uuid.UUID | None
-) -> float | None:
+def _compute_fleet_p95_latency(db: Session, scope: CompanyScope) -> float | None:
     """
     Fleet average P95 latency: average of the latest p95_query_latency_ms of each
     RUNNING instance that has the metric. None if none has it (shows "—").
     """
-    instance_ids = _running_instance_ids(db, company_id)
+    instance_ids = _running_instance_ids(db, scope)
     values = list(
         fleet_summary.latest_metric_by_instance(
             db, instance_ids, "p95_query_latency_ms"
@@ -78,29 +72,31 @@ def write_audit_log(
     db.commit()
 
 
-def get_dashboard(
-    db: Session, company_id: uuid.UUID | None = None
-) -> DashboardResponse:
-    # company_id None = superuser (no filter). Otherwise all aggregates
-    # are restricted to that company's instances; derived resources (alerts,
-    # backups, maintenance) are filtered via a JOIN to the owning instance.
+def get_dashboard(db: Session, scope: CompanyScope) -> DashboardResponse:
+    # An unrestricted scope (superuser, no workspace picked) applies no filter.
+    # Otherwise every aggregate is restricted to the scope's company; derived
+    # resources (alerts, backups, maintenance) are filtered via a JOIN to the
+    # owning instance. An EMPTY scope yields zeros across the board — see
+    # core.scoping.CompanyScope for why that, and not "everything", is correct.
 
     # Instances grouped by status (excluding soft-deleted ones)
     inst_q = db.query(DatabaseInstance.status, func.count(DatabaseInstance.id)).filter(
         DatabaseInstance.deleted_at.is_(None)
     )
-    if company_id is not None:
-        inst_q = inst_q.filter(DatabaseInstance.company_id == company_id)
+    inst_q = scope.apply_to(inst_q, DatabaseInstance.company_id)
     rows = inst_q.group_by(DatabaseInstance.status).all()
     instances_by_status = {status.value: count for status, count in rows}
     total_instances = sum(instances_by_status.values())
 
     # Active alerts (no resolved_at)
     alerts_q = db.query(func.count(AlertEvent.id)).filter(AlertEvent.resolved_at.is_(None))
-    if company_id is not None:
-        alerts_q = alerts_q.join(
-            DatabaseInstance, AlertEvent.instance_id == DatabaseInstance.id
-        ).filter(DatabaseInstance.company_id == company_id)
+    if not scope.unrestricted:
+        alerts_q = scope.apply_to(
+            alerts_q.join(
+                DatabaseInstance, AlertEvent.instance_id == DatabaseInstance.id
+            ),
+            DatabaseInstance.company_id,
+        )
     active_alerts = alerts_q.scalar() or 0
 
     # Backups in the last 24h
@@ -115,13 +111,19 @@ def get_dashboard(
         .filter(Backup.created_at >= since)
         .filter(Backup.status == BackupStatus.FAILED)
     )
-    if company_id is not None:
-        backups_q = backups_q.join(
-            DatabaseInstance, Backup.instance_id == DatabaseInstance.id
-        ).filter(DatabaseInstance.company_id == company_id)
-        failed_q = failed_q.join(
-            DatabaseInstance, Backup.instance_id == DatabaseInstance.id
-        ).filter(DatabaseInstance.company_id == company_id)
+    if not scope.unrestricted:
+        backups_q = scope.apply_to(
+            backups_q.join(
+                DatabaseInstance, Backup.instance_id == DatabaseInstance.id
+            ),
+            DatabaseInstance.company_id,
+        )
+        failed_q = scope.apply_to(
+            failed_q.join(
+                DatabaseInstance, Backup.instance_id == DatabaseInstance.id
+            ),
+            DatabaseInstance.company_id,
+        )
     backups_last_24h = backups_q.scalar() or 0
     failed_backups_last_24h = failed_q.scalar() or 0
 
@@ -129,10 +131,13 @@ def get_dashboard(
     maint_q = db.query(func.count(MaintenanceTask.id)).filter(
         MaintenanceTask.status.in_([TaskStatus.PENDING, TaskStatus.RUNNING])
     )
-    if company_id is not None:
-        maint_q = maint_q.join(
-            DatabaseInstance, MaintenanceTask.instance_id == DatabaseInstance.id
-        ).filter(DatabaseInstance.company_id == company_id)
+    if not scope.unrestricted:
+        maint_q = scope.apply_to(
+            maint_q.join(
+                DatabaseInstance, MaintenanceTask.instance_id == DatabaseInstance.id
+            ),
+            DatabaseInstance.company_id,
+        )
     pending_maintenance_tasks = maint_q.scalar() or 0
 
     return DashboardResponse(
@@ -142,9 +147,9 @@ def get_dashboard(
         backups_last_24h=backups_last_24h,
         failed_backups_last_24h=failed_backups_last_24h,
         pending_maintenance_tasks=pending_maintenance_tasks,
-        queries_per_second=_compute_fleet_queries_per_second(db, company_id),
-        p95_latency_ms=_compute_fleet_p95_latency(db, company_id),
-        fleet_uptime_pct=status_history.get_fleet_uptime_pct(db, company_id),
+        queries_per_second=_compute_fleet_queries_per_second(db, scope),
+        p95_latency_ms=_compute_fleet_p95_latency(db, scope),
+        fleet_uptime_pct=status_history.get_fleet_uptime_pct(db, scope),
     )
 
 
@@ -156,14 +161,13 @@ def list_audit_logs(
     action: str | None = None,
     resource_type: str | None = None,
     user_id: uuid.UUID | None = None,
-    company_id: uuid.UUID | None = None,
+    scope: CompanyScope,
 ) -> list[AuditLog]:
     # LEFT JOIN on users to bring back the actor's email too (AuditLog only stores the
     # user_id). outerjoin: actions with no user (login, background) and already-
     # deleted users keep the row, with email = None.
     query = db.query(AuditLog, User.email).outerjoin(User, User.id == AuditLog.user_id)
-    if company_id is not None:
-        query = query.filter(AuditLog.company_id == company_id)
+    query = scope.apply_to(query, AuditLog.company_id)
     if action:
         query = query.filter(AuditLog.action == action)
     if resource_type:
