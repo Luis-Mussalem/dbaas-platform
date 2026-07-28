@@ -263,6 +263,7 @@
     "loadFailed": "Falha ao carregar",
     "loading": "Carregando…",
     "none": "—",
+    "readOnlyRole": "Somente leitura — peça a um administrador da empresa para alterar.",
     "refresh": "Atualizar",
     "requiresRunning": "requer instância rodando",
     "saving": "Salvando…",
@@ -553,6 +554,11 @@
     "createFailed": "Falha ao provisionar",
     "created": "Instância \"{name}\" provisionada.",
     "environment": "Ambiente",
+    "forbidden": {
+      "back": "Voltar para instâncias",
+      "subtitle": "Apenas um administrador da empresa pode criar instâncias de banco. Peça a um administrador da sua equipe ou navegue pela frota existente.",
+      "title": "Provisionamento restrito"
+    },
     "identity": {
       "nameHint": "Algo memorável. Letras, números e hífens.",
       "nameLabel": "Nome da instância",
@@ -647,9 +653,12 @@
     "title": "Explorador de esquemas"
   },
   "Settings": {
+    "currentPasswordRequired": "Digite a sua senha atual para confirmar esta alteração.",
     "email": {
+      "currentPasswordPlaceholder": "Senha atual",
       "hint": "Usado para login e identificação.",
       "placeholder": "voce@exemplo.com",
+      "reauthHint": "Alterar o e-mail exige a sua senha atual.",
       "sameAsCurrent": "Informe um email diferente do atual.",
       "save": "Salvar email",
       "title": "Email",
@@ -658,9 +667,11 @@
     "memberSince": "membro desde {date}",
     "password": {
       "confirmPlaceholder": "Confirmar nova senha",
+      "currentPasswordPlaceholder": "Senha atual",
       "hint": "Mínimo de 12 caracteres, com maiúscula, minúscula, dígito e símbolo.",
       "mismatch": "As senhas não coincidem.",
       "placeholder": "Nova senha",
+      "reauthHint": "Alterar a senha exige a sua senha atual.",
       "save": "Alterar senha",
       "title": "Senha",
       "tooShort": "A senha deve ter ao menos 12 caracteres.",

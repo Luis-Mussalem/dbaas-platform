@@ -1,13 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, ChevronLeft, ChevronRight, X, Zap, RefreshCw } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, X, Zap, RefreshCw, Lock } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { createInstance } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { BTN_PRIMARY, BTN_DEFAULT } from "@/lib/ui";
 import { useToast } from "@/context/ToastProvider";
+import { useCanManage } from "@/hooks/use-permissions";
+import { EmptyState } from "@/components/EmptyState";
 import { ENVIRONMENTS } from "@/lib/environment";
 import { listRegions } from "@/lib/regions";
 import type { Environment } from "@/lib/types";
@@ -41,6 +44,7 @@ export default function CreateInstancePage() {
   const tc = useTranslations("Common");
   const tEnv = useTranslations("Environments");
   const router = useRouter();
+  const canManage = useCanManage();
 
   // ── wizard state ──
   const [step, setStep] = useState(0);
@@ -54,6 +58,24 @@ export default function CreateInstancePage() {
   const { toast } = useToast();
 
   const size = SIZES.find((s) => s.id === sizeId)!;
+
+  // Provisioning is a write, so a member reaching this URL directly gets an
+  // explanation rather than a wizard whose last step would answer 403. The
+  // backend refuses the POST regardless — this is courtesy, not enforcement.
+  if (!canManage) {
+    return (
+      <EmptyState
+        icon={<Lock size={24} />}
+        title={t("forbidden.title")}
+        subtitle={t("forbidden.subtitle")}
+        action={
+          <Link href="/instances" className={cn(BTN_DEFAULT, "mt-2")}>
+            {t("forbidden.back")}
+          </Link>
+        }
+      />
+    );
+  }
 
   // Only lets you advance from step 0 with a valid name.
   const canNext = step === 0 ? name.trim().length >= 2 : true;

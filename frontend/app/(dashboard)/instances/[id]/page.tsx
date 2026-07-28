@@ -38,6 +38,7 @@ import { ConnectionsTable } from "@/components/ConnectionsTable";
 import { SchemaExplorer } from "@/components/SchemaExplorer";
 import { useFormatters } from "@/hooks/use-formatters";
 import { cn } from "@/lib/utils";
+import { useCanManage } from "@/hooks/use-permissions";
 import { BTN, BTN_DANGER } from "@/lib/ui";
 
 // The labels come from InstanceDetail.tabs.* — here it's just the order and ids.
@@ -69,6 +70,7 @@ export default function InstanceDetailPage() {
   const [tab, setTab] = useState("overview");
 
   const { metrics } = useMetrics(id);
+  const canManage = useCanManage();
   const { toast } = useToast();
   const { confirm } = useConfirm();
 
@@ -148,9 +150,13 @@ export default function InstanceDetailPage() {
   if (!instance)
     return <p className="text-sm text-danger">{error ?? t("notFound")}</p>;
 
-  const canStart = instance.status === "stopped" || instance.status === "failed";
-  const canStop = instance.status === "running";
-  const canDelete = instance.status === "stopped" || instance.status === "failed";
+  // Two independent conditions decide whether a lifecycle button appears: does the
+  // ROLE allow operating (canManage — members observe, admins operate), and does
+  // the current STATUS allow the transition. The role check is cosmetic; the
+  // backend refuses the request either way (see hooks/use-permissions).
+  const canStart = canManage && (instance.status === "stopped" || instance.status === "failed");
+  const canStop = canManage && instance.status === "running";
+  const canDelete = canManage && (instance.status === "stopped" || instance.status === "failed");
 
   const ramGb = instance.memory_mb ? instance.memory_mb / 1024 : null;
 

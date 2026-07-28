@@ -23,6 +23,7 @@ import type {
 } from "@/lib/types";
 import { useFormatters } from "@/hooks/use-formatters";
 import { cn } from "@/lib/utils";
+import { useCanManage } from "@/hooks/use-permissions";
 import { BTN, BTN_GHOST, INPUT } from "@/lib/ui";
 
 // Unit shown next to each metric's threshold (the label comes from i18n).
@@ -64,6 +65,7 @@ const EMPTY_FORM = {
 export function AlertsTab({ instance }: { instance: Instance }) {
   const t = useTranslations("Alerts");
   const tc = useTranslations("Common");
+  const canManage = useCanManage();
   const { ago } = useFormatters();
   const { rules, events, isLoading, error, refresh } = useAlerts(instance.id);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -195,13 +197,15 @@ export function AlertsTab({ instance }: { instance: Instance }) {
                     {ago(ev.triggered_at)}
                   </p>
                 </div>
-                <button
-                  onClick={() => resolve(ev)}
-                  disabled={busy !== null}
-                  className={BTN}
-                >
-                  <Check size={13} /> {busy === ev.id ? t("resolving") : t("resolve")}
-                </button>
+                {canManage && (
+                  <button
+                    onClick={() => resolve(ev)}
+                    disabled={busy !== null}
+                    className={BTN}
+                  >
+                    <Check size={13} /> {busy === ev.id ? t("resolving") : t("resolve")}
+                  </button>
+                )}
               </li>
             ))}
           </ul>
@@ -213,16 +217,23 @@ export function AlertsTab({ instance }: { instance: Instance }) {
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <h2 className="text-sm font-semibold">{t("rulesTitle")}</h2>
           <div className="flex items-center gap-2">
-            <button onClick={seed} disabled={busy !== null} className={BTN_GHOST}>
-              {busy === "seed" ? t("seeding") : t("seed")}
-            </button>
-            <button
-              onClick={() => setShowForm((v) => !v)}
-              disabled={busy !== null}
-              className={BTN}
-            >
-              <Plus size={13} /> {t("newRule")}
-            </button>
+            {/* Alert rules are configuration the whole company relies on. */}
+            {canManage ? (
+              <>
+                <button onClick={seed} disabled={busy !== null} className={BTN_GHOST}>
+                  {busy === "seed" ? t("seeding") : t("seed")}
+                </button>
+                <button
+                  onClick={() => setShowForm((v) => !v)}
+                  disabled={busy !== null}
+                  className={BTN}
+                >
+                  <Plus size={13} /> {t("newRule")}
+                </button>
+              </>
+            ) : (
+              <span className="text-xs text-fg-3">{tc("readOnlyRole")}</span>
+            )}
           </div>
         </div>
 
@@ -342,20 +353,29 @@ export function AlertsTab({ instance }: { instance: Instance }) {
                     </span>
                   </td>
                   <td className="px-4 py-2">
+                    {/* For a member this is a status badge, not a switch. */}
                     <button
                       onClick={() => toggle(r)}
-                      disabled={busy !== null}
+                      disabled={busy !== null || !canManage}
                       className={cn(
-                        "inline-flex items-center rounded-full px-2 py-0.5 text-[11.5px] font-medium transition disabled:opacity-50",
+                        "inline-flex items-center rounded-full px-2 py-0.5 text-[11.5px] font-medium transition",
+                        canManage
+                          ? "disabled:opacity-50"
+                          : "cursor-default",
                         r.is_active
-                          ? "bg-ok/10 text-ok hover:bg-ok/20"
-                          : "bg-surface-2 text-fg-3 hover:bg-surface-2/70"
+                          ? canManage
+                            ? "bg-ok/10 text-ok hover:bg-ok/20"
+                            : "bg-ok/10 text-ok"
+                          : canManage
+                            ? "bg-surface-2 text-fg-3 hover:bg-surface-2/70"
+                            : "bg-surface-2 text-fg-3"
                       )}
                     >
                       {r.is_active ? t("state.active") : t("state.inactive")}
                     </button>
                   </td>
                   <td className="px-4 py-2 text-right">
+                    {canManage && (
                     <button
                       onClick={() => remove(r)}
                       disabled={busy !== null}
@@ -364,6 +384,7 @@ export function AlertsTab({ instance }: { instance: Instance }) {
                     >
                       <Trash2 size={14} />
                     </button>
+                    )}
                   </td>
                 </tr>
               ))}

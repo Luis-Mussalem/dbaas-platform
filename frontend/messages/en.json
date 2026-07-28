@@ -263,6 +263,7 @@
     "loadFailed": "Failed to load",
     "loading": "Loading…",
     "none": "—",
+    "readOnlyRole": "Read-only — ask a company admin to make changes.",
     "refresh": "Refresh",
     "requiresRunning": "requires a running instance",
     "saving": "Saving…",
@@ -553,6 +554,11 @@
     "createFailed": "Failed to provision",
     "created": "Instance \"{name}\" provisioned.",
     "environment": "Environment",
+    "forbidden": {
+      "back": "Back to instances",
+      "subtitle": "Only a company admin can create database instances. Ask an admin on your team, or browse the existing fleet.",
+      "title": "Provisioning is restricted"
+    },
     "identity": {
       "nameHint": "Something memorable. Letters, numbers and hyphens.",
       "nameLabel": "Instance name",
@@ -647,9 +653,12 @@
     "title": "Schema explorer"
   },
   "Settings": {
+    "currentPasswordRequired": "Enter your current password to confirm this change.",
     "email": {
+      "currentPasswordPlaceholder": "Current password",
       "hint": "Used for sign-in and identification.",
       "placeholder": "you@example.com",
+      "reauthHint": "Changing your email requires your current password.",
       "sameAsCurrent": "Enter an email different from the current one.",
       "save": "Save email",
       "title": "Email",
@@ -658,9 +667,11 @@
     "memberSince": "member since {date}",
     "password": {
       "confirmPlaceholder": "Confirm new password",
+      "currentPasswordPlaceholder": "Current password",
       "hint": "At least 12 characters, with uppercase, lowercase, digit and symbol.",
       "mismatch": "The passwords do not match.",
       "placeholder": "New password",
+      "reauthHint": "Changing your password requires your current password.",
       "save": "Change password",
       "title": "Password",
       "tooShort": "The password must be at least 12 characters long.",

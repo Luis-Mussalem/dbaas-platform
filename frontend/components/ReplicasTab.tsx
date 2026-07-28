@@ -10,6 +10,7 @@ import { useConfirm } from "@/context/ConfirmProvider";
 import type { Instance, ReplicationState } from "@/lib/types";
 import { useFormatters } from "@/hooks/use-formatters";
 import { cn } from "@/lib/utils";
+import { useCanManage } from "@/hooks/use-permissions";
 import { BTN, BTN_GHOST } from "@/lib/ui";
 
 // Semantic colors by replication state (same visual vocabulary as the other
@@ -27,6 +28,7 @@ const STATE_CLS: Record<ReplicationState, string> = {
 export function ReplicasTab({ instance }: { instance: Instance }) {
   const t = useTranslations("Replicas");
   const tc = useTranslations("Common");
+  const canManage = useCanManage();
   const { ago, bytes, ratio } = useFormatters();
 
   // Lag in seconds → short string. null (no measurement yet) becomes "—".
@@ -88,13 +90,18 @@ export function ReplicasTab({ instance }: { instance: Instance }) {
           </div>
           {!isRunning && <span className="text-xs text-fg-3">{tc("requiresRunning")}</span>}
         </div>
-        <button
-          onClick={handleCreate}
-          disabled={!isRunning || creating}
-          className={BTN}
-        >
-          <GitBranch size={13} /> {creating ? t("creating") : t("create")}
-        </button>
+        {/* Building a standby runs pg_basebackup against the primary. */}
+        {canManage ? (
+          <button
+            onClick={handleCreate}
+            disabled={!isRunning || creating}
+            className={BTN}
+          >
+            <GitBranch size={13} /> {creating ? t("creating") : t("create")}
+          </button>
+        ) : (
+          <span className="text-xs text-fg-3">{tc("readOnlyRole")}</span>
+        )}
       </div>
 
       {/* replica list */}
@@ -151,15 +158,18 @@ export function ReplicasTab({ instance }: { instance: Instance }) {
                     </td>
                     <td className="px-4 py-2 text-fg-2">{ago(r.created_at)}</td>
                     <td className="px-4 py-2">
-                      <button
-                        className={BTN_GHOST}
-                        disabled={isPromoted || promoting === r.id}
-                        title={isPromoted ? t("promote.already") : t("promote.tooltip")}
-                        onClick={() => handlePromote(r.id)}
-                      >
-                        <ArrowUpCircle size={13} />
-                        {promoting === r.id ? t("promoting") : t("promote.action")}
-                      </button>
+                      {/* Promotion is a failover — it ends the replication link. */}
+                      {canManage && (
+                        <button
+                          className={BTN_GHOST}
+                          disabled={isPromoted || promoting === r.id}
+                          title={isPromoted ? t("promote.already") : t("promote.tooltip")}
+                          onClick={() => handlePromote(r.id)}
+                        >
+                          <ArrowUpCircle size={13} />
+                          {promoting === r.id ? t("promoting") : t("promote.action")}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );

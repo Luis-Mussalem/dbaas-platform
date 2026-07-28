@@ -7,6 +7,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useInstances } from "@/hooks/use-instances";
 import { useDashboard } from "@/hooks/use-dashboard";
 import { useFleetSummary } from "@/hooks/use-fleet-summary";
+import { useCanManage } from "@/hooks/use-permissions";
 import { DASHBOARD_POLL_MS } from "@/lib/constants";
 import { InstanceCard } from "@/components/InstanceCard";
 import { EmptyState } from "@/components/EmptyState";
@@ -26,6 +27,7 @@ export default function InstancesPage() {
   const { instances, isLoading, error } = useInstances(DASHBOARD_POLL_MS);
   const { summary } = useDashboard(DASHBOARD_POLL_MS);
   const { summaries } = useFleetSummary(DASHBOARD_POLL_MS);
+  const canManage = useCanManage();
   // Common (zero-based) ceiling for the queries/s sparklines: a scale shared across
   // the cards, so the line's height encodes magnitude and not just shape.
   const qpsScale = useMemo(
@@ -58,13 +60,16 @@ export default function InstancesPage() {
         </div>
         <div className="flex items-center gap-3">
           <EnvFilterBar value={envFilter} onChange={setEnvFilter} size="sm" />
-          <Link
-            href="/instances/new"
-            className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:brightness-110"
-          >
-            <Plus size={14} />
-            {t("new")}
-          </Link>
+          {/* Provisioning is a write — members observe, admins operate. */}
+          {canManage && (
+            <Link
+              href="/instances/new"
+              className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:brightness-110"
+            >
+              <Plus size={14} />
+              {t("new")}
+            </Link>
+          )}
         </div>
       </div>
 
@@ -75,13 +80,15 @@ export default function InstancesPage() {
           title={t("empty.noneYet")}
           subtitle={t("empty.noneYetSub")}
           action={
-            <Link
-              href="/instances/new"
-              className="mt-2 inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:brightness-110"
-            >
-              <Plus size={14} />
-              {t("new")}
-            </Link>
+            canManage ? (
+              <Link
+                href="/instances/new"
+                className="mt-2 inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:brightness-110"
+              >
+                <Plus size={14} />
+                {t("new")}
+              </Link>
+            ) : undefined
           }
         />
       ) : visibleInstances.length === 0 ? (

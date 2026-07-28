@@ -10,6 +10,7 @@ import { useConfirm } from "@/context/ConfirmProvider";
 import type { Backup, BackupStatus, BackupStrategy, Instance } from "@/lib/types";
 import { useFormatters } from "@/hooks/use-formatters";
 import { cn } from "@/lib/utils";
+import { useCanManage } from "@/hooks/use-permissions";
 import { BTN, BTN_GHOST } from "@/lib/ui";
 
 const STATUS_CLS: Record<BackupStatus, string> = {
@@ -22,6 +23,7 @@ const STATUS_CLS: Record<BackupStatus, string> = {
 export function BackupsTab({ instance }: { instance: Instance }) {
   const t = useTranslations("Backups");
   const tc = useTranslations("Common");
+  const canManage = useCanManage();
   const { ago, bytes } = useFormatters();
   const { backups, isLoading, error, refresh } = useBackups(instance.id);
   // `busy` holds which action is in progress: "logical", "physical", or the id of the backup being restored.
@@ -72,20 +74,27 @@ export function BackupsTab({ instance }: { instance: Instance }) {
           <button onClick={refresh} className={BTN}>
             <RefreshCw size={13} /> {tc("refresh")}
           </button>
-          <button
-            onClick={() => handleCreate("logical")}
-            disabled={!isRunning || busy !== null}
-            className={BTN}
-          >
-            <Save size={13} /> {busy === "logical" ? tc("creating") : t("newLogical")}
-          </button>
-          <button
-            onClick={() => handleCreate("physical")}
-            disabled={!isRunning || busy !== null}
-            className={BTN}
-          >
-            <Save size={13} /> {busy === "physical" ? tc("creating") : t("newPhysical")}
-          </button>
+          {/* Taking a backup is a write — members observe, admins operate. */}
+          {canManage ? (
+            <>
+              <button
+                onClick={() => handleCreate("logical")}
+                disabled={!isRunning || busy !== null}
+                className={BTN}
+              >
+                <Save size={13} /> {busy === "logical" ? tc("creating") : t("newLogical")}
+              </button>
+              <button
+                onClick={() => handleCreate("physical")}
+                disabled={!isRunning || busy !== null}
+                className={BTN}
+              >
+                <Save size={13} /> {busy === "physical" ? tc("creating") : t("newPhysical")}
+              </button>
+            </>
+          ) : (
+            <span className="text-xs text-fg-3">{tc("readOnlyRole")}</span>
+          )}
         </div>
       </div>
 
@@ -141,7 +150,8 @@ export function BackupsTab({ instance }: { instance: Instance }) {
                   </span>
                 </td>
                 <td className="px-4 py-2 text-right">
-                  {b.strategy === "logical" && b.status === "completed" && (
+                  {/* Restore REPLACES every row in the database — admins only. */}
+                  {canManage && b.strategy === "logical" && b.status === "completed" && (
                     <button
                       onClick={() => handleRestore(b)}
                       disabled={!isRunning || busy !== null}

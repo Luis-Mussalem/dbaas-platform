@@ -9,6 +9,7 @@ import { useToast } from "@/context/ToastProvider";
 import type { Instance, TaskType, TaskStatus } from "@/lib/types";
 import { useFormatters } from "@/hooks/use-formatters";
 import { cn } from "@/lib/utils";
+import { useCanManage } from "@/hooks/use-permissions";
 import { BTN, BTN_GHOST } from "@/lib/ui";
 
 // Tasks that run on the entire database (no target_table). VACUUM_FULL is left
@@ -24,6 +25,7 @@ const STATUS_CLS: Record<TaskStatus, string> = {
 export function MaintenanceTab({ instance }: { instance: Instance }) {
   const t = useTranslations("Maintenance");
   const tc = useTranslations("Common");
+  const canManage = useCanManage();
   const { ago } = useFormatters();
   const { tasks, isLoading, error, refresh } = useMaintenance(instance.id);
   const [busy, setBusy] = useState<string | null>(null);
@@ -53,16 +55,21 @@ export function MaintenanceTab({ instance }: { instance: Instance }) {
           {!isRunning && <span className="text-xs text-fg-3">{tc("requiresRunning")}</span>}
         </div>
         <div className="flex flex-wrap gap-2">
-          {RUN_ACTIONS.map((type) => (
-            <button
-              key={type}
-              onClick={() => run(type)}
-              disabled={!isRunning || busy !== null}
-              className={BTN}
-            >
-              <Play size={13} /> {busy === type ? t("running") : t(`tasks.${type}`)}
-            </button>
-          ))}
+          {/* VACUUM/REINDEX take locks on live tables — admins only. */}
+          {canManage ? (
+            RUN_ACTIONS.map((type) => (
+              <button
+                key={type}
+                onClick={() => run(type)}
+                disabled={!isRunning || busy !== null}
+                className={BTN}
+              >
+                <Play size={13} /> {busy === type ? t("running") : t(`tasks.${type}`)}
+              </button>
+            ))
+          ) : (
+            <span className="text-xs text-fg-3">{tc("readOnlyRole")}</span>
+          )}
         </div>
       </div>
 

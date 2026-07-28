@@ -17,6 +17,7 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeProvider";
 import { useInstances } from "@/hooks/use-instances";
+import { useCanManage } from "@/hooks/use-permissions";
 import { setLocale } from "@/i18n/locale-action";
 import {
   ACCOUNT_NAV,
@@ -54,6 +55,7 @@ export function CommandPalette() {
   const router = useRouter();
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const canManage = useCanManage();
   const { instances } = useInstances();
   const locale = useLocale();
   const [, startTransition] = useTransition();
@@ -105,14 +107,20 @@ export function CommandPalette() {
     }));
 
     const actions: Command[] = [
-      {
-        id: "act:new",
-        label: t("action.newInstance"),
-        group: t("group.actions"),
-        icon: Plus,
-        keywords: `${t("action.newInstance")} create new`,
-        run: () => router.push("/instances/new"),
-      },
+      // "New instance" is only offered to who can actually provision one —
+      // members observe, admins operate (hooks/use-permissions).
+      ...(canManage
+        ? [
+            {
+              id: "act:new",
+              label: t("action.newInstance"),
+              group: t("group.actions"),
+              icon: Plus,
+              keywords: `${t("action.newInstance")} create new`,
+              run: () => router.push("/instances/new"),
+            } satisfies Command,
+          ]
+        : []),
       {
         id: "act:theme",
         label: t("action.toggleTheme"),
@@ -146,6 +154,7 @@ export function CommandPalette() {
 
     return [...nav, ...instanceCmds, ...actions];
   }, [
+    canManage,
     instances,
     isAdmin,
     locale,
