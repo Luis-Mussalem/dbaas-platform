@@ -1,7 +1,7 @@
 import asyncio
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from typing import Literal
@@ -12,6 +12,7 @@ from src.core.dependencies import (
     get_instance_if_running,
     get_instance_or_404,
 )
+from src.core.rate_limit import limiter
 from src.models.database_instance import DatabaseInstance
 from src.models.user import User
 from src.schemas.metric import (
@@ -293,7 +294,9 @@ async def get_schema(
     response_model=ExplainResponse,
     summary="Run EXPLAIN ANALYZE for a SELECT query",
 )
+@limiter.limit("30/minute")
 async def explain_query(
+    request: Request,  # noqa: ARG001 — required by slowapi's limiter decorator
     instance_id: uuid.UUID,
     body: ExplainRequest,
     db: Session = Depends(get_db),
@@ -304,6 +307,10 @@ async def explain_query(
 
     Restricted to SELECT: EXPLAIN ANALYZE actually executes the query,
     so DML would cause real effects on the client's data.
+
+    Rate-limited for the same reason as the SQL console: ANALYZE means this runs
+    the customer's query for real, and `statement_timeout` bounds one execution
+    but not how many are requested per minute.
     """
     instance = _require_connected(instance_id, db, current_user)
     try:

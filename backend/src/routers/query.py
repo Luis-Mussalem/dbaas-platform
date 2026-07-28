@@ -2,7 +2,7 @@ import asyncio
 import uuid
 
 import psycopg
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from src.core.dependencies import (
@@ -10,6 +10,7 @@ from src.core.dependencies import (
     get_db,
     get_instance_if_running,
 )
+from src.core.rate_limit import limiter
 from src.models.user import User
 from src.schemas.query import QueryRequest, QueryResult
 from src.services import query as query_service
@@ -25,7 +26,9 @@ router = APIRouter(
     response_model=QueryResult,
     summary="Run a read-only SELECT against the instance's database",
 )
+@limiter.limit("30/minute")
 async def run_query(
+    request: Request,  # noqa: ARG001 — required by slowapi's limiter decorator
     instance_id: uuid.UUID,
     body: QueryRequest,
     db: Session = Depends(get_db),
@@ -39,6 +42,11 @@ async def run_query(
       companies) and requires RUNNING status (409).
     - The SELECT-only guard rejects ``;``, DML, and DDL with 422.
     - The connection inherits ``statement_timeout=30s`` from ``get_connection``.
+    - 30 requests/minute per IP: the timeout bounds ONE query, this bounds the
+      rate. Without it, a loop of 30-second scans is a denial of service against
+      the customer's database. Far above human typing speed.
+    - Open to every member of the company: the console cannot mutate, so it sits
+      on the read side of the write gate (see get_current_company_admin).
     """
     # get_instance_if_running already ensures scoping (404) and RUNNING status (409).
     instance = get_instance_if_running(instance_id, db, current_user)
