@@ -8,6 +8,9 @@ const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 
 export default defineConfig({
   testDir: "./e2e",
+  // screenshots.ts regenerates the README images — it writes to docs/images/ and
+  // is not a test, so it stays out of the smoke run and is invoked by path.
+  testIgnore: /screenshots\.ts/,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
