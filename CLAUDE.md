@@ -52,7 +52,7 @@ only their own company; the admin superuser sees and switches between all.
   the `/demo/simulation/*` endpoints were removed. Full phase detail and dependency map
   in [ROADMAP.md](ROADMAP.md).
 - **i18n** — the UI is bilingual (EN default, PT via the top-bar toggle), using next-intl
-  with the locale in a `NEXT_LOCALE` cookie (no `/[locale]/` in the URLs). ~460 keys in
+  with the locale in a `NEXT_LOCALE` cookie (no `/[locale]/` in the URLs). ~520 keys in
   `messages/{en,pt}.json`; parity is enforced in CI by `npm run i18n:check`. Everything
   outside the UI — README, code, API errors, OpenAPI docs — is English only.
 

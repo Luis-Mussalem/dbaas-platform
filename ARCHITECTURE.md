@@ -114,13 +114,13 @@ and awaits the tasks so no DB commit is torn mid-flight):
 
 | Worker | Interval | Responsibility |
 |---|---|---|
-| Status poller | ~10s | Reconcile container state → `instance_status_history` (drives uptime) |
-| Metrics poller | 60s | Collect `pg_stat_*` from each RUNNING instance → `metrics` |
+| Status poller | 30s | Reconcile container state → `instance_status_history` (drives uptime); also prunes expired blacklisted tokens |
+| Metrics poller | 60s | Collect `pg_stat_*` from each RUNNING instance → `metrics` (the demo lowers it to 15s via `METRICS_POLL_INTERVAL_SECONDS`) |
 | Alert evaluator | 60s | Evaluate rules against latest metrics; open/resolve events; fire webhook |
 | Backup scheduler | 60s | Run due `BackupSchedule`s (cron), apply retention |
 | Maintenance scheduler | 60s | Run due `MaintenanceSchedule`s (VACUUM/ANALYZE/…) |
-| Replication poller | ~10s | Monitor standby lag |
-| Demo workload generator | 15s | Keep the demo fleet alive with a light baseline load (demo mode only, see below) |
+| Replication poller | 30s | Monitor standby lag |
+| Demo workload generator | 5s | Keep the demo fleet alive with a light baseline load (demo mode only, see below) |
 
 Each loop opens its own `SessionLocal()` (outside the HTTP request scope), guards
 every instance in a `try/except` so one bad instance doesn't sink the cycle, and
@@ -368,7 +368,7 @@ Next.js App Router with a small, single-responsibility component style:
 ## 12. Testing & CI
 
 - **Backend** — pytest against a **real PostgreSQL** (service container in CI, not
-  mocks), 272 tests at 82% coverage, plus ruff lint.
+  mocks), 387 tests at 81% coverage, plus ruff lint.
 - **Frontend** — ESLint + `tsc` typecheck + production build, plus the i18n parity
   check, all in CI.
 - **End-to-end** — Playwright smoke tests over the critical path (login → dashboard
@@ -381,7 +381,7 @@ Next.js App Router with a small, single-responsibility component style:
 ## 13. Deployment topology
 
 `docker-compose` wires four services: `postgres` (platform DB), `backend`
-(FastAPI + the six workers, mounting the Docker socket to provision instances),
+(FastAPI + the seven workers, mounting the Docker socket to provision instances),
 `frontend` (Next.js standalone production image), and `pgadmin` (DB inspection).
 The backend needs the Docker socket and matching host UID/GID to write backup
 files; the frontend is a baked production image, so frontend changes require an

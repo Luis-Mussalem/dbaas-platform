@@ -60,8 +60,8 @@ The goal is not only to build APIs, but to design systems that simulate operatio
 | | |
 |---|---|
 | **API surface** | 61 REST endpoints across 12 domain routers (`/api/v1`) |
-| **Codebase** | ~28,500 lines — 12,400 backend (Python) · 7,300 tests · 8,900 frontend (TypeScript) |
-| **Test suite** | 387 backend tests (82% coverage) + 11 Playwright E2E smoke tests |
+| **Codebase** | ~29,000 lines — 12,400 backend (Python) · 7,400 tests · 9,300 frontend (TypeScript) |
+| **Test suite** | 387 backend tests (81% coverage) + 11 Playwright E2E smoke tests |
 | **Data layer** | 19 Alembic migrations, 14 SQLAlchemy models |
 | **Frontend** | 11 routes, 39 reusable React components, fully typed API client |
 | **Background automation** | 7 concurrent loops — status, metrics, alerts, backups, maintenance, replication lag, demo workload generator |
@@ -95,7 +95,11 @@ copy — so exploring freely (including destructive actions) is safe and expecte
 
 On the first `docker compose up`, the backend seeds a fictional multi-tenant
 **fleet**: 3 companies, each with a `prod` and a `staging` instance across three
-regions, plus ~100 rows of mock data in each production database. When Docker is
+regions. Every database gets a business schema of its own — payments, music
+retail, clothing — with a small curated catalog table and a large transactional
+fact table generated up to a per-instance size target between 140 MB and 620 MB
+(millions of rows). That is what makes the storage bars, the query plans and the
+backup durations real rather than decorative. When Docker is
 available these are **real PostgreSQL containers** provisioned by the platform
 itself, so the SQL console, live logs and metrics work end to end; on Docker
 Desktop for macOS/Windows the seed falls back to data-only records. The seed is
@@ -396,7 +400,7 @@ This project focuses heavily on backend engineering and operational concepts, in
 - Instance list with status badges and resource summary
 - Instance detail with tabbed views (overview, metrics, backups, maintenance, alerts, replication, logs)
 - Start / Stop / Delete actions with reactive status updates
-- Time-series metric charts (cache hit ratio, connections) with 15m/1h/6h/24h window selector
+- Time-series metric charts (throughput, connections, cache hit ratio, latency) with 15m/1h/6h/24h window selector
 - Live monitoring: slow queries and active locks
 - Backups management — list, create, restore and scheduling
 - Maintenance actions and alert rules/events management
@@ -405,7 +409,7 @@ This project focuses heavily on backend engineering and operational concepts, in
 - SQL console — read-only query runner with schema browser, results grid and `EXPLAIN` plans
 - Consolidated dashboard and audit log
 - Workspace switcher — active-company selection propagated to every API call
-- Redesigned dark UI: collapsible sidebar, world-map region picker, light/dark themes
+- Redesigned dark UI: persistent sidebar with workspace switcher, world-map region picker, light/dark themes
 - Bilingual UI (English/Portuguese) — see [Internationalization](#internationalization)
 
 ---
@@ -470,8 +474,9 @@ dbaas-platform/
 │   │   ├── schemas/          # Pydantic v2 request/response schemas
 │   │   ├── services/         # Business logic, background pollers & schedulers
 │   │   │   └── provisioning/ # Provisioner interface + Docker implementation
+│   │   ├── seed/             # Demo fleet: provisioning, business schemas, history backfill
 │   │   └── main.py           # FastAPI application entrypoint (lifespan tasks)
-│   ├── alembic/              # 15 database migrations
+│   ├── alembic/              # 19 database migrations
 │   ├── tests/                # 387 tests (~7,400 lines)
 │   └── Dockerfile            # Multi-stage, non-root runtime image
 │
@@ -484,7 +489,7 @@ dbaas-platform/
 │   │   │   ├── admin/users/  #   Employee management & RBAC matrix
 │   │   │   └── audit/        #   Audit trail
 │   │   └── login/            # Login page
-│   ├── components/           # 37 reusable UI components (+ command palette, skeletons)
+│   ├── components/           # 39 reusable UI components (+ command palette, skeletons)
 │   ├── context/              # React Context (auth, theme, toasts, confirmations)
 │   ├── hooks/                # Data hooks — one per API resource
 │   ├── i18n/                 # next-intl setup + en/pt parity checker
@@ -913,7 +918,7 @@ docker compose up -d postgres     # metadata DB for the tests
 cd backend
 pip install -r requirements-dev.txt
 ruff check src/ tests/            # lint
-pytest --cov=src                  # 272 tests + coverage
+pytest --cov=src                  # 387 tests + coverage
 ```
 
 **Frontend** — the same gates CI runs (from `frontend/`):

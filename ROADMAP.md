@@ -374,7 +374,8 @@ Replication lag monitored. Replica can be promoted to primary via API.
 **Completion criterion:** CI green. README demonstrates the project to recruiters.
 
 **Implemented deliverables:**
-- 272 tests, 82% backend coverage (exceeds the 80% target)
+- 272 tests, 82% backend coverage when the phase closed — past the 80% target
+  (387 tests at 81% today)
 - Multi-stage backend `Dockerfile` + new standalone frontend `Dockerfile`; full
   stack in `docker-compose.yaml` (postgres + pgAdmin + backend + frontend)
 - CI: backend `ruff` + `pytest`; frontend `eslint` + `tsc` + `next build`; backend Docker build
@@ -622,7 +623,7 @@ as a self-contained full-stack milestone — and delivered as one.
 | Deliverable | Description |
 |-------------|-------------|
 | next-intl, no URL locale | No `/[locale]/` segments, so `app/` stays flat. Locale in an `HttpOnly` `NEXT_LOCALE` cookie written by a Server Action; `i18n/request.ts` reads it server-side to render `<html lang>`. A tampered cookie falls back to English. |
-| `messages/{en,pt}.json` | ~460 keys across 31 namespaces. `en.json` is the source of the `Messages` type via `global.d.ts`, so an unknown `t()` key is a `tsc` error. |
+| `messages/{en,pt}.json` | ~520 keys across 35 namespaces. `en.json` is the source of the `Messages` type via `global.d.ts`, so an unknown `t()` key is a `tsc` error. |
 | Locale-aware formatting | `lib/format.ts` deleted in favour of `hooks/use-formatters.ts` over `useFormatter`/`useNow`. `formatBRL` and `timeAgo` died; relative time no longer saturates at days. Every `toLocaleString("pt-BR")` is gone. |
 | Currency as rate cards | `lib/cost.ts` holds independent BRL/USD tables — regional list pricing, as AWS/GCP publish it. The ratio between totals is deliberately not an exchange rate. |
 | Grammar via ICU | Gender, number and participle agreement resolved with `select`/`plural` branches carrying the full sentence — never concatenation. PT uses the CLDR `one` branch for zero ("0 alerta ativo"). |
