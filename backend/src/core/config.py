@@ -16,7 +16,7 @@ class Settings(BaseSettings):
 
     # Application
     APP_NAME: str = "DBaaS Platform"
-    APP_VERSION: str = "1.0.0"
+    APP_VERSION: str = "1.0.1"
     DEBUG: bool = False
 
     # Database
@@ -79,12 +79,11 @@ class Settings(BaseSettings):
     METRICS_POLL_INTERVAL_SECONDS: int = 60
 
     # Demo mode — live demo fleet by default
-    # Exposes /api/v1/demo and starts the "live demo" director + the load generator.
-    # Unlike the old model (fleet started empty), here the seed already populates the
-    # fleet with history and the generator keeps a continuous baseline load, so the
-    # dashboard shows a live platform right on first login. The "View live"
-    # button just amplifies this for ~1 min. With DEMO_MODE=false the endpoints
-    # respond 404 and the loops don't start.
+    # Starts the baseline-load generator (see main.py's lifespan). The seed populates
+    # the fleet with history on boot and the generator keeps a continuous, light load
+    # flowing, so the dashboard shows a live platform right on first login — there is
+    # no button to press. With DEMO_MODE=false neither happens: no seeded fleet, no
+    # synthetic load, and no demo superuser.
     DEMO_MODE: bool = True
     # Load generator cadence. 5s (not 15s) so commits go out in
     # smaller, more frequent bursts: each poller collection window (15s)

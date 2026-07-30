@@ -5,6 +5,22 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] — 2026-07-30
+
+### Changed
+
+- README screenshots regenerated from the live fleet — the previous set predated
+  the fleet-card redesign and showed an idle, empty dashboard.
+- Screenshots are now produced by a Playwright script
+  (`frontend/e2e/screenshots.ts`) instead of being captured by hand, so the set
+  can be regenerated reproducibly. It is excluded from the smoke suite.
+
+### Fixed
+
+- `demo-notice.spec.ts` matched two nodes on the About page after that page was
+  expanded, failing on Playwright's strict mode; the assertions now target the
+  section headings.
+
 ## [1.0.0] — 2026-07-30
 
 First complete release. Every phase on the [roadmap](ROADMAP.md) is delivered:
@@ -86,4 +102,5 @@ backend PHASE 0–11 and frontend F0–F8.
   i18n parity check.
 - 387 backend tests plus 11 Playwright E2E smoke tests.
 
+[1.0.1]: https://github.com/Luis-Mussalem/dbaas-platform/releases/tag/v1.0.1
 [1.0.0]: https://github.com/Luis-Mussalem/dbaas-platform/releases/tag/v1.0.0
