@@ -359,9 +359,7 @@ function SlowQueries({ instance }: { instance: Instance }) {
       ) : display === null ? (
         <p className="px-4 py-8 text-center text-sm text-fg-3">{tc("loading")}</p>
       ) : display.length === 0 ? (
-        <p className="px-4 py-8 text-center text-sm text-fg-3">
-          Sem queries lentas registradas.
-        </p>
+        <p className="px-4 py-8 text-center text-sm text-fg-3">{t("slowQueries.empty")}</p>
       ) : (
         <table className="w-full text-sm">
           <thead>
