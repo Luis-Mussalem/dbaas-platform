@@ -350,7 +350,7 @@ Replication lag monitored. Replica can be promoted to primary via API.
 - `replication_poller` — 30s lag monitor via `pg_stat_replication` (bytes + seconds)
 - Router `POST /instances/{id}/replicas`, `GET /instances/{id}/replicas`,
   `POST /replicas/{id}/promote` (company-scoped through the primary)
-- Frontend "Replicação" tab (create, live lag, promote) + 7 service/scoping tests
+- Frontend "Replication" tab (create, live lag, promote) + 7 service/scoping tests
 
 > 💡 **Key concept — Streaming Replication:**
 > The primary sends WAL records to the standby in real time via TCP connection.
@@ -510,22 +510,22 @@ databases; the superuser can switch companies and the data follows the selection
 
 **Completion criterion:** Metrics rendered with automatic updates.
 
-> **Status:** slow queries e locks renderizados; gráficos de série temporal (cache
-> hit ratio, conexões) implementados com `recharts` via `MetricsTab` +
-> `useMetricHistory` — consomem `GET /instances/{id}/metrics/history` (`3f3aa54`).
-> Seletor de janela (15m/1h/6h/24h) funcionando. O gráfico de latência **por query**
-> na aba Metrics segue ilustrativo (o backend não coleta latência por execução
-> individual), mas o **P95 da frota** exibido no dashboard já é real
-> (`pg_stat_statements`, ver PHASE 4). Tab Logs ainda é placeholder — depende de
-> endpoint de log por instância não construído.
+> **Status:** slow queries and locks rendered; time-series charts (cache hit ratio,
+> connections) implemented with `recharts` via `MetricsTab` + `useMetricHistory` —
+> both consume `GET /instances/{id}/metrics/history` (`3f3aa54`). The window selector
+> (15m/1h/6h/24h) works. The **per-query** latency chart on the Metrics tab is still
+> illustrative (the backend does not collect latency per individual execution), but
+> the **fleet-wide P95** shown on the dashboard is real (`pg_stat_statements`, see
+> PHASE 4). The Logs tab was a placeholder here and was delivered later in PHASE 10
+> (`LogsTab` over `GET /instances/{id}/logs`).
 >
-> **Polimento visual (2026-07-02):** dashboard e página de Instâncias ganharam a
-> linha de KPIs reais (queries/s, P95, gasto estimado, uptime 30d — via `FleetKpiRow`),
-> filtro de ambiente (`EnvFilterBar`) e cores de identidade por instância
-> (`lib/identity-color.ts`); a tela de Funcionários ganhou métricas-resumo (total,
-> donos/admins, última atividade — de `audit_logs`) e uma **matriz de permissões**
-> estática (`CapabilityLegend`) derivada das regras reais de RBAC. Labels de ambiente
-> unificadas em `lib/environment.ts`.
+> **Visual polish (2026-07-02):** the dashboard and the Instances page gained a row of
+> real KPIs (queries/s, P95, estimated spend, 30-day uptime — via `FleetKpiRow`), an
+> environment filter (`EnvFilterBar`) and per-instance identity colors
+> (`lib/identity-color.ts`); the Employees screen gained summary metrics (total,
+> owners/admins, last activity — from `audit_logs`) and a static **permission matrix**
+> (`CapabilityLegend`) derived from the real RBAC rules. Environment labels were
+> unified in `lib/environment.ts`.
 
 ---
 
