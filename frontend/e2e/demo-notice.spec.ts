@@ -18,10 +18,13 @@ test("the demo notice is visible and links to the About page", async ({ page }) 
 test("the About page explains what is real and what is generated", async ({ page }) => {
   await page.goto("/demo");
 
-  await expect(page.getByText(/what is real/i)).toBeVisible();
-  await expect(page.getByText(/what is generated/i)).toBeVisible();
+  // Target the section headings: the intro paragraph repeats the same wording,
+  // so a bare getByText matches more than one node.
+  await expect(page.getByRole("heading", { name: /what is real/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /what is generated/i })).toBeVisible();
   // The journey of the removed button is part of the on-screen documentation.
-  await expect(page.getByText(/simulate usage/i)).toBeVisible();
+  // Heading again: the section body repeats the button's name.
+  await expect(page.getByRole("heading", { name: /simulate usage/i })).toBeVisible();
 });
 
 test("the removed simulation endpoints are gone", async ({ page }) => {
