@@ -43,7 +43,7 @@ export function Sidebar() {
         </div>
         <span>DBaaS</span>
         <span className="ml-auto rounded bg-bg-2 px-1.5 py-0.5 text-[11.5px] font-medium text-fg-3">
-          v0.1
+          v1.0
         </span>
       </div>
 

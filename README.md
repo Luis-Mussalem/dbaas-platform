@@ -16,6 +16,7 @@ The project simulates real-world DBaaS concepts commonly found in modern platfor
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)
 
 [![CI](https://github.com/Luis-Mussalem/dbaas-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/Luis-Mussalem/dbaas-platform/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/badge/release-v1.0.0-blue?style=flat-square)](CHANGELOG.md)
 ![Tests](https://img.shields.io/badge/tests-387%20passing-brightgreen?style=flat-square)
 ![Coverage](https://img.shields.io/badge/coverage-82%25-brightgreen?style=flat-square)
 ![Ruff](https://img.shields.io/badge/lint-ruff-blue?style=flat-square)
